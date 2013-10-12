@@ -4134,6 +4134,7 @@ public class ObjectStore implements RawStore, Configurable {
       //alt table name
       if(!oldt.getTableName().toLowerCase().equals(newt.getTableName().toLowerCase()))
       {
+        params.put("table_name", newt.getTableName());
         params.put("old_table_name", oldt.getTableName());
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME,db_id,-1, pm, oldt,params));
       }
@@ -4145,14 +4146,15 @@ public class ObjectStore implements RawStore, Configurable {
         List<MFieldSchema> newCols = new ArrayList<MFieldSchema>();
         newCols.addAll( newt.getSd().getCD().getCols());
 
-        params.put("db_name", oldt.getDatabase().getName());
-        params.put("table_name", oldt.getTableName());
-
         oldCols.removeAll(newCols);
         for(MFieldSchema omfs : oldCols)
         {
-            params.put("column_name",omfs.getName());
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL,db_id,-1, pm, oldt,params));
+          HashMap<String, Object> ps = new HashMap<String, Object>();
+          ps.put("db_name", oldt.getDatabase().getName());
+          ps.put("table_name", oldt.getTableName());
+          LOG.info("---zy--in alterTable delCol,colname:"+omfs.getName());
+            ps.put("column_name",omfs.getName());
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL,db_id,-1, pm, oldt,ps));
 
         }
       }
@@ -4163,15 +4165,17 @@ public class ObjectStore implements RawStore, Configurable {
         oldCols.addAll( oldt.getSd().getCD().getCols());
         List<MFieldSchema> newCols = new ArrayList<MFieldSchema>();
         newCols.addAll( newt.getSd().getCD().getCols());
-
-        params.put("db_name", oldt.getDatabase().getName());
-        params.put("table_name", oldt.getTableName());
-
+//        LOG.info("---zy--in alterTable addCol, before removeall");
         newCols.removeAll(oldCols);
+//        LOG.info("---zy--in alterTable addCol, after removeall");
         for(MFieldSchema nmfs : newCols)
         {
-            params.put("column_name",nmfs.getName());
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL,db_id,-1, pm, oldt,params));
+          HashMap<String, Object> ps = new HashMap<String, Object>();
+          ps.put("db_name", oldt.getDatabase().getName());
+          ps.put("table_name", oldt.getTableName());
+          LOG.info("---zy--in alterTable addCol,colname:"+nmfs.getName());
+            ps.put("column_name",nmfs.getName());
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL,db_id,-1, pm, oldt,ps));
         }
       }
       //修改列名，列类型  一次只能修改一个
@@ -4183,7 +4187,7 @@ public class ObjectStore implements RawStore, Configurable {
         newCols.addAll( newt.getSd().getCD().getCols());
 
         oldCols.removeAll(newt.getSd().getCD().getCols());
-        newCols.removeAll(newt.getSd().getCD().getCols());
+        newCols.removeAll(oldt.getSd().getCD().getCols());
         if(oldCols.size() == 1 && newCols.size() == 1 && !oldCols.get(0).getName().equals(newCols.get(0).getName()))    //说明只有一列是不同的,且是名字不同
         {
           params.put("db_name", oldt.getDatabase().getName());
@@ -4204,8 +4208,9 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
       //alt table param
-      if(!oldt.getParameters().equals(newt.getParameters()))
+      if(!tableParamEquals(oldt.getParameters(), newt.getParameters()) )
       {
+        LOG.debug("---zy--in ObjectStore alterTable: alt table param");
         params.put("db_name", oldt.getDatabase().getName());
         params.put("table_name", oldt.getTableName());
         params.put("tbl_param_keys", newt.getParameters().keySet());
@@ -4285,6 +4290,38 @@ public class ObjectStore implements RawStore, Configurable {
         rollbackTransaction();
       }
     }
+  }
+
+  //add by zy
+  private boolean tableParamEquals(Map<String,String> m1,Map<String,String> m2)
+  {
+
+    //忽略下面三个键
+    String[] keys = {"transient_lastDdlTime","last_modified_time","last_modified_by"};
+    Map<String,String> mc1 = new HashMap<String,String>();
+    Map<String,String> mc2 = new HashMap<String,String>();
+    mc1.putAll(m1);
+    mc2.putAll(m2);
+    for(String k:keys)
+    {
+      mc1.remove(k);
+      mc2.remove(k);
+    }
+//    if(m1.size() != m2.size()) {
+//      LOG.info("---zy--in tableParamEquals size not equal old:"+m1.keySet()+", new:"+m2.keySet());
+//      return false;
+//    }
+//    boolean re = true;
+//    while(m1.keySet().iterator().hasNext())
+//    {
+//      String key = m1.keySet().iterator().next();
+//      if(!(m2.containsKey(key) && m1.get(key).equals(m2.get(key)))) {
+//        LOG.debug("---zy--in tableParamEquals "+key+" "+m1.get(key)+" "+m2.get(key));
+//        re = false;
+//      }
+
+//    }
+    return mc1.equals(mc2);     //map的equals方法应该是重载过,可以直接拿来判断的
   }
 
   public void alterIndex(String dbname, String baseTblName, String name, Index newIndex)

@@ -3864,6 +3864,8 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
    */
   private int alterTable(Hive db, AlterTableDesc alterTbl) throws HiveException {
     // alter the table
+    try{
+      LOG.info("=======================1");
     Table tbl = db.getTable(alterTbl.getOldName());
 
     Partition part = null;
@@ -3887,8 +3889,10 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     Table oldTbl = tbl.copy();
 
     if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.RENAME) {
+      LOG.info("=======================2 RENAME");
       tbl.setTableName(alterTbl.getNewName());
     } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ADDCOLS) {
+      LOG.info("=======================23 ADDCOLS");
       List<FieldSchema> newCols = alterTbl.getNewCols();
       List<FieldSchema> oldCols = tbl.getCols();
       if (tbl.getSerializationLib().equals(
@@ -3910,6 +3914,7 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
               formatter.consoleError(console,
                                      "Column '" + newColName + "' exists",
                                      formatter.CONFLICT);
+              LOG.info("=======================3 return 1;");
               return 1;
             }
           }
@@ -4160,12 +4165,13 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
         }
       }
     } else {
+      LOG.info("=======================4 else");
       formatter.consoleError(console,
                              "Unsupported Alter commnad",
                              formatter.ERROR);
       return 1;
     }
-
+    LOG.info("======================= 5");
     if (part == null && allPartitions == null) {
       if (!updateModifiedParameters(tbl.getTTable().getParameters(), conf)) {
         return 1;
@@ -4190,10 +4196,12 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
         }
       }
     }
-
+    LOG.info("======================= 6");
     try {
       if (part == null && allPartitions == null) {
+        LOG.info("======================= 7");
         db.alterTable(alterTbl.getOldName(), tbl);
+        LOG.info("======================= 8");
       } else if (part != null) {
         db.alterPartition(tbl.getTableName(), part);
       }
@@ -4205,6 +4213,8 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       LOG.info("alter table: " + stringifyException(e));
       return 1;
     } catch (HiveException e) {
+      LOG.info("======================= 9");
+      LOG.error(e,e);
       return 1;
     }
 
@@ -4228,6 +4238,11 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       work.getOutputs().add(new WriteEntity(tbl));
     }
     return 0;
+    }catch(Exception e){
+      LOG.error("=======================");
+      LOG.error(e,e);
+      return -1;
+    }
   }
 
   /**

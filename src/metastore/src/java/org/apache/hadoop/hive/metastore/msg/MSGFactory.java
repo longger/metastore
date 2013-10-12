@@ -347,7 +347,9 @@ public class MSGFactory {
             //修改表名
           MTable alt_tbl = (MTable)msg.getEventObject();
           params.put("db_name",alt_tbl.getDatabase().getName());
-          params.put("table_name",alt_tbl.getTableName());
+          if(msg.getOld_object_params().containsKey("table_name")){
+            params.put("table_name",msg.getOld_object_params().get("table_name"));
+          }
           if(msg.getOld_object_params().containsKey("old_table_name")){
             params.put("old_table_name",msg.getOld_object_params().get("old_table_name"));
           }
