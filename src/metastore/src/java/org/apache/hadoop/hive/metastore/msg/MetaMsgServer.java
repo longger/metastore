@@ -44,6 +44,7 @@ public class MetaMsgServer {
     server = new MetaMsgServer();
     producer.config(zkAddr);
     producer = Producer.getInstance();
+    initalized = true;
   }
 
 
