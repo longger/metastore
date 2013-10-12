@@ -664,7 +664,11 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       if (null != showSchemaDesc) {
         return showSchema(db, showSchemaDesc);
       }
-
+      AlterSchemaDesc alterSchDesc = work.getAlterSchDesc();
+      if (null != alterSchDesc) {
+        LOG.info("****************zqh****************alterSchema(db, alterSch))");
+        return alterSchema(db, alterSchDesc);
+      }
 
     } catch (InvalidTableException e) {
       formatter.consoleError(console, "Table " + e.getTableName() + " does not exist",
@@ -5301,9 +5305,169 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
   }
 
   private int dropSchema(Hive db, DropSchemaDesc dropSchemaDesc) throws HiveException {
-    GlobalSchema  schema = new GlobalSchema();
+    GlobalSchema schema = new GlobalSchema();
     schema.setSchemaName(dropSchemaDesc.getSchemaName());
     this.db.dropSchema(schema);
+    return 0;
+  }
+  /**
+   * Alter a given schema.
+   *
+   * @param db
+   *          The database in question.
+   * @param alterSch
+   *          This is the schema we're altering.
+   * @return Returns 0 when execution succeeds and above 0 if it fails.
+   * @throws HiveException
+   *           Throws this exception if an unexpected error occurs.
+   */
+  private int alterSchema(Hive db, AlterSchemaDesc alterSchDesc) throws Exception {
+    // alter the schema
+    GlobalSchema gls = db.getSchema(alterSchDesc.getOldName(), true);
+    GlobalSchema oldGlobalSchema = gls.copy();
+    if (alterSchDesc.getOp() == AlterSchemaDesc.AlterSchemaTypes.RENAME) {
+      gls.setSchemaName(alterSchDesc.getNewName());
+    } else if (alterSchDesc.getOp() == AlterSchemaDesc.AlterSchemaTypes.ADDCOLS) {
+      List<FieldSchema> newCols = alterSchDesc.getNewCols();
+      List<FieldSchema> oldCols = gls.getCols();
+        // make sure the columns does not already exist
+        Iterator<FieldSchema> iterNewCols = newCols.iterator();
+        while (iterNewCols.hasNext()) {
+          FieldSchema newCol = iterNewCols.next();
+          String newColName = newCol.getName();
+          Iterator<FieldSchema> iterOldCols = oldCols.iterator();
+          while (iterOldCols.hasNext()) {
+            String oldColName = iterOldCols.next().getName();
+            if (oldColName.equalsIgnoreCase(newColName)) {
+              formatter.consoleError(console,
+                                     "Column '" + newColName + "' exists",
+                                     formatter.CONFLICT);
+              return 1;
+            }
+          }
+          oldCols.add(newCol);
+        }
+        gls.getTSchema().getSd().setCols(oldCols);
+        LOG.info("****************zqh****************AlterSchemaTypes.ADDCOLS SUCCESSFULLY");
+    } else if (alterSchDesc.getOp() == AlterSchemaDesc.AlterSchemaTypes.RENAMECOLUMN) {
+      List<FieldSchema> oldCols = gls.getCols();
+      List<FieldSchema> newCols = new ArrayList<FieldSchema>();
+      Iterator<FieldSchema> iterOldCols = oldCols.iterator();
+      String oldName = alterSchDesc.getOldColName();
+      String newName = alterSchDesc.getNewColName();
+      String type = alterSchDesc.getNewColType();
+      String comment = alterSchDesc.getNewColComment();
+      boolean first = alterSchDesc.getFirst();
+      String afterCol = alterSchDesc.getAfterCol();
+      FieldSchema column = null;
+
+      boolean found = false;
+      int position = -1;
+      if (first) {
+        position = 0;
+      }
+
+      int i = 1;
+      while (iterOldCols.hasNext()) {
+        FieldSchema col = iterOldCols.next();
+        String oldColName = col.getName();
+        if (oldColName.equalsIgnoreCase(newName)
+            && !oldColName.equalsIgnoreCase(oldName)) {
+          formatter.consoleError(console,
+                                 "Column '" + newName + "' exists",
+                                 formatter.CONFLICT);
+          return 1;
+        } else if (oldColName.equalsIgnoreCase(oldName)) {
+          col.setName(newName);
+          if (type != null && !type.trim().equals("")) {
+            col.setType(type);
+          }
+          if (comment != null) {
+            col.setComment(comment);
+          }
+          found = true;
+          if (first || (afterCol != null && !afterCol.trim().equals(""))) {
+            column = col;
+            continue;
+          }
+        }
+
+        if (afterCol != null && !afterCol.trim().equals("")
+            && oldColName.equalsIgnoreCase(afterCol)) {
+          position = i;
+        }
+
+        i++;
+        newCols.add(col);
+      }
+
+      // did not find the column
+      if (!found) {
+        formatter.consoleError(console,
+                               "Column '" + oldName + "' does not exists",
+                               formatter.MISSING);
+        return 1;
+      }
+      // after column is not null, but we did not find it.
+      if ((afterCol != null && !afterCol.trim().equals("")) && position < 0) {
+        formatter.consoleError(console,
+                               "Column '" + afterCol + "' does not exists",
+                               formatter.MISSING);
+        return 1;
+      }
+
+      if (position >= 0) {
+        newCols.add(position, column);
+      }
+
+      gls.getTSchema().getSd().setCols(newCols);
+
+    } else if (alterSchDesc.getOp() == AlterSchemaDesc.AlterSchemaTypes.REPLACECOLS) {
+      // change SerDe to LazySimpleSerDe if it is columnsetSerDe
+      if (gls.getSerializationLib().equals(
+          "org.apache.hadoop.hive.serde.thrift.columnsetSerDe")) {
+        console
+            .printInfo("Replacing columns for columnsetSerDe and changing to LazySimpleSerDe");
+        gls.setSerializationLib(LazySimpleSerDe.class.getName());
+      } else if (!gls.getSerializationLib().equals(
+          MetadataTypedColumnsetSerDe.class.getName())
+          && !gls.getSerializationLib().equals(LazySimpleSerDe.class.getName())
+          && !gls.getSerializationLib().equals(ColumnarSerDe.class.getName())
+          && !gls.getSerializationLib().equals(DynamicSerDe.class.getName())) {
+        formatter.consoleError(console,
+                               "Replace columns is not supported for this Schema. "
+                               + "SerDe may be incompatible.",
+                               formatter.ERROR);
+        return 1;
+      }
+      gls.getTSchema().getSd().setCols(alterSchDesc.getNewCols());
+      LOG.info("****************zqh****************AlterSchemaTypes.REPLACECOLS SUCCESSFULLY");
+    } else if (alterSchDesc.getOp() == AlterSchemaDesc.AlterSchemaTypes.ADDPROPS) {
+      gls.getTSchema().getParameters().putAll(alterSchDesc.getProps());
+      LOG.info("****************zqh****************AlterSchemaTypes.ADDPROPS SUCCESSFULLY");
+    } else {
+      formatter.consoleError(console,
+                             "Unsupported Alter commnad",
+                             formatter.ERROR);
+      return 1;
+    }
+
+    try {
+      db.alterSchema(alterSchDesc.getOldName(), gls);
+      LOG.info("****************zqh****************AlterSchema SUCCESSFULLY");
+    } catch (InvalidOperationException e) {
+      console.printError("Invalid alter operation: " + e.getMessage());
+      LOG.info("alter schema: " + stringifyException(e));
+      return 1;
+    } catch (HiveException e) {
+      return 1;
+    } catch (Exception e) {
+      return 1;
+    }
+
+    work.getInputs().add(new ReadEntity(oldGlobalSchema));
+    work.getOutputs().add(new WriteEntity(gls));
+
     return 0;
   }
 }
