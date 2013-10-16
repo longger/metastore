@@ -660,7 +660,8 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
   }
 
   private void analyzeDropSchema(ASTNode ast) throws SemanticException {
-    String schemaName = unescapeIdentifier(ast.getChild(0).getText());
+    String schemaName = getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
+    LOG.info("****************zqh****************analyzeDropSchema):" + schemaName);
     boolean ifExists = false;
     if (null != ast.getFirstChildWithType(HiveParser.TOK_IFEXISTS)) {
       ifExists = true;
