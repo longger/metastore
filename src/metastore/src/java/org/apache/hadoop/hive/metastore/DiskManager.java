@@ -8,6 +8,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -286,6 +287,8 @@ public class DiskManager {
       List<JSONObject> toRep;
       String lastReportStr;
       long totalReportNr = 0;
+      long totalFileRep = 0;
+      long totalFileDel = 0;
 
       public NodeInfo(List<DeviceInfo> dis) {
         this.lastRptTs = System.currentTimeMillis();
@@ -669,11 +672,23 @@ public class DiskManager {
       public void do_delete(SFile f, int nr) {
         int i = 0;
 
-        if (nr <= 0) {
+        if (nr < 0) {
           return;
         }
 
         synchronized (ndmap) {
+          if (f.getLocationsSize() == 0 && f.getStore_status() == MetaStoreConst.MFileStoreStatus.RM_PHYSICAL) {
+            // this means it contains non-valid locations, just delete it
+            try {
+              synchronized (trs) {
+                LOG.info("----> Truely delete file " + f.getFid());
+                trs.delSFile(f.getFid());
+                return;
+              }
+            } catch (MetaException e) {
+              LOG.error(e, e);
+            }
+          }
           for (SFileLocation loc : f.getLocations()) {
             if (i >= nr) {
               break;
@@ -708,8 +723,8 @@ public class DiskManager {
         }
         // find the backup devices
         findBackupDevice(spec_dev, spec_node);
-        LOG.debug("Try to write to backup device firstly: N <" + spec_node.toArray().toString() +
-            ">, D <" + spec_dev.toArray().toString() + ">");
+        LOG.debug("Try to write to backup device firstly: N <" + Arrays.toString(spec_node.toArray()) +
+            ">, D <" + Arrays.toString(spec_dev.toArray()) + ">");
 
         // find the valid entry
         for (int i = 0; i < init_size; i++) {
@@ -1178,7 +1193,10 @@ public class DiskManager {
       r += "\nActive Node Infos: {\n";
       synchronized (ndmap) {
         for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
-          r += prefix + " " + e.getKey() + " -> " + "Rpt TNr: " + e.getValue().totalReportNr + ", Last Rpt " + (System.currentTimeMillis() - e.getValue().lastRptTs)/1000 + "s ago, {\n";
+          r += prefix + " " + e.getKey() + " -> " + "Rpt TNr: " + e.getValue().totalReportNr +
+              ", TREP: " + e.getValue().totalFileRep +
+              ", TDEL: " + e.getValue().totalFileDel +
+              ", Last Rpt " + (System.currentTimeMillis() - e.getValue().lastRptTs)/1000 + "s ago, {\n";
           r += prefix + e.getValue().lastReportStr + "}\n";
         }
       }
@@ -1855,12 +1873,12 @@ public class DiskManager {
             flp.mode == FileLocatingPolicy.EXCLUDE_NODES_DEVS_SHARED) {
           if (flp.devs != null && flp.devs.contains(di.dev)) {
             ignore = true;
-            break;
+            continue;
           }
         } else if (flp.mode == FileLocatingPolicy.SPECIFY_NODES_DEVS) {
           if (flp.devs != null && !flp.devs.contains(di.dev)) {
             ignore = true;
-            break;
+            continue;
           }
         }
         if (!ignore && di.free > free) {
@@ -1923,9 +1941,31 @@ public class DiskManager {
     }
 
     public class DMRepThread implements Runnable {
+      private RawStore rrs = null;
       Thread runner;
 
+      public RawStore getRS() {
+        if (rrs != null) {
+          return rrs;
+        } else {
+          return rs;
+        }
+      }
+
+      public void init(HiveConf conf) throws MetaException {
+        String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
+        Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
+            rawStoreClassName);
+        this.rrs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+      }
+
       public DMRepThread(String threadName) {
+        try {
+          init(hiveConf);
+        } catch (MetaException e) {
+          e.printStackTrace();
+          rrs = null;
+        }
         runner = new Thread(this, threadName);
         runner.start();
       }
@@ -2006,8 +2046,8 @@ public class DiskManager {
                 do {
                   location = "/data/";
                   if (r.file.getDbName() != null && r.file.getTableName() != null) {
-                    synchronized (rs) {
-                      Table t = rs.getTable(r.file.getDbName(), r.file.getTableName());
+                    synchronized (getRS()) {
+                      Table t = getRS().getTable(r.file.getDbName(), r.file.getTableName());
                       location += t.getDbName() + "/" + t.getTableName() + "/"
                           + rand.nextInt(Integer.MAX_VALUE);
                     }
@@ -2017,8 +2057,8 @@ public class DiskManager {
                   nloc = new SFileLocation(node_name, r.file.getFid(), devid, location,
                       i, System.currentTimeMillis(),
                       MetaStoreConst.MFileLocationVisitStatus.OFFLINE, "SFL_REP_DEFAULT");
-                  synchronized (rs) {
-                    if (rs.createFileLocation(nloc)) {
+                  synchronized (getRS()) {
+                    if (getRS().createFileLocation(nloc)) {
                       break;
                     }
                   }
@@ -2212,14 +2252,20 @@ public class DiskManager {
           r = null;
         }
 
-        //FIXME: do not print this info now
-        /*String infos = "----node----->" + r.node + "\n";
-        if (r.dil != null) {
+        // FIXME: do not print this info now
+        if (r.replies != null && r.replies.size() > 0) {
+          String infos = "----> node " + r.node + ", CMDS: {\n";
+          for (DMReply reply : r.replies) {
+            infos += "\t" + reply.toString() + "\n";
+          }
+          infos += "}";
+          LOG.debug(infos);
+        }
+        /*if (r.dil != null) {
           for (DeviceInfo di : r.dil) {
             infos += "----DEVINFO------>" + di.dev + "," + di.mp + "," + di.used + "," + di.free + "\n";
           }
-        }
-        LOG.debug(infos);*/
+        }*/
 
         return r;
       }
@@ -2353,6 +2399,18 @@ public class DiskManager {
             oni = ndmap.get(reportNode.getNode_name());
             if (oni != null) {
               oni.totalReportNr++;
+              if (report.replies != null && report.replies.size() > 0) {
+                for (DMReply r : report.replies) {
+                  switch (r.type) {
+                  case REPLICATED:
+                    oni.totalFileRep++;
+                    break;
+                  case DELETED:
+                    oni.totalFileDel++;
+                    break;
+                  }
+                }
+              }
               oni.lastReportStr = report.toString();
             }
 
@@ -2479,7 +2537,7 @@ public class DiskManager {
                     }
                   }
                 } catch (MetaException e) {
-                  e.printStackTrace();
+                  LOG.error(e, e);
                 }
               }
               toCheckDel.clear();
