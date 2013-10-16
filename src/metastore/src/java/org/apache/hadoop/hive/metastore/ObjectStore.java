@@ -8917,7 +8917,7 @@ public MUser getMUser(String userName) {
       Query query = pm.newQuery(MTable.class, "schema.schemaName == schemaName");
       query.declareParameters("java.lang.String schemaName");
       mtbls = (List<MTable>) query.execute(schemaName);
-      pm.retrieve(mtbls);
+      pm.retrieveAll(mtbls);
       commited = commitTransaction();
     } finally {
       if (!commited) {
