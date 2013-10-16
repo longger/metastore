@@ -215,6 +215,8 @@ public class MetaMsgServer {
 //        //dw2 专用DDL语句
 //    }//end of switch
 
+
+
     jsonMsg = MSGFactory.getMsgData(msg);
     LOG.info("---zjw-- send ddl msg:"+jsonMsg);
     boolean success = false;
@@ -233,15 +235,16 @@ public class MetaMsgServer {
     }
     //zy
     //第一次失败,第二次发送成功的话依然返回false把..
+    //修改
     boolean success = false;
     try{
       success = producer.sendMsg(jsonMsg);
     }catch(InterruptedException ie){
       LOG.error(ie,ie);
-      retrySendMsg(jsonMsg,times-1);
+      return retrySendMsg(jsonMsg,times-1);
     } catch (MetaClientException e) {
       LOG.error(e,e);
-      retrySendMsg(jsonMsg,times-1);
+      return retrySendMsg(jsonMsg,times-1);
     }
     return success;
   }
@@ -342,7 +345,7 @@ public class MetaMsgServer {
 
     nl.add(1l);
     nl.add(2l);
-    List<DDLMsg> msg = MSGFactory.generateDDLMsgs(MSGType.MSG_NEW_PARTITION_FILE,-1l,-1l,null,nl,null);
+    List<DDLMsg> msg = MSGFactory.generateDDLMsgs(MSGType.MSG_ADD_PARTITION_FILE,-1l,-1l,null,nl,null);
     nl.add(3l);
   }
 
