@@ -36,11 +36,11 @@ public class DDLTest {
     //String sql = "drop roleAssignment('a','b')";
     //String sql = "show roleAssignment";
 
-    String sql = "alter schema tb rename to tc";
+    //String sql = "alter schema tb rename to tc";
     //String sql = "alter schema tb add columns(col int)";
     //String sql = "alter schema tb change column tb tc int";
     //String sql = "alter schema tb set schemeproperties('ff'='FF')";
-
+    String sql = "drop schema tb";
 
     Driver dr = new Driver(new HiveConf());
     try {

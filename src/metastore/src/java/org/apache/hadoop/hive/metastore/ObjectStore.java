@@ -4363,7 +4363,7 @@ public class ObjectStore implements RawStore, Configurable {
       //MSG_ALT_TALBE_PARTITIONING
       if(!oldt.getPartitionKeys().equals(newt.getPartitionKeys()))      //要传什么参数呢．．
       {
-        params.put("old_table_name", oldt.getTableName());
+//        params.put("old_table_name", oldt.getTableName());
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,params));
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, newt,params));
       }
@@ -9171,10 +9171,10 @@ public MUser getMUser(String userName) {
       MSchema schema = getMSchema(schemaName);
       pm.retrieve(schema);
 
-//      HashMap<String, Object> old_params = new HashMap<String, Object>();
-//      old_params.put("schema_name", schemaName);
-//      LOG.debug("---zy-- in deleteSchema:"+schema == null);
-//      MSGFactory.DDLMsg msg = MSGFactory.generateDDLMsg(MSGType.MSG_DEL_SCHEMA, -1l, -1l, pm, schema, old_params);
+      HashMap<String, Object> old_params = new HashMap<String, Object>();
+      old_params.put("schema_name", schemaName);
+      LOG.debug("---zy-- in deleteSchema:"+schema == null);
+      MSGFactory.DDLMsg msg = MSGFactory.generateDDLMsg(MSGType.MSG_DEL_SCHEMA, -1l, -1l, pm, schema, old_params);
 
       if (schema != null) {
         // first remove all the grants
@@ -9216,9 +9216,9 @@ public MUser getMUser(String userName) {
       success = commitTransaction();
 
       //在删除之前先获得各种参数,如果删除成功再发送消息
-//      if(success) {
-//        MetaMsgServer.sendMsg(msg);
-//      }
+      if(success) {
+        MetaMsgServer.sendMsg(msg);
+      }
     } finally {
       if (!success) {
         rollbackTransaction();

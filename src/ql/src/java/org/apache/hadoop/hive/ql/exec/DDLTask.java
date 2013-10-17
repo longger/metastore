@@ -5306,8 +5306,7 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
 
   private int dropSchema(Hive db, DropSchemaDesc dropSchemaDesc) throws HiveException {
     GlobalSchema schema = new GlobalSchema();
-    schema.setSchemaName(dropSchemaDesc.getSchemaName());
-    this.db.dropSchema(schema);
+    this.db.dropSchema(dropSchemaDesc.getSchemaName());
     return 0;
   }
   /**

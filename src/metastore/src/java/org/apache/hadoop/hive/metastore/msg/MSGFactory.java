@@ -538,6 +538,12 @@ public class MSGFactory {
         if(msg.getOld_object_params().containsKey("f_id")){
           params.put("f_id",msg.getOld_object_params().get("f_id"));
         }
+        if(msg.getOld_object_params().containsKey("devid")){
+          params.put("devid",msg.getOld_object_params().get("devid"));
+        }
+        if(msg.getOld_object_params().containsKey("location")){
+          params.put("location",msg.getOld_object_params().get("location"));
+        }
         if(msg.getOld_object_params().containsKey("partition_name")){
           params.put("partition_name",msg.getOld_object_params().get("partition_name"));
         }
@@ -635,6 +641,9 @@ public class MSGFactory {
           params.put("f_id", msg.getOld_object_params().get("f_id"));
         } else {
           params.put("f_id", mfl.getFile().getFid());
+        }
+        if(msg.getOld_object_params().containsKey("new_repnr")){
+          params.put("new_repnr",msg.getOld_object_params().get("new_repnr"));
         }
         if (msg.getOld_object_params().containsKey("devid")) {
           params.put("devid", msg.getOld_object_params().get("devid"));
