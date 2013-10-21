@@ -35,22 +35,24 @@ public class MSGType {
       //表参数变化
   public static final int MSG_ALT_TABLE_PARAM = 1206;
       //修改表修改列类型长度
+  public static final int MSG_DROP_TABLE = 1207;        //删除表
+
   public static final int MSG_NEW_PARTITION =  1301;
       // 新建分区
   public static final int MSG_ALT_PARTITION =  1302;
       //修改分区
   public static final int MSG_DEL_PARTITION =  1303;
       // 删除分区
-  public static final int MSG_NEW_PARTITION_FILE =  1304;
+  public static final int MSG_ADD_PARTITION_FILE =  1304;
       //增加分区文件
   public static final int MSG_ALT_PARTITION_FILE =  1305;           ////分区的先不管
       //修改分区文件
-  public static final int MSG_REP_PARTITION_FILE_CHAGE =  1306;
-      //分区文件副本变化
-  public static final int MSG_STA_PARTITION_FILE_CHAGE =  1307;
-      //分区文件状态变化
-  public static final int MSG_REP_PARTITION_FILE_ONOFF =  1308;
-      //分区文件副本上下线变化
+  public static final int MSG_REP_FILE_CHANGE =  1306;
+      //文件副本变化
+  public static final int MSG_STA_FILE_CHANGE =  1307;
+      //文件状态变化
+  public static final int MSG_REP_FILE_ONOFF =  1308;
+      //文件副本上下线变化
   public static final int MSG_DEL_PARTITION_FILE =  1309;
       //删除分区文件
   public static final int MSG_FILE_USER_SET_REP_CHANGE = 1310;
@@ -73,12 +75,6 @@ public class MSGType {
       //增加分区索引文件
   public static final int MSG_ALT_PARTITION_INDEX_FILE = 1409;
       //修改分区索引文件
-  public static final int MSG_REP_PARTITION_INDEX_FILE_CHAGE = 1410;
-      //分区索引文件副本变化
-  public static final int MSG_STA_PARTITION_INDEX_FILE_CHAGE = 1411;
-      //分区索引文件状态变化
-  public static final int MSG_REP_PARTITION_INDEX_FILE_ONOFF = 1412;
-      //分区索引文件副本上下线变化
   public static final int MSG_DEL_PARTITION_INDEX_FILE = 1413;
       //删除分区索引文件
   public static final int MSG_NEW_NODE = 1501;
@@ -89,6 +85,16 @@ public class MSGType {
       //节点故障
   public static final int MSG_BACK_NODE = 1504;
       //节点恢复
+
+  public static final int MSG_CREATE_SCHEMA = 1601;
+  public static final int MSG_MODIFY_SCHEMA_NAME = 1602;
+  public static final int MSG_MODIFY_SCHEMA_DEL_COL = 1603;
+  public static final int MSG_MODIFY_SCHEMA_ADD_COL = 1604;
+  public static final int MSG_MODIFY_SCHEMA_ALT_COL_NAME = 1605;
+  public static final int MSG_MODIFY_SCHEMA_ALT_COL_TYPE = 1606;
+  public static final int MSG_MODIFY_SCHEMA_PARAM = 1607;
+  public static final int MSG_DEL_SCHEMA = 1608;
+
   public static final int MSG_DDL_DIRECT_DW1 = 2001;
   //dw1 专用DDL语句
   public static final int MSG_DDL_DIRECT_DW2 = 2002;
@@ -97,4 +103,9 @@ public class MSGType {
   public static final int MSG_NEW_NODEGROUP = 3001;     //新增节点组
   public static final int MSG_MODIFY_NODEGROUP = 3002;      //修改节点组
   public static final int MSG_DEL_NODEGROUP = 3003;         //删除节点组
+
+  public static final int MSG_CREATE_FILE = 4001;
+  public static final int MSG_DEL_FILE = 4002;
+
+
 }

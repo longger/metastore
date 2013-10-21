@@ -4861,7 +4861,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       old_params.put("partition_level", 2);
       old_params.put("db_name", subpart.getDbName());
       old_params.put("table_name", subpart.getTableName());
-      MetaMsgServer.sendMsg(MSGFactory.generateDDLMsgs(MSGType.MSG_NEW_PARTITION_FILE,-1l,-1l, null,nl,old_params));
+      MetaMsgServer.sendMsg(MSGFactory.generateDDLMsgs(MSGType.MSG_ADD_PARTITION_FILE,-1l,-1l, null,nl,old_params));
       return 0;
     }
 
