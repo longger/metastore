@@ -3325,10 +3325,10 @@ public class Hive {
   }
 
 
-  public void dropSchema(org.apache.hadoop.hive.ql.metadata.GlobalSchema schema) throws HiveException {
+  public void dropSchema(String schemaName) throws HiveException {
 
     try {
-      GlobalSchema gls = getMSC().getSchemaByName(schema.getSchemaName());
+      GlobalSchema gls = getMSC().getSchemaByName(schemaName);
       getMSC().deleteSchema(gls.getSchemaName());
     } catch (Exception e) {
       throw new HiveException(e);

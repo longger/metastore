@@ -3893,8 +3893,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       try {
         ret = getMS().grantPrivileges(privileges);
       } catch (MetaException e) {
+        LOG.error("Unable to grant privileges MetaException:" + e.getMessage());
         throw e;
       } catch (Exception e) {
+        LOG.error("Unable to grant privileges Exception:" + e.getMessage());
         throw new RuntimeException(e);
       }
       return ret;
