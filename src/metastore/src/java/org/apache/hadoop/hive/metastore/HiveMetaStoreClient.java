@@ -49,6 +49,7 @@ import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
+import org.apache.hadoop.hive.metastore.api.CreatePolicy;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.EquipRoom;
@@ -2284,6 +2285,16 @@ public boolean authentication(String user_name, String passwd)
   public List<Long> listFilesByDigest(String digest) throws MetaException, TException {
     assert digest != null;
     return client.listFilesByDigest(digest);
+  }
+
+  @Override
+  public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name,
+      String table_name, List<SplitValue> values) throws FileOperationException, TException {
+    assert policy != null;
+    assert db_name != null;
+    assert table_name != null;
+    assert values != null;
+    return client.create_file_by_policy(policy, repnr, db_name, table_name, values);
   }
 
 }

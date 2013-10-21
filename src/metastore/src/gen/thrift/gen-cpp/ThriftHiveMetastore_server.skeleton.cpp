@@ -697,6 +697,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("create_file\n");
   }
 
+  void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) {
+    // Your implementation goes here
+    printf("create_file_by_policy\n");
+  }
+
   int32_t close_file(const SFile& file) {
     // Your implementation goes here
     printf("close_file\n");

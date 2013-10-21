@@ -40,7 +40,8 @@ public class DDLTest {
     //String sql = "alter schema tb add columns(col int)";
     //String sql = "alter schema tb change column tb tc int";
     //String sql = "alter schema tb set schemeproperties('ff'='FF')";
-    String sql = "drop schema tb";
+
+    String sql = "drop schema z_q_h";
 
     Driver dr = new Driver(new HiveConf());
     try {

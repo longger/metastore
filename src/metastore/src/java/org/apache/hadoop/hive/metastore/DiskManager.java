@@ -745,8 +745,8 @@ public class DiskManager {
           return;
         }
 
-        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES_DEVS, false);
-        flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES_DEVS, true);
+        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS, false);
+        flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
 
         for (int i = init_size; i < (init_size + nr); i++, flp = flp_default) {
           if (i == init_size) {
@@ -757,13 +757,13 @@ public class DiskManager {
           try {
             String node_name = findBestNode(flp);
             if (node_name == null) {
-              LOG.info("Could not find any best node to replicate file " + f.getFid());
+              LOG.warn("Could not find any best node to replicate file " + f.getFid());
               break;
             }
             excludes.add(node_name);
             String devid = findBestDevice(node_name, flp);
             if (devid == null) {
-              LOG.info("Could not find any best device on node " + node_name + " to replicate file " + f.getFid());
+              LOG.warn("Could not find any best device on node " + node_name + " to replicate file " + f.getFid());
               break;
             }
             excl_dev.add(devid);
@@ -1643,18 +1643,25 @@ public class DiskManager {
     static public class FileLocatingPolicy {
       public static final int EXCLUDE_NODES_DEVS = 0;
       public static final int EXCLUDE_NODES_DEVS_SHARED = 1;
-      public static final int SPECIFY_NODES = 2;
       public static final int SPECIFY_NODES_DEVS = 3;
+
+      public static final int SPECIFY_NODES = 0;
+      public static final int EXCLUDE_NODES = 1;
+      public static final int SPECIFY_DEVS = 2;
+      public static final int EXCLUDE_DEVS = 3;
+      public static final int EXCLUDE_DEVS_SHARED = 4;
 
       Set<String> nodes;
       Set<String> devs;
-      int mode;
+      int node_mode;
+      int dev_mode;
       boolean canIgnore;
 
-      public FileLocatingPolicy(Set<String> nodes, Set<String> devs, int mode, boolean canIgnore) {
+      public FileLocatingPolicy(Set<String> nodes, Set<String> devs, int node_mode, int dev_mode, boolean canIgnore) {
         this.nodes = nodes;
         this.devs = devs;
-        this.mode = mode;
+        this.node_mode = node_mode;
+        this.dev_mode = dev_mode;
         this.canIgnore = canIgnore;
       }
     }
@@ -1701,19 +1708,13 @@ public class DiskManager {
       if (safeMode) {
         throw new IOException("Disk Manager is in Safe Mode, waiting for disk reports ...\n");
       }
-      switch (flp.mode) {
-      case FileLocatingPolicy.EXCLUDE_NODES_DEVS:
+      switch (flp.node_mode) {
+      case FileLocatingPolicy.EXCLUDE_NODES:
         if (flp.nodes == null || flp.nodes.size() == 0) {
           return findBestNode(false);
         }
         break;
-      case FileLocatingPolicy.EXCLUDE_NODES_DEVS_SHARED:
-        if (flp.nodes == null || flp.nodes.size() == 0) {
-          return findBestNode(true);
-        }
-        break;
       case FileLocatingPolicy.SPECIFY_NODES:
-      case FileLocatingPolicy.SPECIFY_NODES_DEVS:
         if (flp.nodes == null || flp.nodes.size() == 0) {
           return null;
         }
@@ -1739,7 +1740,7 @@ public class DiskManager {
             if (flp.devs != null) {
               excludeDevs.addAll(flp.devs);
             }
-            if (flp.mode == FileLocatingPolicy.EXCLUDE_NODES_DEVS_SHARED) {
+            if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED) {
               excludeDevs.addAll(findSharedDevs(dis));
             }
             if (!canFindDevices(ni, excludeDevs)) {
@@ -1802,20 +1803,23 @@ public class DiskManager {
 
     private void findBackupDevice(Set<String> dev, Set<String> node) {
       for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
-        for (DeviceInfo di : e.getValue().dis) {
-          Device d = null;
-          synchronized (rs) {
-            try {
-              d = rs.getDevice(di.dev);
-            } catch (MetaException e1) {
-              LOG.error(e1, e1);
-            } catch (NoSuchObjectException e1) {
-              LOG.error(e1, e1);
+        List<DeviceInfo> dis = e.getValue().dis;
+        if (dis != null) {
+          for (DeviceInfo di : dis) {
+            Device d = null;
+            synchronized (rs) {
+              try {
+                d = rs.getDevice(di.dev);
+              } catch (MetaException e1) {
+                LOG.error(e1, e1);
+              } catch (NoSuchObjectException e1) {
+                LOG.error(e1, e1);
+              }
             }
-          }
-          if (d != null && (d.getProp() == MetaStoreConst.MDeviceProp.BACKUP || d.getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE)) {
-            dev.add(di.dev);
-            node.add(d.getNode_name());
+            if (d != null && (d.getProp() == MetaStoreConst.MDeviceProp.BACKUP || d.getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE)) {
+              dev.add(di.dev);
+              node.add(d.getNode_name());
+            }
           }
         }
       }
@@ -1855,7 +1859,7 @@ public class DiskManager {
         throw new IOException("Node '" + node + "' does not exist in NDMap, are you sure node '" + node + "' belongs to this MetaStore?" + hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION) + "\n");
       }
       List<DeviceInfo> dilist = ni.dis;
-      if (flp.mode == FileLocatingPolicy.EXCLUDE_NODES_DEVS_SHARED) {
+      if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED) {
         synchronized (ni) {
           dilist = filterSharedDevice(node, ni.dis);
         }
@@ -1869,13 +1873,13 @@ public class DiskManager {
       for (DeviceInfo di : dilist) {
         boolean ignore = false;
 
-        if (flp.mode == FileLocatingPolicy.EXCLUDE_NODES_DEVS ||
-            flp.mode == FileLocatingPolicy.EXCLUDE_NODES_DEVS_SHARED) {
+        if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS ||
+            flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED) {
           if (flp.devs != null && flp.devs.contains(di.dev)) {
             ignore = true;
             continue;
           }
-        } else if (flp.mode == FileLocatingPolicy.SPECIFY_NODES_DEVS) {
+        } else if (flp.dev_mode == FileLocatingPolicy.SPECIFY_DEVS) {
           if (flp.devs != null && !flp.devs.contains(di.dev)) {
             ignore = true;
             continue;
@@ -2006,8 +2010,8 @@ public class DiskManager {
               }
             }
 
-            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES_DEVS, true);
-            flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES_DEVS, true);
+            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS, true);
+            flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
 
             for (int i = r.begin_idx; i < r.file.getRep_nr(); i++, flp = flp_default) {
               if (i == r.begin_idx) {
@@ -2018,7 +2022,7 @@ public class DiskManager {
               try {
                 String node_name = findBestNode(flp);
                 if (node_name == null) {
-                  LOG.info("Could not find any best node to replicate file " + r.file.getFid());
+                  LOG.warn("Could not find any best node to replicate file " + r.file.getFid());
                   r.begin_idx = i;
                   // insert back to the queue;
                   synchronized (repQ) {
@@ -2029,7 +2033,7 @@ public class DiskManager {
                 excludes.add(node_name);
                 String devid = findBestDevice(node_name, flp);
                 if (devid == null) {
-                  LOG.info("Could not find any best device on node " + node_name + " to replicate file " + r.file.getFid());
+                  LOG.warn("Could not find any best device on node " + node_name + " to replicate file " + r.file.getFid());
                   r.begin_idx = i;
                   // insert back to the queue;
                   synchronized (repQ) {

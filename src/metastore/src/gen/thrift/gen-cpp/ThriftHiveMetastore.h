@@ -151,6 +151,7 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual int64_t renew_delegation_token(const std::string& token_str_form) = 0;
   virtual void cancel_delegation_token(const std::string& token_str_form) = 0;
   virtual void create_file(SFile& _return, const std::string& node_name, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) = 0;
+  virtual void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) = 0;
   virtual int32_t close_file(const SFile& file) = 0;
   virtual bool online_filelocation(const SFile& file) = 0;
   virtual bool toggle_safemode() = 0;
@@ -685,6 +686,9 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
     return;
   }
   void create_file(SFile& /* _return */, const std::string& /* node_name */, const int32_t /* repnr */, const std::string& /* db_name */, const std::string& /* table_name */, const std::vector<SplitValue> & /* values */) {
+    return;
+  }
+  void create_file_by_policy(SFile& /* _return */, const CreatePolicy& /* policy */, const int32_t /* repnr */, const std::string& /* db_name */, const std::string& /* table_name */, const std::vector<SplitValue> & /* values */) {
     return;
   }
   int32_t close_file(const SFile& /* file */) {
@@ -18968,6 +18972,160 @@ class ThriftHiveMetastore_create_file_presult {
 
 };
 
+typedef struct _ThriftHiveMetastore_create_file_by_policy_args__isset {
+  _ThriftHiveMetastore_create_file_by_policy_args__isset() : policy(false), repnr(false), db_name(false), table_name(false), values(false) {}
+  bool policy;
+  bool repnr;
+  bool db_name;
+  bool table_name;
+  bool values;
+} _ThriftHiveMetastore_create_file_by_policy_args__isset;
+
+class ThriftHiveMetastore_create_file_by_policy_args {
+ public:
+
+  ThriftHiveMetastore_create_file_by_policy_args() : repnr(0), db_name(), table_name() {
+  }
+
+  virtual ~ThriftHiveMetastore_create_file_by_policy_args() throw() {}
+
+  CreatePolicy policy;
+  int32_t repnr;
+  std::string db_name;
+  std::string table_name;
+  std::vector<SplitValue>  values;
+
+  _ThriftHiveMetastore_create_file_by_policy_args__isset __isset;
+
+  void __set_policy(const CreatePolicy& val) {
+    policy = val;
+  }
+
+  void __set_repnr(const int32_t val) {
+    repnr = val;
+  }
+
+  void __set_db_name(const std::string& val) {
+    db_name = val;
+  }
+
+  void __set_table_name(const std::string& val) {
+    table_name = val;
+  }
+
+  void __set_values(const std::vector<SplitValue> & val) {
+    values = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_create_file_by_policy_args & rhs) const
+  {
+    if (!(policy == rhs.policy))
+      return false;
+    if (!(repnr == rhs.repnr))
+      return false;
+    if (!(db_name == rhs.db_name))
+      return false;
+    if (!(table_name == rhs.table_name))
+      return false;
+    if (!(values == rhs.values))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_create_file_by_policy_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_create_file_by_policy_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_create_file_by_policy_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_create_file_by_policy_pargs() throw() {}
+
+  const CreatePolicy* policy;
+  const int32_t* repnr;
+  const std::string* db_name;
+  const std::string* table_name;
+  const std::vector<SplitValue> * values;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_create_file_by_policy_result__isset {
+  _ThriftHiveMetastore_create_file_by_policy_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_create_file_by_policy_result__isset;
+
+class ThriftHiveMetastore_create_file_by_policy_result {
+ public:
+
+  ThriftHiveMetastore_create_file_by_policy_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_create_file_by_policy_result() throw() {}
+
+  SFile success;
+  FileOperationException o1;
+
+  _ThriftHiveMetastore_create_file_by_policy_result__isset __isset;
+
+  void __set_success(const SFile& val) {
+    success = val;
+  }
+
+  void __set_o1(const FileOperationException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_create_file_by_policy_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_create_file_by_policy_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_create_file_by_policy_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_create_file_by_policy_presult__isset {
+  _ThriftHiveMetastore_create_file_by_policy_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_create_file_by_policy_presult__isset;
+
+class ThriftHiveMetastore_create_file_by_policy_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_create_file_by_policy_presult() throw() {}
+
+  SFile* success;
+  FileOperationException o1;
+
+  _ThriftHiveMetastore_create_file_by_policy_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 typedef struct _ThriftHiveMetastore_close_file_args__isset {
   _ThriftHiveMetastore_close_file_args__isset() : file(false) {}
   bool file;
@@ -25829,6 +25987,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void create_file(SFile& _return, const std::string& node_name, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
   void send_create_file(const std::string& node_name, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
   void recv_create_file(SFile& _return);
+  void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
+  void send_create_file_by_policy(const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
+  void recv_create_file_by_policy(SFile& _return);
   int32_t close_file(const SFile& file);
   void send_close_file(const SFile& file);
   int32_t recv_close_file();
@@ -26124,6 +26285,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_renew_delegation_token(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_cancel_delegation_token(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_create_file(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_create_file_by_policy(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_close_file(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_online_filelocation(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_toggle_safemode(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -26313,6 +26475,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["renew_delegation_token"] = &ThriftHiveMetastoreProcessor::process_renew_delegation_token;
     processMap_["cancel_delegation_token"] = &ThriftHiveMetastoreProcessor::process_cancel_delegation_token;
     processMap_["create_file"] = &ThriftHiveMetastoreProcessor::process_create_file;
+    processMap_["create_file_by_policy"] = &ThriftHiveMetastoreProcessor::process_create_file_by_policy;
     processMap_["close_file"] = &ThriftHiveMetastoreProcessor::process_close_file;
     processMap_["online_filelocation"] = &ThriftHiveMetastoreProcessor::process_online_filelocation;
     processMap_["toggle_safemode"] = &ThriftHiveMetastoreProcessor::process_toggle_safemode;
@@ -27671,6 +27834,16 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
       ifaces_[i]->create_file(_return, node_name, repnr, db_name, table_name, values);
     }
     ifaces_[i]->create_file(_return, node_name, repnr, db_name, table_name, values);
+    return;
+  }
+
+  void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->create_file_by_policy(_return, policy, repnr, db_name, table_name, values);
+    }
+    ifaces_[i]->create_file_by_policy(_return, policy, repnr, db_name, table_name, values);
     return;
   }
 

@@ -76,6 +76,9 @@ enum FOFailReason {
   INVALID_NODE = 1,
   INVALID_TABLE = 2,
   INVALID_FILE = 3,
+  INVALID_SPLIT_VALUES = 4,
+  INVALID_ATTRIBUTION = 5,
+  INVALID_NODE_GROUPS = 6,
   
   NOSPACE = 10,
   NOTEXIST = 11,
@@ -168,6 +171,14 @@ enum MSOperation {
 	ALTERINDEX_PROPS = 43,
 	ALTERDATABASE = 44,
 	DESCDATABASE = 45,
+}
+
+enum CreateOperation {
+	CREATE_NEW = 1,
+    CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST = 2,
+    CREATE_NEW_IN_NODEGROUPS = 3,
+    
+    CREATE_AUX_IDX_FILE = 4,
 }
 
 struct Role {
@@ -331,6 +342,11 @@ struct SplitValue {
   4: i64	verison,
 }
 
+struct CreatePolicy {
+  1: CreateOperation operation,
+  2: list<string> arguments,
+}
+
 struct Device {
   1: string devid,
   2: i32    prop,
@@ -360,7 +376,8 @@ struct SFile {
   8: i64	all_record_nr,
   9: list<SFileLocation> locations,
   10: i64    length,
-  11: list<SplitValue> values,
+  11: list<i64> ref_files,
+  12: list<SplitValue> values,
 }
 
 struct SFileRef {
@@ -920,6 +937,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   // method for file operations
   SFile create_file(1:string node_name, 2:i32 repnr, 3:string db_name, 4:string table_name, 5:list<SplitValue> values) throws (1:FileOperationException o1)
+  
+  SFile create_file_by_policy(1:CreatePolicy policy, 2:i32 repnr, 3:string db_name, 4:string table_name, 5:list<SplitValue> values) throws (1:FileOperationException o1)
   
   i32 close_file(1:SFile file) throws (1:FileOperationException o1, 2:MetaException o2)
   

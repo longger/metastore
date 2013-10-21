@@ -26,7 +26,6 @@ import java.util.Map;
 
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
-import org.apache.hadoop.hive.metastore.api.Order;
 import org.apache.hadoop.hive.ql.exec.Utilities;
 
 /**
@@ -58,10 +57,7 @@ public class AlterSchemaDesc extends DDLDesc implements Serializable {
   HashMap<String, String> props;
   String inputFormat;
   String outputFormat;
-  String storageHandler;
-  int numberBuckets;
-  ArrayList<String> bucketColumns;
-  ArrayList<Order> sortColumns;
+
 
   String oldColName;
   String newColName;
@@ -298,66 +294,6 @@ public class AlterSchemaDesc extends DDLDesc implements Serializable {
     this.outputFormat = outputFormat;
   }
 
-  /**
-   * @return the storage handler
-   */
-  @Explain(displayName = "storage handler")
-  public String getStorageHandler() {
-    return storageHandler;
-  }
-
-  /**
-   * @param storageHandler
-   *          the storage handler to set
-   */
-  public void setStorageHandler(String storageHandler) {
-    this.storageHandler = storageHandler;
-  }
-
-  /**
-   * @return the number of buckets
-   */
-  public int getNumberBuckets() {
-    return numberBuckets;
-  }
-
-  /**
-   * @param numberBuckets
-   *          the number of buckets to set
-   */
-  public void setNumberBuckets(int numberBuckets) {
-    this.numberBuckets = numberBuckets;
-  }
-
-  /**
-   * @return the bucket columns
-   */
-  public ArrayList<String> getBucketColumns() {
-    return bucketColumns;
-  }
-
-  /**
-   * @param bucketColumns
-   *          the bucket columns to set
-   */
-  public void setBucketColumns(ArrayList<String> bucketColumns) {
-    this.bucketColumns = bucketColumns;
-  }
-
-  /**
-   * @return the sort columns
-   */
-  public ArrayList<Order> getSortColumns() {
-    return sortColumns;
-  }
-
-  /**
-   * @param sortColumns
-   *          the sort columns to set
-   */
-  public void setSortColumns(ArrayList<Order> sortColumns) {
-    this.sortColumns = sortColumns;
-  }
 
   /**
    * @return old column name

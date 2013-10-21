@@ -2263,6 +2263,22 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'create_file failed: unknown result')
     end
 
+    def create_file_by_policy(policy, repnr, db_name, table_name, values)
+      send_create_file_by_policy(policy, repnr, db_name, table_name, values)
+      return recv_create_file_by_policy()
+    end
+
+    def send_create_file_by_policy(policy, repnr, db_name, table_name, values)
+      send_message('create_file_by_policy', Create_file_by_policy_args, :policy => policy, :repnr => repnr, :db_name => db_name, :table_name => table_name, :values => values)
+    end
+
+    def recv_create_file_by_policy()
+      result = receive_message(Create_file_by_policy_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'create_file_by_policy failed: unknown result')
+    end
+
     def close_file(file)
       send_close_file(file)
       return recv_close_file()
@@ -4773,6 +4789,17 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'create_file', seqid)
+    end
+
+    def process_create_file_by_policy(seqid, iprot, oprot)
+      args = read_args(iprot, Create_file_by_policy_args)
+      result = Create_file_by_policy_result.new()
+      begin
+        result.success = @handler.create_file_by_policy(args.policy, args.repnr, args.db_name, args.table_name, args.values)
+      rescue ::FileOperationException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'create_file_by_policy', seqid)
     end
 
     def process_close_file(seqid, iprot, oprot)
@@ -10440,6 +10467,48 @@ module ThriftHiveMetastore
   end
 
   class Create_file_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::STRUCT, :name => 'success', :class => ::SFile},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::FileOperationException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Create_file_by_policy_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    POLICY = 1
+    REPNR = 2
+    DB_NAME = 3
+    TABLE_NAME = 4
+    VALUES = 5
+
+    FIELDS = {
+      POLICY => {:type => ::Thrift::Types::STRUCT, :name => 'policy', :class => ::CreatePolicy},
+      REPNR => {:type => ::Thrift::Types::I32, :name => 'repnr'},
+      DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
+      TABLE_NAME => {:type => ::Thrift::Types::STRING, :name => 'table_name'},
+      VALUES => {:type => ::Thrift::Types::LIST, :name => 'values', :element => {:type => ::Thrift::Types::STRUCT, :class => ::SplitValue}}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Create_file_by_policy_result
     include ::Thrift::Struct, ::Thrift::Struct_Union
     SUCCESS = 0
     O1 = 1

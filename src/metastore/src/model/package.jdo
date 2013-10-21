@@ -1242,6 +1242,18 @@
       <field name="length">
         <column name="length"/>
       </field>
+      <field name="create_time">
+        <column name="create_time"/>
+      </field>
+      <field name="ref_files" table="FILE_REF_FILES">
+        <collection element-type="java.lang.Long"/>
+        <join>
+          <column name="FILE_ID"/>
+        </join>
+        <element>
+          <column name="FID"/>
+        </element>
+      </field>
       
       <field name="values" table="FILE_KEY_VALS">
         <collection element-type="MSplitValue"/>

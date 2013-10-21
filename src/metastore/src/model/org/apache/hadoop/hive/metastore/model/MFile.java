@@ -12,10 +12,12 @@ public class MFile {
   private long all_record_nr;
   //private List<MFileLocation> locations;
   private long length;
+  private long create_time;
+  private List<Long> ref_files;
   private List<MSplitValue> values;
 
   public MFile(long fid, MTable table, int store_status, int rep_nr, String digest,
-      long record_nr, long all_record_nr, long length, List<MSplitValue> values) {
+      long record_nr, long all_record_nr, long length, List<Long> ref_files, List<MSplitValue> values) {
     this.setFid(fid);
     this.setTable(table);
     this.store_status = store_status;
@@ -24,6 +26,8 @@ public class MFile {
     this.record_nr = record_nr;
     this.all_record_nr = all_record_nr;
     this.setLength(length);
+    this.create_time = System.currentTimeMillis();
+    this.ref_files = ref_files;
     this.values = values;
   }
 
@@ -87,5 +91,21 @@ public class MFile {
 
   public void setTable(MTable table) {
     this.table = table;
+  }
+
+  public long getCreate_time() {
+    return create_time;
+  }
+
+  public void setCreate_time(long create_time) {
+    this.create_time = create_time;
+  }
+
+  public List<Long> getRef_files() {
+    return ref_files;
+  }
+
+  public void setRef_files(List<Long> ref_files) {
+    this.ref_files = ref_files;
   }
 }

@@ -36,12 +36,15 @@ module FOFailReason
   INVALID_NODE = 1
   INVALID_TABLE = 2
   INVALID_FILE = 3
+  INVALID_SPLIT_VALUES = 4
+  INVALID_ATTRIBUTION = 5
+  INVALID_NODE_GROUPS = 6
   NOSPACE = 10
   NOTEXIST = 11
   SAFEMODE = 12
   INVALID_STATE = 13
-  VALUE_MAP = {1 => "INVALID_NODE", 2 => "INVALID_TABLE", 3 => "INVALID_FILE", 10 => "NOSPACE", 11 => "NOTEXIST", 12 => "SAFEMODE", 13 => "INVALID_STATE"}
-  VALID_VALUES = Set.new([INVALID_NODE, INVALID_TABLE, INVALID_FILE, NOSPACE, NOTEXIST, SAFEMODE, INVALID_STATE]).freeze
+  VALUE_MAP = {1 => "INVALID_NODE", 2 => "INVALID_TABLE", 3 => "INVALID_FILE", 4 => "INVALID_SPLIT_VALUES", 5 => "INVALID_ATTRIBUTION", 6 => "INVALID_NODE_GROUPS", 10 => "NOSPACE", 11 => "NOTEXIST", 12 => "SAFEMODE", 13 => "INVALID_STATE"}
+  VALID_VALUES = Set.new([INVALID_NODE, INVALID_TABLE, INVALID_FILE, INVALID_SPLIT_VALUES, INVALID_ATTRIBUTION, INVALID_NODE_GROUPS, NOSPACE, NOTEXIST, SAFEMODE, INVALID_STATE]).freeze
 end
 
 module FindNodePolicy
@@ -99,6 +102,15 @@ module MSOperation
   DESCDATABASE = 45
   VALUE_MAP = {1 => "EXPLAIN", 2 => "CREATEDATABASE", 3 => "DROPDATABASE", 4 => "DROPTABLE", 5 => "DESCTABLE", 6 => "ALTERTABLE_RENAME", 7 => "ALTERTABLE_RENAMECOL", 8 => "ALTERTABLE_ADDPARTS", 9 => "ALTERTABLE_DROPPARTS", 10 => "ALTERTABLE_ADDCOLS", 11 => "ALTERTABLE_REPLACECOLS", 12 => "ALTERTABLE_RENAMEPART", 13 => "ALTERTABLE_PROPERTIES", 14 => "SHOWDATABASES", 15 => "SHOWTABLES", 16 => "SHOWCOLUMNS", 17 => "SHOW_TABLESTATUS", 18 => "SHOW_TBLPROPERTIES", 19 => "SHOW_CREATETABLE", 20 => "SHOWINDEXES", 21 => "SHOWPARTITIONS", 22 => "CREATEVIEW", 23 => "DROPVIEW", 24 => "CREATEINDEX", 25 => "DROPINDEX", 26 => "ALTERINDEX_REBUILD", 27 => "ALTERVIEW_PROPERTIES", 28 => "CREATEUSER", 29 => "DROPUSER", 30 => "CHANGE_PWD", 31 => "AUTHENTICATION", 32 => "SHOW_USERNAMES", 33 => "CREATEROLE", 34 => "DROPROLE", 35 => "GRANT_PRIVILEGE", 36 => "REVOKE_PRIVILEGE", 37 => "SHOW_GRANT", 38 => "GRANT_ROLE", 39 => "REVOKE_ROLE", 40 => "SHOW_ROLE_GRANT", 41 => "CREATETABLE", 42 => "QUERY", 43 => "ALTERINDEX_PROPS", 44 => "ALTERDATABASE", 45 => "DESCDATABASE"}
   VALID_VALUES = Set.new([EXPLAIN, CREATEDATABASE, DROPDATABASE, DROPTABLE, DESCTABLE, ALTERTABLE_RENAME, ALTERTABLE_RENAMECOL, ALTERTABLE_ADDPARTS, ALTERTABLE_DROPPARTS, ALTERTABLE_ADDCOLS, ALTERTABLE_REPLACECOLS, ALTERTABLE_RENAMEPART, ALTERTABLE_PROPERTIES, SHOWDATABASES, SHOWTABLES, SHOWCOLUMNS, SHOW_TABLESTATUS, SHOW_TBLPROPERTIES, SHOW_CREATETABLE, SHOWINDEXES, SHOWPARTITIONS, CREATEVIEW, DROPVIEW, CREATEINDEX, DROPINDEX, ALTERINDEX_REBUILD, ALTERVIEW_PROPERTIES, CREATEUSER, DROPUSER, CHANGE_PWD, AUTHENTICATION, SHOW_USERNAMES, CREATEROLE, DROPROLE, GRANT_PRIVILEGE, REVOKE_PRIVILEGE, SHOW_GRANT, GRANT_ROLE, REVOKE_ROLE, SHOW_ROLE_GRANT, CREATETABLE, QUERY, ALTERINDEX_PROPS, ALTERDATABASE, DESCDATABASE]).freeze
+end
+
+module CreateOperation
+  CREATE_NEW = 1
+  CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST = 2
+  CREATE_NEW_IN_NODEGROUPS = 3
+  CREATE_AUX_IDX_FILE = 4
+  VALUE_MAP = {1 => "CREATE_NEW", 2 => "CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST", 3 => "CREATE_NEW_IN_NODEGROUPS", 4 => "CREATE_AUX_IDX_FILE"}
+  VALID_VALUES = Set.new([CREATE_NEW, CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST, CREATE_NEW_IN_NODEGROUPS, CREATE_AUX_IDX_FILE]).freeze
 end
 
 class Version
@@ -700,6 +712,27 @@ class SplitValue
   ::Thrift::Struct.generate_accessors self
 end
 
+class CreatePolicy
+  include ::Thrift::Struct, ::Thrift::Struct_Union
+  OPERATION = 1
+  ARGUMENTS = 2
+
+  FIELDS = {
+    OPERATION => {:type => ::Thrift::Types::I32, :name => 'operation', :enum_class => ::CreateOperation},
+    ARGUMENTS => {:type => ::Thrift::Types::LIST, :name => 'arguments', :element => {:type => ::Thrift::Types::STRING}}
+  }
+
+  def struct_fields; FIELDS; end
+
+  def validate
+    unless @operation.nil? || ::CreateOperation::VALID_VALUES.include?(@operation)
+      raise ::Thrift::ProtocolException.new(::Thrift::ProtocolException::UNKNOWN, 'Invalid value of field operation!')
+    end
+  end
+
+  ::Thrift::Struct.generate_accessors self
+end
+
 class Device
   include ::Thrift::Struct, ::Thrift::Struct_Union
   DEVID = 1
@@ -764,7 +797,8 @@ class SFile
   ALL_RECORD_NR = 8
   LOCATIONS = 9
   LENGTH = 10
-  VALUES = 11
+  REF_FILES = 11
+  VALUES = 12
 
   FIELDS = {
     FID => {:type => ::Thrift::Types::I64, :name => 'fid'},
@@ -777,6 +811,7 @@ class SFile
     ALL_RECORD_NR => {:type => ::Thrift::Types::I64, :name => 'all_record_nr'},
     LOCATIONS => {:type => ::Thrift::Types::LIST, :name => 'locations', :element => {:type => ::Thrift::Types::STRUCT, :class => ::SFileLocation}},
     LENGTH => {:type => ::Thrift::Types::I64, :name => 'length'},
+    REF_FILES => {:type => ::Thrift::Types::LIST, :name => 'ref_files', :element => {:type => ::Thrift::Types::I64}},
     VALUES => {:type => ::Thrift::Types::LIST, :name => 'values', :element => {:type => ::Thrift::Types::STRUCT, :class => ::SplitValue}}
   }
 

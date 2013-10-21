@@ -791,7 +791,7 @@ public class ObjectStore implements RawStore, Configurable {
   @Override
   public List<SFile> filterTableFiles(String dbName, String tableName, List<SplitValue> values) throws MetaException {
     List<SFile> rls = new ArrayList<SFile>();
-    String filter = "", parameters = "java.lang.String tableName, java.lang.String dbName, java.util.Collection values";
+    String filter = "", parameters = "java.lang.String tableName, java.lang.String dbName";
     Map<String, Object> params = new HashMap<String, Object>();
 
     if (values.size() == 0) {
@@ -801,19 +801,35 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query q = pm.newQuery(MFile.class, "this.table.tableName == tableName && this.table.database.name == dbName");
       for (int i = 0; i < values.size(); i++) {
-        filter += "values.get(" + i + ").splitKeyName == 'rel_time'";
+        if (i != 0) {
+          filter += "&&";
+        }
+        filter += "(this.values.contains(v" + i + ") && (v"
+            + i + ".pkname == v" + i + "pkname && v"
+            + i + ".level == v" + i + "level && v"
+            + i + ".value == v" + i + "value && v"
+            + i + ".version == v" + i + "version" + "))";
+        params.put("v" + i + "pkname", values.get(i).getSplitKeyName());
+        params.put("v" + i + "level", values.get(i).getLevel());
+        params.put("v" + i + "value", values.get(i).getValue());
+        params.put("v" + i + "version", values.get(i).getVerison());
+        parameters += ", java.lang.String v" + i + "pkname";
+        parameters += ", java.lang.Integer v" + i + "level";
+        parameters += ", java.lang.String v" + i + "value";
+        parameters += ", java.lang.Long v" + i + "version";
+        //filter += "values.get(" + i + ").splitKeyName == this.values.get(" + i + ").splitKeyName";
       }
 
       params.put("tableName", tableName);
       params.put("dbName", dbName);
-      params.put("values", values);
 
-      LOG.info("Got filter: " + filter);
-      LOG.info("Got parameter: " + parameters);
+      LOG.debug("Got filter: " + filter);
+      LOG.debug("Got parameter: " + parameters);
+      LOG.debug("Got kvs: " + params.toString());
 
       q.setFilter(filter);
       q.declareParameters(parameters);
-      Collection files = (Collection)q.execute(tableName, dbName, values);
+      Collection files = (Collection)q.executeWithMap(params);
       Iterator iter = files.iterator();
       while (iter.hasNext()) {
         MFile mf = (MFile)iter.next();
@@ -1551,7 +1567,7 @@ public class ObjectStore implements RawStore, Configurable {
     //createFile(new SFile(10, 10, 3, 4, "abc", 1, 2, null));
     //createFile(new SFile(20, 10, 5, 6, "xyz", 1, 2, null));
     Node n = new Node("macan", ips, MetaStoreConst.MNodeStatus.SUSPECT);
-    SFile sf = new SFile(0, "db", "table", 5, 6, "xyzadfads", 1, 2, null, 100, null);
+    SFile sf = new SFile(0, "db", "table", 5, 6, "xyzadfads", 1, 2, null, 100, null, null);
     createNode(n);
     MDevice md1 = new MDevice(getMNode("macan"), "dev-hello", 0, 0);
     MDevice md2 = new MDevice(getMNode("macan"), "xyz1", 0, 0);
@@ -2653,7 +2669,7 @@ public class ObjectStore implements RawStore, Configurable {
       }
     }
     return new SFile(mf.getFid(), dbName, tableName, mf.getStore_status(), mf.getRep_nr(),
-        mf.getDigest(), mf.getRecord_nr(), mf.getAll_record_nr(), null, mf.getLength(), values);
+        mf.getDigest(), mf.getRecord_nr(), mf.getAll_record_nr(), null, mf.getLength(), mf.getRef_files(), values);
   }
 
   private List<SFileLocation> convertToSFileLocation(List<MFileLocation> mfl) throws MetaException {
@@ -2774,7 +2790,7 @@ public class ObjectStore implements RawStore, Configurable {
     }
 
     return new MFile(file.getFid(), mt, file.getStore_status(), file.getRep_nr(),
-        file.getDigest(), file.getRecord_nr(), file.getAll_record_nr(), file.getLength(), values);
+        file.getDigest(), file.getRecord_nr(), file.getAll_record_nr(), file.getLength(), file.getRef_files(), values);
   }
 
   private MFileLocation convertToMFileLocation(SFileLocation location) {
