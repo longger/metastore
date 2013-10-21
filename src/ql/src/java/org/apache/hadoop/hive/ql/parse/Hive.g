@@ -1943,7 +1943,7 @@ splitExper
 @init { msgs.push("splitExper specification"); }
 @after { msgs.pop(); }
     :KW_SPLIT split_name=splitName  partitionValuesExper  subSplitTemplate?
-    -> ^(TOK_SPLIT $splitName partitionValuesExper subSplitTemplate?)
+    -> ^(TOK_SPLIT $split_name partitionValuesExper subSplitTemplate?)
     ;
     
 partitionExper
