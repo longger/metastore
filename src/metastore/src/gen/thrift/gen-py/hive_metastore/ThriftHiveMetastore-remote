@@ -158,6 +158,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '  i64 renew_delegation_token(string token_str_form)'
   print '  void cancel_delegation_token(string token_str_form)'
   print '  SFile create_file(string node_name, i32 repnr, string db_name, string table_name,  values)'
+  print '  SFile create_file_by_policy(CreatePolicy policy, i32 repnr, string db_name, string table_name,  values)'
   print '  i32 close_file(SFile file)'
   print '  bool online_filelocation(SFile file)'
   print '  bool toggle_safemode()'
@@ -1068,6 +1069,12 @@ elif cmd == 'create_file':
     print 'create_file requires 5 args'
     sys.exit(1)
   pp.pprint(client.create_file(args[0],eval(args[1]),args[2],args[3],eval(args[4]),))
+
+elif cmd == 'create_file_by_policy':
+  if len(args) != 5:
+    print 'create_file_by_policy requires 5 args'
+    sys.exit(1)
+  pp.pprint(client.create_file_by_policy(eval(args[0]),eval(args[1]),args[2],args[3],eval(args[4]),))
 
 elif cmd == 'close_file':
   if len(args) != 1:

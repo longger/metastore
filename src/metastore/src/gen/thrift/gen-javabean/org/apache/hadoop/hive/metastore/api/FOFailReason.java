@@ -15,6 +15,9 @@ public enum FOFailReason implements org.apache.thrift.TEnum {
   INVALID_NODE(1),
   INVALID_TABLE(2),
   INVALID_FILE(3),
+  INVALID_SPLIT_VALUES(4),
+  INVALID_ATTRIBUTION(5),
+  INVALID_NODE_GROUPS(6),
   NOSPACE(10),
   NOTEXIST(11),
   SAFEMODE(12),
@@ -45,6 +48,12 @@ public enum FOFailReason implements org.apache.thrift.TEnum {
         return INVALID_TABLE;
       case 3:
         return INVALID_FILE;
+      case 4:
+        return INVALID_SPLIT_VALUES;
+      case 5:
+        return INVALID_ATTRIBUTION;
+      case 6:
+        return INVALID_NODE_GROUPS;
       case 10:
         return NOSPACE;
       case 11:

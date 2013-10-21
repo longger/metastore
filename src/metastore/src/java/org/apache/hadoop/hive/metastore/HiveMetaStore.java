@@ -68,6 +68,8 @@ import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsDesc;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
+import org.apache.hadoop.hive.metastore.api.CreateOperation;
+import org.apache.hadoop.hive.metastore.api.CreatePolicy;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.EnvironmentContext;
@@ -206,6 +208,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
   public static DiskManager dm = null;
   public static Random rand = new Random();
+
+  public static Long file_creation_lock = 0L;
 
   public static class HMSHandler extends FacebookBase implements
       IHMSHandler {
@@ -4405,7 +4409,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         repnr++;
       }
       // do not select the backup/shared device for the first entry
-      FileLocatingPolicy flp = new FileLocatingPolicy(null, dm.backupDevs, FileLocatingPolicy.EXCLUDE_NODES_DEVS_SHARED, false);
+      FileLocatingPolicy flp = new FileLocatingPolicy(null, dm.backupDevs, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
       return create_file(flp, node_name, repnr, db_name, table_name, values);
     }
 
@@ -4416,7 +4420,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throw new FileOperationException("Invalid File Split Values: inconsistent version among values?", FOFailReason.INVALID_FILE);
       }
       SFile cfile = new SFile(0, dbName, tableName, MetaStoreConst.MFileStoreStatus.INCREATE, repnr,
-          "SFILE_DEFAULT_X", 0, 0, null, 0, values);
+          "SFILE_DEFAULT_X", 0, 0, null, 0, null, values);
       getMS().createFile(cfile);
       cfile = getMS().getSFile(cfile.getFid());
       if (cfile == null) {
@@ -4451,7 +4455,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       }
       try {
         if (flp == null) {
-          flp = new FileLocatingPolicy(null, null, FileLocatingPolicy.EXCLUDE_NODES_DEVS_SHARED, true);
+          flp = new FileLocatingPolicy(null, null, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, true);
         }
         String devid = dm.findBestDevice(node_name, flp);
 
@@ -4474,7 +4478,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
         // how to convert table_name to tbl_id?
         cfile = new SFile(0, db_name, table_name, MetaStoreConst.MFileStoreStatus.INCREATE, repnr,
-            "SFILE_DEFALUT", 0, 0, null, 0, values);
+            "SFILE_DEFALUT", 0, 0, null, 0, null, values);
         getMS().createFile(cfile);
         cfile = getMS().getSFile(cfile.getFid());
         if (cfile == null) {
@@ -6434,6 +6438,205 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     public List<Long> listFilesByDigest(String digest) throws MetaException, TException {
       startFunction("listFilesByDigest", "digest: " + digest);
       return getMS().findSpecificDigestFiles(digest);
+    }
+
+    @Override
+    public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name,
+        String table_name, List<SplitValue> values) throws FileOperationException, TException {
+      Table tbl = null;
+      List<NodeGroup> ngs = null;
+      Set<String> ngnodes = new HashSet<String>();
+
+      // Step 1: parse the policy and check arguments
+      switch (policy.getOperation()) {
+      case CREATE_NEW_IN_NODEGROUPS:
+      case CREATE_NEW:
+      case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
+        // check db, table now
+        try {
+          tbl = getMS().getTable(db_name, table_name);
+        } catch (MetaException me) {
+          throw new FileOperationException("getTable:" + db_name + "." + table_name + " + " + me.getMessage(), FOFailReason.INVALID_TABLE);
+        }
+        if (tbl == null) {
+            throw new FileOperationException("Invalid DB or Table name:" + db_name + "." + table_name, FOFailReason.INVALID_TABLE);
+        }
+
+        // check nodegroups now
+        if (policy.getOperation() == CreateOperation.CREATE_NEW_IN_NODEGROUPS) {
+          if (policy.getArgumentsSize() <= 0) {
+            throw new FileOperationException("Invalid arguments in CreatePolicy.", FOFailReason.INVALID_NODE_GROUPS);
+          }
+          ngs = tbl.getNodeGroups();
+          if (ngs != null && ngs.size() > 0) {
+             for (NodeGroup ng : ngs) {
+               ngnodes.add(ng.getNode_group_name());
+             }
+          }
+          for (String ng : policy.getArguments()) {
+            if (!ngnodes.contains(ng)) {
+              throw new FileOperationException("Invalid node groups set in CreatePolicy.", FOFailReason.INVALID_NODE_GROUPS);
+            }
+          }
+        } else {
+          ngs = tbl.getNodeGroups();
+        }
+        // check values now
+        if (values == null || values.size() == 0) {
+          throw new FileOperationException("Invalid file split values.", FOFailReason.INVALID_SPLIT_VALUES);
+        }
+        List<PartitionInfo> pis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl.getFileSplitKeys());
+        int vlen = 0;
+        for (PartitionInfo pi : pis) {
+          switch (pi.getP_type()) {
+          case none:
+          case roundrobin:
+          case list:
+          case range:
+            break;
+          case interval:
+            vlen += 2;
+            break;
+          case hash:
+            vlen += 1;
+            break;
+          }
+        }
+        if (vlen != values.size()) {
+          throw new FileOperationException("File split value should be " + vlen + " entries.", FOFailReason.INVALID_SPLIT_VALUES);
+        }
+        long low = -1, high = -1;
+        for (int i = 0, j = 0; i < values.size(); i++) {
+          SplitValue sv = values.get(i);
+          PartitionInfo pi = pis.get(j);
+
+          switch (pi.getP_type()) {
+          case none:
+          case roundrobin:
+          case list:
+          case range:
+            throw new FileOperationException("Split type " + pi.getP_type() + " shouldn't be set values.", FOFailReason.INVALID_SPLIT_VALUES);
+          case interval:
+            if (low == -1) {
+              low = Long.parseLong(sv.getValue());
+              break;
+            }
+            if (high == -1) {
+              high = Long.parseLong(sv.getValue());
+              // check range
+              String interval_unit = pi.getArgs().get(0);
+              Double d = Double.parseDouble(pi.getArgs().get(1));
+              Long interval_seconds = 0L;
+              try {
+                interval_seconds = PartitionFactory.getIntervalSeconds(interval_unit, d);
+              } catch (Exception e) {
+                throw new FileOperationException("Handle interval split: internal error.", FOFailReason.INVALID_SPLIT_VALUES);
+              }
+              if (high - low != interval_seconds) {
+                throw new FileOperationException("Invalid interval range specified: [" + low + ", " + high +
+                    "), expect range length: " + interval_seconds + ".", FOFailReason.INVALID_SPLIT_VALUES);
+              }
+              // unit check
+              Long iu = 1L;
+              try {
+                iu = PartitionFactory.getIntervalUnit(interval_unit);
+              } catch (Exception e) {
+                throw new FileOperationException("Handle interval split unit: interval error.", FOFailReason.INVALID_SPLIT_VALUES);
+              }
+              if (low % iu != 0) {
+                throw new FileOperationException("The low limit of interval split should be MODed by unit " +
+                    interval_unit + "(" + iu + ").", FOFailReason.INVALID_SPLIT_VALUES);
+              }
+              j++;
+              break;
+            }
+            break;
+          case hash:
+            low = high = -1;
+            long v = Long.parseLong(sv.getValue());
+            if (v < 0 && v >= pi.getP_num()) {
+              throw new FileOperationException("Hash value exceeds valid range: [0, " + pi.getP_num() + ").", FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            break;
+          }
+          // check version, column name here
+          if (sv.getVerison() != pi.getP_version() ||
+              pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
+            throw new FileOperationException("Version or SplitKeyName mismatch, please check your metadata.", FOFailReason.INVALID_SPLIT_VALUES);
+          }
+
+        }
+        break;
+      case CREATE_AUX_IDX_FILE:
+        // ignore db, table, and values check
+        break;
+      }
+
+      // Step 2: do file creation or file gets now
+      boolean do_create = true;
+      SFile r = null;
+
+      if (policy.getOperation() == CreateOperation.CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST) {
+        // get files by value firstly
+        List<SFile> gfs = getMS().filterTableFiles(db_name, table_name, values);
+        if (gfs != null && gfs.size() > 0) {
+          // this means there are many files with this same split value, check if there exists INCREATE file
+          for (SFile f : gfs) {
+            if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+              // ok, we should return this INCREATE file
+              r = f;
+              do_create = false;
+              break;
+            }
+          }
+        }
+      }
+      if (do_create) {
+        FileLocatingPolicy flp = null;
+
+        // do not select the backup/shared device for the first entry
+        switch (policy.getOperation()) {
+        case CREATE_NEW_IN_NODEGROUPS:
+          flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+          break;
+        case CREATE_NEW:
+        case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
+          if (ngs != null) {
+            // use all available node group's nodes
+            for (NodeGroup ng : ngs) {
+              ngnodes.add(ng.getNode_group_name());
+            }
+            flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+          }
+          break;
+        case CREATE_AUX_IDX_FILE:
+          // use all available ndoes
+          flp = new FileLocatingPolicy(null, dm.backupDevs, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+          break;
+        default:
+            throw new FileOperationException("Invalid create operation provided!", FOFailReason.INVALID_FILE);
+        }
+
+        if (policy.getOperation() == CreateOperation.CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST) {
+          synchronized (file_creation_lock) {
+            // final check here
+            List<SFile> gfs = getMS().filterTableFiles(db_name, table_name, values);
+            if (gfs != null && gfs.size() > 0) {
+              for (SFile f : gfs) {
+                if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+                  // oh, we should return now
+                  return f;
+                }
+              }
+            }
+            // ok, it means there is no INCREATE files, create one
+            r = create_file(flp, null, repnr, db_name, table_name, values);
+          }
+        } else {
+          r = create_file(flp, null, repnr, db_name, table_name, values);
+        }
+      }
+      return r;
     }
 
   }

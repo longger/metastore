@@ -52,6 +52,9 @@ struct FOFailReason {
     INVALID_NODE = 1,
     INVALID_TABLE = 2,
     INVALID_FILE = 3,
+    INVALID_SPLIT_VALUES = 4,
+    INVALID_ATTRIBUTION = 5,
+    INVALID_NODE_GROUPS = 6,
     NOSPACE = 10,
     NOTEXIST = 11,
     SAFEMODE = 12,
@@ -121,6 +124,17 @@ struct MSOperation {
 };
 
 extern const std::map<int, const char*> _MSOperation_VALUES_TO_NAMES;
+
+struct CreateOperation {
+  enum type {
+    CREATE_NEW = 1,
+    CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST = 2,
+    CREATE_NEW_IN_NODEGROUPS = 3,
+    CREATE_AUX_IDX_FILE = 4
+  };
+};
+
+extern const std::map<int, const char*> _CreateOperation_VALUES_TO_NAMES;
 
 typedef struct _Version__isset {
   _Version__isset() : version(false), comments(false) {}
@@ -2032,6 +2046,57 @@ class SplitValue {
 
 void swap(SplitValue &a, SplitValue &b);
 
+typedef struct _CreatePolicy__isset {
+  _CreatePolicy__isset() : operation(false), arguments(false) {}
+  bool operation;
+  bool arguments;
+} _CreatePolicy__isset;
+
+class CreatePolicy {
+ public:
+
+  static const char* ascii_fingerprint; // = "A22BE3E84688C9DA4E00CC902B4EE818";
+  static const uint8_t binary_fingerprint[16]; // = {0xA2,0x2B,0xE3,0xE8,0x46,0x88,0xC9,0xDA,0x4E,0x00,0xCC,0x90,0x2B,0x4E,0xE8,0x18};
+
+  CreatePolicy() : operation((CreateOperation::type)0) {
+  }
+
+  virtual ~CreatePolicy() throw() {}
+
+  CreateOperation::type operation;
+  std::vector<std::string>  arguments;
+
+  _CreatePolicy__isset __isset;
+
+  void __set_operation(const CreateOperation::type val) {
+    operation = val;
+  }
+
+  void __set_arguments(const std::vector<std::string> & val) {
+    arguments = val;
+  }
+
+  bool operator == (const CreatePolicy & rhs) const
+  {
+    if (!(operation == rhs.operation))
+      return false;
+    if (!(arguments == rhs.arguments))
+      return false;
+    return true;
+  }
+  bool operator != (const CreatePolicy &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const CreatePolicy & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+void swap(CreatePolicy &a, CreatePolicy &b);
+
 typedef struct _Device__isset {
   _Device__isset() : devid(false), prop(false), node_name(false), status(false) {}
   bool devid;
@@ -2199,7 +2264,7 @@ class SFileLocation {
 void swap(SFileLocation &a, SFileLocation &b);
 
 typedef struct _SFile__isset {
-  _SFile__isset() : fid(false), dbName(false), tableName(false), store_status(false), rep_nr(false), digest(false), record_nr(false), all_record_nr(false), locations(false), length(false), values(false) {}
+  _SFile__isset() : fid(false), dbName(false), tableName(false), store_status(false), rep_nr(false), digest(false), record_nr(false), all_record_nr(false), locations(false), length(false), ref_files(false), values(false) {}
   bool fid;
   bool dbName;
   bool tableName;
@@ -2210,14 +2275,15 @@ typedef struct _SFile__isset {
   bool all_record_nr;
   bool locations;
   bool length;
+  bool ref_files;
   bool values;
 } _SFile__isset;
 
 class SFile {
  public:
 
-  static const char* ascii_fingerprint; // = "D97D287EA64ABBFDA973ED9DFD4246C8";
-  static const uint8_t binary_fingerprint[16]; // = {0xD9,0x7D,0x28,0x7E,0xA6,0x4A,0xBB,0xFD,0xA9,0x73,0xED,0x9D,0xFD,0x42,0x46,0xC8};
+  static const char* ascii_fingerprint; // = "859DCB9E8E785327C9B2DE0B1EC70FA0";
+  static const uint8_t binary_fingerprint[16]; // = {0x85,0x9D,0xCB,0x9E,0x8E,0x78,0x53,0x27,0xC9,0xB2,0xDE,0x0B,0x1E,0xC7,0x0F,0xA0};
 
   SFile() : fid(0), dbName(), tableName(), store_status(0), rep_nr(0), digest(), record_nr(0), all_record_nr(0), length(0) {
   }
@@ -2234,6 +2300,7 @@ class SFile {
   int64_t all_record_nr;
   std::vector<SFileLocation>  locations;
   int64_t length;
+  std::vector<int64_t>  ref_files;
   std::vector<SplitValue>  values;
 
   _SFile__isset __isset;
@@ -2278,6 +2345,10 @@ class SFile {
     length = val;
   }
 
+  void __set_ref_files(const std::vector<int64_t> & val) {
+    ref_files = val;
+  }
+
   void __set_values(const std::vector<SplitValue> & val) {
     values = val;
   }
@@ -2303,6 +2374,8 @@ class SFile {
     if (!(locations == rhs.locations))
       return false;
     if (!(length == rhs.length))
+      return false;
+    if (!(ref_files == rhs.ref_files))
       return false;
     if (!(values == rhs.values))
       return false;
@@ -2330,8 +2403,8 @@ typedef struct _SFileRef__isset {
 class SFileRef {
  public:
 
-  static const char* ascii_fingerprint; // = "74B036F8991A125FF055CCE997FCFD70";
-  static const uint8_t binary_fingerprint[16]; // = {0x74,0xB0,0x36,0xF8,0x99,0x1A,0x12,0x5F,0xF0,0x55,0xCC,0xE9,0x97,0xFC,0xFD,0x70};
+  static const char* ascii_fingerprint; // = "8DA41438AC1F918C00C3E0A6C2952DEE";
+  static const uint8_t binary_fingerprint[16]; // = {0x8D,0xA4,0x14,0x38,0xAC,0x1F,0x91,0x8C,0x00,0xC3,0xE0,0xA6,0xC2,0x95,0x2D,0xEE};
 
   SFileRef() : origin_fid(0) {
   }

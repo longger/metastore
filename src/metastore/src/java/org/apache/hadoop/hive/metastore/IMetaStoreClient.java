@@ -27,6 +27,7 @@ import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
+import org.apache.hadoop.hive.metastore.api.CreatePolicy;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.EquipRoom;
@@ -988,6 +989,9 @@ public interface IMetaStoreClient {
   public void cancelDelegationToken(String tokenStrForm) throws MetaException, TException;
 
   public SFile create_file(String node_name, int repnr, String db_name, String table_name, List<SplitValue> values)
+      throws FileOperationException, TException;
+
+  public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name, String table_name, List<SplitValue> values)
       throws FileOperationException, TException;
 
   public int close_file(SFile file) throws FileOperationException, TException;
