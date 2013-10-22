@@ -1431,6 +1431,10 @@ public class ObjectStore implements RawStore, Configurable {
       commited = commitTransaction();
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", mfile.getFid());
+//      LOG.info("---zy-- in createFile: table="+(mfile.getTable()==null));
+//      if(mfile.getTable() != null) {
+//        LOG.info("---zy-- in createFile: db:"+mfile.getTable().getDatabase()==null);
+//      }
 //      old_params.put("db_name", mfile.getTable().getDatabase().getName());
 //      old_params.put("table_name", mfile.getTable().getTableName() );
 //      long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mfile.getTable().getDatabase()).toString()));
@@ -1471,7 +1475,8 @@ public class ObjectStore implements RawStore, Configurable {
     if (r && mfloc != null && commited) {
       // send the sfile rep change message
       HashMap<String, Object> old_params = new HashMap<String, Object>();
-      old_params.put("f_id", location.getFid());
+      old_params.put("f_id", new Long(location.getFid()));
+//      old_params.put("f_id", Long.MAX_VALUE);
       old_params.put("devid", location.getDevid());
       old_params.put("location", location.getLocation());
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfloc, old_params));
