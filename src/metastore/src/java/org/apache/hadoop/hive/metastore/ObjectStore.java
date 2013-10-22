@@ -607,7 +607,7 @@ public class ObjectStore implements RawStore, Configurable {
       committed = commitTransaction();
 
       HashMap<String, Object> params = new HashMap<String, Object>();
-      params.put("param_name", mdb.getParameters().keySet());
+      params.put("param_name",new ArrayList<String>().addAll( mdb.getParameters().keySet()));
       if(committed) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALTER_DATABESE_PARAM,db_id,-1, pm, mdb,params));
       }
@@ -4404,7 +4404,8 @@ public class ObjectStore implements RawStore, Configurable {
         LOG.debug("---zy--in ObjectStore alterTable: alt table param");
         params.put("db_name", oldt.getDatabase().getName());
         params.put("table_name", oldt.getTableName());
-        params.put("tbl_param_keys", newt.getParameters().keySet());
+        params.put("tbl_param_keys", new ArrayList<String>().addAll(newt.getParameters().keySet()));
+
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, newt,params));
       }
@@ -4562,7 +4563,7 @@ public class ObjectStore implements RawStore, Configurable {
 
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(oldi.getOrigTable().getDatabase()).toString()));
       HashMap<String,Object> params = new HashMap<String,Object>();
-      params.put("param_name", oldi.getParameters().keySet());
+      params.put("param_name", new ArrayList<String>().addAll(oldi.getParameters().keySet()));
       if(success) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_INDEX_PARAM, db_id, -1, pm, oldi, params));
       }
@@ -8189,20 +8190,20 @@ public MUser getMUser(String userName) {
     try {
       openTransaction();
       MFile mf = getMFile(fid);
-      long db_id = -1;
+//      long db_id = -1;
       HashMap<String, Object> old_params = new HashMap<String, Object>();
 
       if (mf != null) {
-        db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mf.getTable().getDatabase()).toString()));
+//        db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mf.getTable().getDatabase()).toString()));
         old_params.put("f_id", mf.getFid());
-        old_params.put("db_name", mf.getTable().getDatabase().getName());
-        old_params.put("table_name", mf.getTable().getTableName() );
+//        old_params.put("db_name", mf.getTable().getDatabase().getName());
+//        old_params.put("table_name", mf.getTable().getTableName() );
         pm.deletePersistent(mf);
       }
       success = commitTransaction();
 
       if(success) {
-        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_DEL_FILE, db_id, -1l, pm, mf, old_params));
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_DEL_FILE, -1l, -1l, pm, mf, old_params));
       }
     } finally {
       if (!success) {
@@ -9118,7 +9119,7 @@ public MUser getMUser(String userName) {
       if(!tableParamEquals(oldSchema.getParameters(), mSchema.getParameters()) )
       {
         params.put("schema_name", schemaName);
-        params.put("tbl_param_keys", mSchema.getParameters().keySet());
+        params.put("tbl_param_keys", new ArrayList<String>().addAll(mSchema.getParameters().keySet()));
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_PARAM,db_id,-1, pm, oldSchema,params));
       }
 
