@@ -47,8 +47,11 @@ public class MSGType {
       //增加分区文件
   public static final int MSG_ALT_PARTITION_FILE =  1305;           ////分区的先不管
       //修改分区文件
+  /**
+   * 文件副本变化
+   */
   public static final int MSG_REP_FILE_CHANGE =  1306;
-      //文件副本变化
+
   public static final int MSG_STA_FILE_CHANGE =  1307;
       //文件状态变化
   public static final int MSG_REP_FILE_ONOFF =  1308;
