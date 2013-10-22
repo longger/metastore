@@ -1424,9 +1424,15 @@ public class ObjectStore implements RawStore, Configurable {
     } while (true);
 
     try {
+      String dbName = null;
+      String tableName = null;
+
       openTransaction();
       MFile mfile = convertToMFile(file);
       pm.makePersistent(mfile);
+
+      dbName = mfile.getTable().getDatabase().getName();
+      tableName = mfile.getTable().getTableName();
 
       commited = commitTransaction();
       HashMap<String, Object> old_params = new HashMap<String, Object>();
@@ -1435,8 +1441,8 @@ public class ObjectStore implements RawStore, Configurable {
 //      if(mfile.getTable() != null) {
 //        LOG.info("---zy-- in createFile: db:"+mfile.getTable().getDatabase()==null);
 //      }
-//      old_params.put("db_name", mfile.getTable().getDatabase().getName());
-//      old_params.put("table_name", mfile.getTable().getTableName() );
+      old_params.put("db_name", dbName);
+      old_params.put("table_name", tableName);
 //      long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mfile.getTable().getDatabase()).toString()));
 
       if(commited) {
@@ -1479,7 +1485,7 @@ public class ObjectStore implements RawStore, Configurable {
 //      old_params.put("f_id", Long.MAX_VALUE);
       old_params.put("devid", location.getDevid());
       old_params.put("location", location.getLocation());
-      MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfloc, old_params));
+      MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfloc.getFile(), old_params));
     }
     return r;
   }
