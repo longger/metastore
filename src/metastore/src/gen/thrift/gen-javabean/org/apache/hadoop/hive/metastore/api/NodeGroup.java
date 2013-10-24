@@ -613,14 +613,14 @@ public class NodeGroup implements org.apache.thrift.TBase<NodeGroup, NodeGroup._
           case 4: // NODES
             if (schemeField.type == org.apache.thrift.protocol.TType.SET) {
               {
-                org.apache.thrift.protocol.TSet _set86 = iprot.readSetBegin();
-                struct.nodes = new HashSet<Node>(2*_set86.size);
-                for (int _i87 = 0; _i87 < _set86.size; ++_i87)
+                org.apache.thrift.protocol.TSet _set102 = iprot.readSetBegin();
+                struct.nodes = new HashSet<Node>(2*_set102.size);
+                for (int _i103 = 0; _i103 < _set102.size; ++_i103)
                 {
-                  Node _elem88; // required
-                  _elem88 = new Node();
-                  _elem88.read(iprot);
-                  struct.nodes.add(_elem88);
+                  Node _elem104; // required
+                  _elem104 = new Node();
+                  _elem104.read(iprot);
+                  struct.nodes.add(_elem104);
                 }
                 iprot.readSetEnd();
               }
@@ -659,9 +659,9 @@ public class NodeGroup implements org.apache.thrift.TBase<NodeGroup, NodeGroup._
         oprot.writeFieldBegin(NODES_FIELD_DESC);
         {
           oprot.writeSetBegin(new org.apache.thrift.protocol.TSet(org.apache.thrift.protocol.TType.STRUCT, struct.nodes.size()));
-          for (Node _iter89 : struct.nodes)
+          for (Node _iter105 : struct.nodes)
           {
-            _iter89.write(oprot);
+            _iter105.write(oprot);
           }
           oprot.writeSetEnd();
         }
@@ -710,9 +710,9 @@ public class NodeGroup implements org.apache.thrift.TBase<NodeGroup, NodeGroup._
       if (struct.isSetNodes()) {
         {
           oprot.writeI32(struct.nodes.size());
-          for (Node _iter90 : struct.nodes)
+          for (Node _iter106 : struct.nodes)
           {
-            _iter90.write(oprot);
+            _iter106.write(oprot);
           }
         }
       }
@@ -736,14 +736,14 @@ public class NodeGroup implements org.apache.thrift.TBase<NodeGroup, NodeGroup._
       }
       if (incoming.get(3)) {
         {
-          org.apache.thrift.protocol.TSet _set91 = new org.apache.thrift.protocol.TSet(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.nodes = new HashSet<Node>(2*_set91.size);
-          for (int _i92 = 0; _i92 < _set91.size; ++_i92)
+          org.apache.thrift.protocol.TSet _set107 = new org.apache.thrift.protocol.TSet(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.nodes = new HashSet<Node>(2*_set107.size);
+          for (int _i108 = 0; _i108 < _set107.size; ++_i108)
           {
-            Node _elem93; // required
-            _elem93 = new Node();
-            _elem93.read(iprot);
-            struct.nodes.add(_elem93);
+            Node _elem109; // required
+            _elem109 = new Node();
+            _elem109.read(iprot);
+            struct.nodes.add(_elem109);
           }
         }
         struct.setNodesIsSet(true);

@@ -59,6 +59,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
 import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
+import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MDBPrivilege;
 import org.apache.hadoop.hive.metastore.model.MGlobalPrivilege;
 import org.apache.hadoop.hive.metastore.model.MPartitionColumnPrivilege;
@@ -677,5 +678,9 @@ public interface RawStore extends Configurable {
   public abstract long getCurrentFID();
 
   public abstract List<Device> listDevice() throws MetaException;
+
+  public abstract statfs statFileSystem(long from, long to) throws MetaException;
+
+  public abstract long countDevice() throws MetaException;
 
 }

@@ -1398,14 +1398,14 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
           case 9: // LOCATIONS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list310 = iprot.readListBegin();
-                struct.locations = new ArrayList<SFileLocation>(_list310.size);
-                for (int _i311 = 0; _i311 < _list310.size; ++_i311)
+                org.apache.thrift.protocol.TList _list326 = iprot.readListBegin();
+                struct.locations = new ArrayList<SFileLocation>(_list326.size);
+                for (int _i327 = 0; _i327 < _list326.size; ++_i327)
                 {
-                  SFileLocation _elem312; // required
-                  _elem312 = new SFileLocation();
-                  _elem312.read(iprot);
-                  struct.locations.add(_elem312);
+                  SFileLocation _elem328; // required
+                  _elem328 = new SFileLocation();
+                  _elem328.read(iprot);
+                  struct.locations.add(_elem328);
                 }
                 iprot.readListEnd();
               }
@@ -1425,13 +1425,13 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
           case 11: // REF_FILES
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list313 = iprot.readListBegin();
-                struct.ref_files = new ArrayList<Long>(_list313.size);
-                for (int _i314 = 0; _i314 < _list313.size; ++_i314)
+                org.apache.thrift.protocol.TList _list329 = iprot.readListBegin();
+                struct.ref_files = new ArrayList<Long>(_list329.size);
+                for (int _i330 = 0; _i330 < _list329.size; ++_i330)
                 {
-                  long _elem315; // required
-                  _elem315 = iprot.readI64();
-                  struct.ref_files.add(_elem315);
+                  long _elem331; // required
+                  _elem331 = iprot.readI64();
+                  struct.ref_files.add(_elem331);
                 }
                 iprot.readListEnd();
               }
@@ -1443,14 +1443,14 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
           case 12: // VALUES
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list316 = iprot.readListBegin();
-                struct.values = new ArrayList<SplitValue>(_list316.size);
-                for (int _i317 = 0; _i317 < _list316.size; ++_i317)
+                org.apache.thrift.protocol.TList _list332 = iprot.readListBegin();
+                struct.values = new ArrayList<SplitValue>(_list332.size);
+                for (int _i333 = 0; _i333 < _list332.size; ++_i333)
                 {
-                  SplitValue _elem318; // required
-                  _elem318 = new SplitValue();
-                  _elem318.read(iprot);
-                  struct.values.add(_elem318);
+                  SplitValue _elem334; // required
+                  _elem334 = new SplitValue();
+                  _elem334.read(iprot);
+                  struct.values.add(_elem334);
                 }
                 iprot.readListEnd();
               }
@@ -1514,9 +1514,9 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
         oprot.writeFieldBegin(LOCATIONS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.locations.size()));
-          for (SFileLocation _iter319 : struct.locations)
+          for (SFileLocation _iter335 : struct.locations)
           {
-            _iter319.write(oprot);
+            _iter335.write(oprot);
           }
           oprot.writeListEnd();
         }
@@ -1529,9 +1529,9 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
         oprot.writeFieldBegin(REF_FILES_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I64, struct.ref_files.size()));
-          for (long _iter320 : struct.ref_files)
+          for (long _iter336 : struct.ref_files)
           {
-            oprot.writeI64(_iter320);
+            oprot.writeI64(_iter336);
           }
           oprot.writeListEnd();
         }
@@ -1541,9 +1541,9 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
         oprot.writeFieldBegin(VALUES_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.values.size()));
-          for (SplitValue _iter321 : struct.values)
+          for (SplitValue _iter337 : struct.values)
           {
-            _iter321.write(oprot);
+            _iter337.write(oprot);
           }
           oprot.writeListEnd();
         }
@@ -1637,9 +1637,9 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
       if (struct.isSetLocations()) {
         {
           oprot.writeI32(struct.locations.size());
-          for (SFileLocation _iter322 : struct.locations)
+          for (SFileLocation _iter338 : struct.locations)
           {
-            _iter322.write(oprot);
+            _iter338.write(oprot);
           }
         }
       }
@@ -1649,18 +1649,18 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
       if (struct.isSetRef_files()) {
         {
           oprot.writeI32(struct.ref_files.size());
-          for (long _iter323 : struct.ref_files)
+          for (long _iter339 : struct.ref_files)
           {
-            oprot.writeI64(_iter323);
+            oprot.writeI64(_iter339);
           }
         }
       }
       if (struct.isSetValues()) {
         {
           oprot.writeI32(struct.values.size());
-          for (SplitValue _iter324 : struct.values)
+          for (SplitValue _iter340 : struct.values)
           {
-            _iter324.write(oprot);
+            _iter340.write(oprot);
           }
         }
       }
@@ -1707,14 +1707,14 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
       }
       if (incoming.get(8)) {
         {
-          org.apache.thrift.protocol.TList _list325 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.locations = new ArrayList<SFileLocation>(_list325.size);
-          for (int _i326 = 0; _i326 < _list325.size; ++_i326)
+          org.apache.thrift.protocol.TList _list341 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.locations = new ArrayList<SFileLocation>(_list341.size);
+          for (int _i342 = 0; _i342 < _list341.size; ++_i342)
           {
-            SFileLocation _elem327; // required
-            _elem327 = new SFileLocation();
-            _elem327.read(iprot);
-            struct.locations.add(_elem327);
+            SFileLocation _elem343; // required
+            _elem343 = new SFileLocation();
+            _elem343.read(iprot);
+            struct.locations.add(_elem343);
           }
         }
         struct.setLocationsIsSet(true);
@@ -1725,27 +1725,27 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
       }
       if (incoming.get(10)) {
         {
-          org.apache.thrift.protocol.TList _list328 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I64, iprot.readI32());
-          struct.ref_files = new ArrayList<Long>(_list328.size);
-          for (int _i329 = 0; _i329 < _list328.size; ++_i329)
+          org.apache.thrift.protocol.TList _list344 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I64, iprot.readI32());
+          struct.ref_files = new ArrayList<Long>(_list344.size);
+          for (int _i345 = 0; _i345 < _list344.size; ++_i345)
           {
-            long _elem330; // required
-            _elem330 = iprot.readI64();
-            struct.ref_files.add(_elem330);
+            long _elem346; // required
+            _elem346 = iprot.readI64();
+            struct.ref_files.add(_elem346);
           }
         }
         struct.setRef_filesIsSet(true);
       }
       if (incoming.get(11)) {
         {
-          org.apache.thrift.protocol.TList _list331 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.values = new ArrayList<SplitValue>(_list331.size);
-          for (int _i332 = 0; _i332 < _list331.size; ++_i332)
+          org.apache.thrift.protocol.TList _list347 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.values = new ArrayList<SplitValue>(_list347.size);
+          for (int _i348 = 0; _i348 < _list347.size; ++_i348)
           {
-            SplitValue _elem333; // required
-            _elem333 = new SplitValue();
-            _elem333.read(iprot);
-            struct.values.add(_elem333);
+            SplitValue _elem349; // required
+            _elem349 = new SplitValue();
+            _elem349.read(iprot);
+            struct.values.add(_elem349);
           }
         }
         struct.setValuesIsSet(true);

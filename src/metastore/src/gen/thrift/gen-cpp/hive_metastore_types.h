@@ -131,7 +131,8 @@ struct CreateOperation {
     CREATE_NEW = 1,
     CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST = 2,
     CREATE_NEW_IN_NODEGROUPS = 3,
-    CREATE_AUX_IDX_FILE = 4
+    CREATE_AUX_IDX_FILE = 4,
+    CREATE_NEW_RANDOM = 5
   };
 };
 
@@ -652,6 +653,169 @@ class PrincipalPrivilegeSet {
 };
 
 void swap(PrincipalPrivilegeSet &a, PrincipalPrivilegeSet &b);
+
+typedef struct _statfs__isset {
+  _statfs__isset() : from(false), to(false), increate(false), close(false), replicated(false), rm_logical(false), rm_physical(false), underrep(false), overrep(false), linger(false), suspect(false), inc_ons(false), inc_ons2(false), cls_offs(false), incs(false), clos(false) {}
+  bool from;
+  bool to;
+  bool increate;
+  bool close;
+  bool replicated;
+  bool rm_logical;
+  bool rm_physical;
+  bool underrep;
+  bool overrep;
+  bool linger;
+  bool suspect;
+  bool inc_ons;
+  bool inc_ons2;
+  bool cls_offs;
+  bool incs;
+  bool clos;
+} _statfs__isset;
+
+class statfs {
+ public:
+
+  static const char* ascii_fingerprint; // = "A6BFB333AF777EF18EE691D7401272E2";
+  static const uint8_t binary_fingerprint[16]; // = {0xA6,0xBF,0xB3,0x33,0xAF,0x77,0x7E,0xF1,0x8E,0xE6,0x91,0xD7,0x40,0x12,0x72,0xE2};
+
+  statfs() : from(0), to(0), increate(0), close(0), replicated(0), rm_logical(0), rm_physical(0), underrep(0), overrep(0), linger(0), suspect(0), inc_ons(0), inc_ons2(0), cls_offs(0) {
+  }
+
+  virtual ~statfs() throw() {}
+
+  int64_t from;
+  int64_t to;
+  int64_t increate;
+  int64_t close;
+  int64_t replicated;
+  int64_t rm_logical;
+  int64_t rm_physical;
+  int64_t underrep;
+  int64_t overrep;
+  int64_t linger;
+  int64_t suspect;
+  int64_t inc_ons;
+  int64_t inc_ons2;
+  int64_t cls_offs;
+  std::vector<int64_t>  incs;
+  std::vector<int64_t>  clos;
+
+  _statfs__isset __isset;
+
+  void __set_from(const int64_t val) {
+    from = val;
+  }
+
+  void __set_to(const int64_t val) {
+    to = val;
+  }
+
+  void __set_increate(const int64_t val) {
+    increate = val;
+  }
+
+  void __set_close(const int64_t val) {
+    close = val;
+  }
+
+  void __set_replicated(const int64_t val) {
+    replicated = val;
+  }
+
+  void __set_rm_logical(const int64_t val) {
+    rm_logical = val;
+  }
+
+  void __set_rm_physical(const int64_t val) {
+    rm_physical = val;
+  }
+
+  void __set_underrep(const int64_t val) {
+    underrep = val;
+  }
+
+  void __set_overrep(const int64_t val) {
+    overrep = val;
+  }
+
+  void __set_linger(const int64_t val) {
+    linger = val;
+  }
+
+  void __set_suspect(const int64_t val) {
+    suspect = val;
+  }
+
+  void __set_inc_ons(const int64_t val) {
+    inc_ons = val;
+  }
+
+  void __set_inc_ons2(const int64_t val) {
+    inc_ons2 = val;
+  }
+
+  void __set_cls_offs(const int64_t val) {
+    cls_offs = val;
+  }
+
+  void __set_incs(const std::vector<int64_t> & val) {
+    incs = val;
+  }
+
+  void __set_clos(const std::vector<int64_t> & val) {
+    clos = val;
+  }
+
+  bool operator == (const statfs & rhs) const
+  {
+    if (!(from == rhs.from))
+      return false;
+    if (!(to == rhs.to))
+      return false;
+    if (!(increate == rhs.increate))
+      return false;
+    if (!(close == rhs.close))
+      return false;
+    if (!(replicated == rhs.replicated))
+      return false;
+    if (!(rm_logical == rhs.rm_logical))
+      return false;
+    if (!(rm_physical == rhs.rm_physical))
+      return false;
+    if (!(underrep == rhs.underrep))
+      return false;
+    if (!(overrep == rhs.overrep))
+      return false;
+    if (!(linger == rhs.linger))
+      return false;
+    if (!(suspect == rhs.suspect))
+      return false;
+    if (!(inc_ons == rhs.inc_ons))
+      return false;
+    if (!(inc_ons2 == rhs.inc_ons2))
+      return false;
+    if (!(cls_offs == rhs.cls_offs))
+      return false;
+    if (!(incs == rhs.incs))
+      return false;
+    if (!(clos == rhs.clos))
+      return false;
+    return true;
+  }
+  bool operator != (const statfs &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const statfs & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+void swap(statfs &a, statfs &b);
 
 typedef struct _Role__isset {
   _Role__isset() : roleName(false), createTime(false), ownerName(false) {}
@@ -1714,8 +1878,8 @@ typedef struct _Table__isset {
 class Table {
  public:
 
-  static const char* ascii_fingerprint; // = "CA9C3D16CFF315792651F5BFCAA07DCC";
-  static const uint8_t binary_fingerprint[16]; // = {0xCA,0x9C,0x3D,0x16,0xCF,0xF3,0x15,0x79,0x26,0x51,0xF5,0xBF,0xCA,0xA0,0x7D,0xCC};
+  static const char* ascii_fingerprint; // = "C68CCAEBD56326F2E7FA16995D0BA14A";
+  static const uint8_t binary_fingerprint[16]; // = {0xC6,0x8C,0xCA,0xEB,0xD5,0x63,0x26,0xF2,0xE7,0xFA,0x16,0x99,0x5D,0x0B,0xA1,0x4A};
 
   Table() : tableName(), dbName(), schemaName(), owner(), createTime(0), lastAccessTime(0), retention(0), viewOriginalText(), viewExpandedText(), tableType() {
   }
@@ -1796,7 +1960,6 @@ class Table {
 
   void __set_nodeGroups(const std::vector<NodeGroup> & val) {
     nodeGroups = val;
-    __isset.nodeGroups = true;
   }
 
   void __set_privileges(const PrincipalPrivilegeSet& val) {
@@ -1841,9 +2004,7 @@ class Table {
       return false;
     if (!(tableType == rhs.tableType))
       return false;
-    if (__isset.nodeGroups != rhs.__isset.nodeGroups)
-      return false;
-    else if (__isset.nodeGroups && !(nodeGroups == rhs.nodeGroups))
+    if (!(nodeGroups == rhs.nodeGroups))
       return false;
     if (__isset.privileges != rhs.__isset.privileges)
       return false;
@@ -1880,8 +2041,8 @@ typedef struct _BusiTypeColumn__isset {
 class BusiTypeColumn {
  public:
 
-  static const char* ascii_fingerprint; // = "429203F0F804B86D08EBF7446189C6EE";
-  static const uint8_t binary_fingerprint[16]; // = {0x42,0x92,0x03,0xF0,0xF8,0x04,0xB8,0x6D,0x08,0xEB,0xF7,0x44,0x61,0x89,0xC6,0xEE};
+  static const char* ascii_fingerprint; // = "4F6CF489081F4332C2A1BDB27E7884D7";
+  static const uint8_t binary_fingerprint[16]; // = {0x4F,0x6C,0xF4,0x89,0x08,0x1F,0x43,0x32,0xC2,0xA1,0xBD,0xB2,0x7E,0x78,0x84,0xD7};
 
   BusiTypeColumn() : busiType(), column() {
   }
