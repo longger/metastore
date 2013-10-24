@@ -1,5 +1,6 @@
 package org.apache.hadoop.hive.metastore.metalog;
 
+import java.util.Date;
 import java.util.List;
 
 import org.apache.bookkeeper.client.LedgerHandle;
@@ -232,4 +233,17 @@ public class MetaTxn implements Transaction {
     this.txnStatus = txnStatus;
   }
 
+  public static void main(String args[]){
+    Date date = new Date();
+    int[] ds = new int[]{1382906716,
+        1382907361,
+        1382906778,
+        1382908409,
+        1382904892};
+    for(int x:ds){
+    date.setTime(x*1000L);
+    System.out.println(date);
+    }
+
+  }
  }

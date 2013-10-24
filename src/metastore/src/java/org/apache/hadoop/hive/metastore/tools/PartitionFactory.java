@@ -49,6 +49,26 @@ public class PartitionFactory {
     return interval_seconds;
   }
 
+  public static long getIntervalUnit(String interval_unit) throws Exception{
+    long interval_seconds=0;
+    if("'Y'".equalsIgnoreCase(interval_unit) ||"\"Y\"".equalsIgnoreCase(interval_unit)){
+      interval_seconds = (long)(3600 * 24 * 7 *30 * 365);
+    }else if("'M'".equalsIgnoreCase(interval_unit) ||"\"M\"".equalsIgnoreCase(interval_unit)){
+      interval_seconds = (long)(3600 * 24 * 7 *30);
+    }else if("'W'".equalsIgnoreCase(interval_unit) ||"\"W\"".equalsIgnoreCase(interval_unit)){
+      interval_seconds = (long)(3600 * 24 * 7);
+    }else if("'D'".equalsIgnoreCase(interval_unit) ||"\"D\"".equalsIgnoreCase(interval_unit)){
+      interval_seconds = (long)(3600 * 24);
+    }else if("'H'".equalsIgnoreCase(interval_unit) ||"\"H\"".equalsIgnoreCase(interval_unit)){
+      interval_seconds = (long)(3600);
+    }else if("'MI'".equalsIgnoreCase(interval_unit) ||"\"MI\"".equalsIgnoreCase(interval_unit)){
+      interval_seconds = (long)(60);
+    }else{
+      throw new Exception("Not valid interval unit.");
+    }
+    return interval_seconds;
+  }
+
   public static enum PartitionType{
     none("none"),roundrobin("roundrobin"),hash("hash"),list("list"),range("range"),interval("interval");
     private static  HashSet<String> Types  = new HashSet<String>();
@@ -183,7 +203,7 @@ public class PartitionFactory {
 
     public String toJson(){
       JSONObject jsonObject = new JSONObject();
-      jsonObject.put("p_col", p_col);
+      jsonObject.put("p_col", p_col.toLowerCase());
       jsonObject.put("p_level", p_level);
       jsonObject.put("p_order", p_order);
       jsonObject.put("p_num", p_num);
@@ -204,7 +224,7 @@ public class PartitionFactory {
     public static PartitionInfo fromJson(String jsonData){
       JSONObject json = (JSONObject)JSONSerializer.toJSON(jsonData);
       PartitionInfo pi = new PartitionInfo();
-      pi.p_col = json.getString("p_col");
+      pi.p_col = json.getString("p_col").toLowerCase();
       pi.p_level = Integer.parseInt(json.getString("p_level"));
       pi.p_order = Integer.parseInt(json.getString("p_order"));
       pi.p_num = Integer.parseInt(json.getString("p_num"));

@@ -76,12 +76,17 @@ enum FOFailReason {
   INVALID_NODE = 1,
   INVALID_TABLE = 2,
   INVALID_FILE = 3,
+  INVALID_SPLIT_VALUES = 4,
+  INVALID_ATTRIBUTION = 5,
+  INVALID_NODE_GROUPS = 6,
   
   NOSPACE = 10,
   NOTEXIST = 11,
   
   SAFEMODE = 12,
   INVALID_STATE = 13,
+  
+  TRY_AGAIN = 14,
 }
 
 struct HiveObjectRef{
@@ -168,6 +173,14 @@ enum MSOperation {
 	ALTERINDEX_PROPS = 43,
 	ALTERDATABASE = 44,
 	DESCDATABASE = 45,
+}
+
+enum CreateOperation {
+	CREATE_NEW = 1,
+    CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST = 2,
+    CREATE_NEW_IN_NODEGROUPS = 3,
+    
+    CREATE_AUX_IDX_FILE = 4,
 }
 
 struct Role {
@@ -331,6 +344,11 @@ struct SplitValue {
   4: i64	verison,
 }
 
+struct CreatePolicy {
+  1: CreateOperation operation,
+  2: list<string> arguments,
+}
+
 struct Device {
   1: string devid,
   2: i32    prop,
@@ -360,7 +378,9 @@ struct SFile {
   8: i64	all_record_nr,
   9: list<SFileLocation> locations,
   10: i64    length,
-  11: list<SplitValue> values,
+  11: list<i64> ref_files,
+  12: list<SplitValue> values,
+  13: i32 	load_status,
 }
 
 struct SFileRef {
@@ -476,7 +496,6 @@ struct EquipRoom {
 3: optional string comment,
 4: optional GeoLocation geolocation
 }
-//end up with cry
 
 exception MetaException {
   1: string message
@@ -618,6 +637,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   bool addNodeGroupAssignment (1:NodeGroup ng, 2:string dbName) throws(1:MetaException o1)
   bool deleteNodeGroupAssignment (1:NodeGroup ng, 2:string dbName) throws(1:MetaException o1)
+  
+  string pingPong(1:string str) throws (1:MetaException o1);
   
 //end up with cry
 
@@ -920,6 +941,10 @@ service ThriftHiveMetastore extends fb303.FacebookService
   // method for file operations
   SFile create_file(1:string node_name, 2:i32 repnr, 3:string db_name, 4:string table_name, 5:list<SplitValue> values) throws (1:FileOperationException o1)
   
+  SFile create_file_by_policy(1:CreatePolicy policy, 2:i32 repnr, 3:string db_name, 4:string table_name, 5:list<SplitValue> values) throws (1:FileOperationException o1)
+  
+  bool reopen_file(1:i64 fid) throws (1:FileOperationException o1, 2:MetaException o2)
+  
   i32 close_file(1:SFile file) throws (1:FileOperationException o1, 2:MetaException o2)
   
   bool online_filelocation(1:SFile file) throws (1:MetaException o1)
@@ -951,6 +976,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   Device modify_device(1:Device dev, 2:Node node) throws (1:MetaException o1)
   
+  list<Device> list_device() throws (1:MetaException o1)
+  
   Node alter_node(1:string node_name, 2:list<string> ipl, 3:i32 status) throws (1:MetaException o1)
   
   list<Node> find_best_nodes(1:i32 nr) throws (1:MetaException o1)
@@ -963,11 +990,11 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   string getNodeInfo() throws(1:MetaException o1)
   
-  bool migrate_in(1:Table tbl, 2:list<SFile> files, 3:list<Index> idxs, 4:string from_db, 5:string to_devid, 6:map<i64, SFileLocation> fileMap) throws (1:MetaException o1)
+  bool migrate_in(1:Table tbl, 2:map<i64, SFile> files, 3:list<Index> idxs, 4:string from_db, 5:string to_devid, 6:map<i64, SFileLocation> fileMap) throws (1:MetaException o1)
   
   list<SFileLocation> migrate_stage1(1:string dbName, 2:string tableName, 3:list<i64> files, 4:string to_db) throws (1:MetaException o1)
   
-  bool migrate_stage2(1:string dbName, 2:string tableName, 3:list<i64> files, 4:string from_db, 5:string to_db, 6:string to_devid) throws (1:MetaException o1)
+  bool migrate_stage2(1:string dbName, 2:string tableName, 3:list<i64> files, 4:string from_db, 5:string to_db, 6:string to_devid, 7:string user, 8:string password) throws (1:MetaException o1)
   
   bool migrate2_in(1:Table tbl, 2:list<Partition> parts, 3:list<Index> idxs, 4:string from_db, 5:string to_nas_devid, 6:map<i64, SFileLocation> fileMap) throws (1:MetaException o1)
   
@@ -988,8 +1015,10 @@ service ThriftHiveMetastore extends fb303.FacebookService
   list<NodeGroup> getTableNodeGroups(1:string dbName,2:string tabName) throws (1:MetaException o1)
   list<SFile> getTableNodeFiles(1:string dbName,2:string tabName,3:string nodeName)  throws (1:MetaException o1)
   
-  list<SFile> listTableFiles(1:string dbName,2:string tabName,3:i16 max_num)  throws (1:MetaException o1)
-  list<SFile> filterTableFiles(1:string dbName,2:string tabName,3:list<string> values)  throws (1:MetaException o1)
+  list<i64> listTableFiles(1:string dbName,2:string tabName,3:i32 from, 4:i32 to)  throws (1:MetaException o1)
+  list<i64> listFilesByDigest(1:string digest) throws (1:MetaException o1)
+  list<SFile> filterTableFiles(1:string dbName,2:string tabName,3:list<SplitValue> values)  throws (1:MetaException o1)
+  void truncTableFiles(1:string dbName, 2:string tabName) throws (1:MetaException o1)
   
   bool addNodeGroup(1:NodeGroup ng) throws (1:AlreadyExistsException o1,2:MetaException o2)
   bool modifyNodeGroup (1:string schemaName,2:NodeGroup ng) throws (1:MetaException o1)

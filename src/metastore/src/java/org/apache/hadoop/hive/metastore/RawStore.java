@@ -51,6 +51,7 @@ import org.apache.hadoop.hive.metastore.api.Role;
 import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.api.SFileRef;
+import org.apache.hadoop.hive.metastore.api.SplitValue;
 import org.apache.hadoop.hive.metastore.api.Subpartition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.api.Type;
@@ -136,7 +137,7 @@ public interface RawStore extends Configurable {
 
   public long countNode() throws MetaException;
 
-  public void createFile(SFile file) throws InvalidObjectException, MetaException;
+  public SFile createFile(SFile file) throws InvalidObjectException, MetaException;
 
   public SFile getSFile(long fid) throws MetaException;
 
@@ -520,7 +521,7 @@ public interface RawStore extends Configurable {
 
   public List<SFile> findLingeringFiles(long node_nr) throws MetaException;
 
-  public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering) throws MetaException;
+  public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering, long from, long to) throws MetaException;
 
   public void findVoidFiles(List<SFile> voidFiles) throws MetaException;
 
@@ -623,9 +624,11 @@ public interface RawStore extends Configurable {
 
   public abstract void createSchema(GlobalSchema schema)throws InvalidObjectException, MetaException;
 
-  public abstract List<SFile> listTableFiles(String dbName, String tableName, short max_num) throws MetaException;
+  public abstract List<Long> listTableFiles(String dbName, String tableName, int begin, int end) throws MetaException;
 
-  public abstract List<SFile> filterTableFiles(String dbName, String tableName, List<String> values)
+  public abstract List<Long> findSpecificDigestFiles(String digest) throws MetaException;
+
+  public abstract List<SFile> filterTableFiles(String dbName, String tableName, List<SplitValue> values)
       throws MetaException;
 
   public abstract boolean assiginSchematoDB(String dbName, String schemaName, List<FieldSchema> fileSplitKeys, List<FieldSchema> part_keys,
@@ -666,5 +669,13 @@ public interface RawStore extends Configurable {
   public abstract boolean addNodeGroupAssignment(NodeGroup ng, String dbName) throws MetaException, NoSuchObjectException;
 
   public abstract boolean deleteNodeGroupAssignment(NodeGroup ng, String dbName) throws MetaException, NoSuchObjectException;
+
+  public abstract void truncTableFiles(String dbName, String tableName) throws MetaException, NoSuchObjectException;
+
+  public abstract boolean reopenSFile(SFile file) throws MetaException;
+
+  public abstract long getCurrentFID();
+
+  public abstract List<Device> listDevice() throws MetaException;
 
 }

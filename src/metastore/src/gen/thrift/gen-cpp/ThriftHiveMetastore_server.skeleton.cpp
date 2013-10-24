@@ -272,6 +272,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("deleteNodeGroupAssignment\n");
   }
 
+  void pingPong(std::string& _return, const std::string& str) {
+    // Your implementation goes here
+    printf("pingPong\n");
+  }
+
   void create_database(const Database& database) {
     // Your implementation goes here
     printf("create_database\n");
@@ -692,6 +697,16 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("create_file\n");
   }
 
+  void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) {
+    // Your implementation goes here
+    printf("create_file_by_policy\n");
+  }
+
+  bool reopen_file(const int64_t fid) {
+    // Your implementation goes here
+    printf("reopen_file\n");
+  }
+
   int32_t close_file(const SFile& file) {
     // Your implementation goes here
     printf("close_file\n");
@@ -767,6 +782,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("modify_device\n");
   }
 
+  void list_device(std::vector<Device> & _return) {
+    // Your implementation goes here
+    printf("list_device\n");
+  }
+
   void alter_node(Node& _return, const std::string& node_name, const std::vector<std::string> & ipl, const int32_t status) {
     // Your implementation goes here
     printf("alter_node\n");
@@ -797,7 +817,7 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("getNodeInfo\n");
   }
 
-  bool migrate_in(const Table& tbl, const std::vector<SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap) {
+  bool migrate_in(const Table& tbl, const std::map<int64_t, SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap) {
     // Your implementation goes here
     printf("migrate_in\n");
   }
@@ -807,7 +827,7 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("migrate_stage1\n");
   }
 
-  bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid) {
+  bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid, const std::string& user, const std::string& password) {
     // Your implementation goes here
     printf("migrate_stage2\n");
   }
@@ -872,14 +892,24 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("getTableNodeFiles\n");
   }
 
-  void listTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const int16_t max_num) {
+  void listTableFiles(std::vector<int64_t> & _return, const std::string& dbName, const std::string& tabName, const int32_t from, const int32_t to) {
     // Your implementation goes here
     printf("listTableFiles\n");
   }
 
-  void filterTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::vector<std::string> & values) {
+  void listFilesByDigest(std::vector<int64_t> & _return, const std::string& digest) {
+    // Your implementation goes here
+    printf("listFilesByDigest\n");
+  }
+
+  void filterTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::vector<SplitValue> & values) {
     // Your implementation goes here
     printf("filterTableFiles\n");
+  }
+
+  void truncTableFiles(const std::string& dbName, const std::string& tabName) {
+    // Your implementation goes here
+    printf("truncTableFiles\n");
   }
 
   bool addNodeGroup(const NodeGroup& ng) {

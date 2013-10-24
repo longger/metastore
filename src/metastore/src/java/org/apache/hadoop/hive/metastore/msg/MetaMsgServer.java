@@ -7,7 +7,7 @@ import java.util.concurrent.Semaphore;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hive.metastore.ObjectStore; 
+import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 
 import com.taobao.metamorphosis.Message;
@@ -17,7 +17,7 @@ import com.taobao.metamorphosis.client.MetaMessageSessionFactory;
 import com.taobao.metamorphosis.client.consumer.ConsumerConfig;
 import com.taobao.metamorphosis.client.consumer.MessageConsumer;
 import com.taobao.metamorphosis.client.producer.MessageProducer;
-import com.taobao.metamorphosis.client.producer.SendResult; 
+import com.taobao.metamorphosis.client.producer.SendResult;
 import com.taobao.metamorphosis.exception.MetaClientException;
 import com.taobao.metamorphosis.utils.ZkUtils.ZKConfig;
 
@@ -44,6 +44,7 @@ public class MetaMsgServer {
     server = new MetaMsgServer();
     producer.config(zkAddr);
     producer = Producer.getInstance();
+    initalized = true;
   }
 
 
@@ -77,9 +78,9 @@ public class MetaMsgServer {
       while(true ){
         try{
           if(queue.isEmpty()){
-            LOG.info("---in sendThread before ac");
+            LOG.debug("---in sendThread before ac");
             sem.acquire();
-            LOG.info("---in sendThread after ac");
+            LOG.debug("---in sendThread after ac");
             if(queue.isEmpty()){
               continue;
             }
@@ -214,6 +215,8 @@ public class MetaMsgServer {
 //        //dw2 专用DDL语句
 //    }//end of switch
 
+
+
     jsonMsg = MSGFactory.getMsgData(msg);
     LOG.info("---zjw-- send ddl msg:"+jsonMsg);
     boolean success = false;
@@ -232,15 +235,16 @@ public class MetaMsgServer {
     }
     //zy
     //第一次失败,第二次发送成功的话依然返回false把..
+    //修改
     boolean success = false;
     try{
       success = producer.sendMsg(jsonMsg);
     }catch(InterruptedException ie){
       LOG.error(ie,ie);
-      retrySendMsg(jsonMsg,times-1);
+      return retrySendMsg(jsonMsg,times-1);
     } catch (MetaClientException e) {
       LOG.error(e,e);
-      retrySendMsg(jsonMsg,times-1);
+      return retrySendMsg(jsonMsg,times-1);
     }
     return success;
   }
@@ -314,7 +318,7 @@ public class MetaMsgServer {
     }
 
     boolean sendMsg(String msg) throws MetaClientException, InterruptedException{
-        LOG.info("in send msg:"+msg);
+        LOG.debug("in send msg:"+msg);
 
         if(producer == null){
           connect();
@@ -327,10 +331,10 @@ public class MetaMsgServer {
 
         boolean success = sendResult.isSuccess();
         if (!success) {
-            LOG.info("Send message failed,error message:" + sendResult.getErrorMessage());
+            LOG.error("Send message failed,error message:" + sendResult.getErrorMessage());
         }
         else {
-            LOG.info("Send message successfully,sent to " + sendResult.getPartition());
+            LOG.debug("Send message successfully,sent to " + sendResult.getPartition());
         }
         return success;
     }
@@ -341,7 +345,7 @@ public class MetaMsgServer {
 
     nl.add(1l);
     nl.add(2l);
-    List<DDLMsg> msg = MSGFactory.generateDDLMsgs(MSGType.MSG_NEW_PARTITION_FILE,-1l,-1l,null,nl,null);
+    List<DDLMsg> msg = MSGFactory.generateDDLMsgs(MSGType.MSG_ADD_PARTITION_FILE,-1l,-1l,null,nl,null);
     nl.add(3l);
   }
 

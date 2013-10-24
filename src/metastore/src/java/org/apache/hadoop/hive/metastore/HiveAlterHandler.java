@@ -193,7 +193,11 @@ public class HiveAlterHandler implements AlterHandler {
       throw new InvalidOperationException(
           "Unable to change partition or table. Database " + dbname + " does not exist"
               + " Check metastore logs for detailed stack." + e.getMessage());
-    } finally {
+    }catch (Exception e) {
+      LOG.error(e,e);
+      throw new MetaException(
+          "Unable to change  table: " + name + " ,error:" + e.getMessage());
+    }finally {
       if (!success) {
         msdb.rollbackTransaction();
       }

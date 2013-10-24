@@ -22,11 +22,13 @@ import java.io.Serializable;
 import java.net.URI;
 import java.util.Map;
 
-import org.apache.hadoop.hive.ql.metadata.Partition;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.ql.metadata.DummyPartition;
+import org.apache.hadoop.hive.ql.metadata.GlobalSchema;
+import org.apache.hadoop.hive.ql.metadata.Partition;
 import org.apache.hadoop.hive.ql.metadata.Table;
-import org.apache.hadoop.hive.ql.session.SessionState;
-import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.ql.parse.DDLSemanticAnalyzer;
 
 /**
  * This class encapsulates an object that is being read or written to by the
@@ -35,12 +37,13 @@ import org.apache.hadoop.hive.conf.HiveConf;
  */
 public class Entity implements Serializable {
   private static final long serialVersionUID = 1L;
+  private static final Log LOG = LogFactory.getLog(DDLSemanticAnalyzer.class);
 
   /**
    * The type of the entity.
    */
   public static enum Type {
-    TABLE, PARTITION, DUMMYPARTITION, DFS_DIR, LOCAL_DIR
+    TABLE, PARTITION, DUMMYPARTITION, DFS_DIR, LOCAL_DIR, SCHEMA
   };
 
   /**
@@ -74,6 +77,8 @@ public class Entity implements Serializable {
    * complete output may not be known
    */
   private boolean complete;
+
+  private GlobalSchema gls;
 
   public boolean isComplete() {
     return complete;
@@ -123,6 +128,14 @@ public class Entity implements Serializable {
     this.d = d;
   }
 
+  public GlobalSchema getGls() {
+    return gls;
+  }
+
+  public void setGls(GlobalSchema gls) {
+    this.gls = gls;
+  }
+
   /**
    * Only used by serialization.
    */
@@ -144,6 +157,26 @@ public class Entity implements Serializable {
     p = null;
     this.t = t;
     typ = Type.TABLE;
+    name = computeName();
+    this.complete = complete;
+  }
+
+  /**
+   * Constructor for a Schema.
+   *
+   * @param s
+   *          Schema that is read or written to.
+   */
+  public Entity(GlobalSchema gls) {
+    this(gls, true);
+  }
+
+  public Entity(GlobalSchema gls, boolean complete) {
+    d = null;
+    p = null;
+    this.gls = gls;
+    LOG.info("****************zqh****************inputs.add(new Read/WriteEntity(sch)):"+this.gls.getCompleteName());
+    typ = Type.SCHEMA;
     name = computeName();
     this.complete = complete;
   }
@@ -200,6 +233,8 @@ public class Entity implements Serializable {
     name = computeName();
     this.complete = complete;
   }
+
+
 
   /**
    * Get the parameter map of the Entity.
@@ -268,6 +303,8 @@ public class Entity implements Serializable {
       return t.getDbName() + "@" + t.getTableName() + "@" + p.getName();
     case DUMMYPARTITION:
       return p.getName();
+    case SCHEMA:
+      return gls.getSchemaName();
     default:
       return d;
     }

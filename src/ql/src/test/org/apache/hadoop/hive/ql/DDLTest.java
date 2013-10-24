@@ -17,10 +17,10 @@ public class DDLTest {
 
     //String sql = "create eqroom('aaa',qw)comment 'dsds' on'ff'";
     //String sql = "drop eqroom'aaa'";
-    String sql = "modify eqroom('aaa',qq)'dsds' on'ff'";
+    //String sql = "modify eqroom('aaa',qq)comment 'dsds' on'ff'";
     //String sql = "show eqroom";
 
-    //String sql = "create NODEASSIGNMENT('aaa','qw')";
+    //String sql = "create NODEASSIGNMENT('aaa','db1')";
     //String sql = "DROP NODEASSIGNMENT('aaa','qw')";
     //String sql = "show NODEASSIGNMENT";
 
@@ -35,6 +35,13 @@ public class DDLTest {
     //String sql = "create roleAssignment('a','b')";
     //String sql = "drop roleAssignment('a','b')";
     //String sql = "show roleAssignment";
+
+    //String sql = "alter schema tb rename to tc";
+    //String sql = "alter schema tb add columns(col int)";
+    //String sql = "alter schema tb change column tb tc int";
+    //String sql = "alter schema tb set schemeproperties('ff'='FF')";
+
+    String sql = "drop schema z_q_h";
 
     Driver dr = new Driver(new HiveConf());
     try {

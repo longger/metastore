@@ -1159,7 +1159,6 @@
     
     <class name="MNode" table="NODES" identity-type="datastore" detachable="true">
       <index name="UniqueNode" unique="true">
-        <column name="NODE_ID"/>
         <column name="NODE_NAME"/>
       </index>
       
@@ -1189,7 +1188,6 @@
     
     <class name="MDevice" table="DEVICES" identity-type="datastore" detachable="true">
       <index name="UniqueDevice" unique="true">
-        <column name="DEV_ID"/>
         <column name="DEV_NAME"/>
       </index>
       
@@ -1213,7 +1211,6 @@
     
     <class name="MFile" table="FILES" identity-type="datastore" detachable="true">
       <index name="UniqueFile" unique="true">
-        <column name="FILE_ID"/>
         <column name="FID"/>
       </index>
       
@@ -1245,15 +1242,22 @@
       <field name="length">
         <column name="length"/>
       </field>
+      <field name="create_time">
+        <column name="create_time"/>
+      </field>
+      <field name="ref_files" table="FILE_REF_FILES">
+        <collection element-type="java.lang.Long"/>
+        <join>
+          <column name="FILE_ID"/>
+        </join>
+        <element>
+          <column name="FID"/>
+        </element>
+      </field>
       
       <field name="values" table="FILE_KEY_VALS">
         <collection element-type="MSplitValue"/>
         <join>
-          <primary-key name="FILE_KEY_VALS_PK">
-            <column name="FILE_ID"/>
-            <column name="PKEY_NAME"/>
-            <column name="VERSION"/>
-          </primary-key>
           <column name="FILE_ID"/>
         </join>
         <element>
@@ -1273,12 +1277,29 @@
           </embedded>
         </element>
       </field>
+      
+      <field name="load_status">
+        <column name="LOAD_STATUS"/>
+      </field>
     </class>
     
     <class name="MFileLocation" table="FILE_LOCATION" identity-type="datastore" detachable="true">
       <datastore-identity>
         <column name="LOCATION_ID"/>
       </datastore-identity>
+      
+      <index name="FastFileLocationSearch">
+        <column name="FILE_ID"/>
+      </index>
+      
+      <index name="FastFileLocaitonSearchByStatus">
+        <column name="visit_status"/>
+      </index>
+      
+      <index name="FastFLSByDL">
+        <column name="DEV_ID"/>
+        <column name="LOCATION"/>
+      </index>
       
       <field name="file">
         <column name="FILE_ID"/>

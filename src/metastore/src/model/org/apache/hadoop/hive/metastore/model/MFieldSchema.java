@@ -22,6 +22,7 @@
 package org.apache.hadoop.hive.metastore.model;
 
 
+
 /**
  * Represent a column or a type of a table or object
  */
@@ -30,7 +31,6 @@ public class MFieldSchema {
   private String type;
   private String comment;
   private long version;
-
   public MFieldSchema() {}
 
   /**
@@ -91,4 +91,30 @@ public class MFieldSchema {
   }
 
 
+  @Override
+  public boolean equals(Object o)         //重写equals方法,在修改表增删列中的removeall方法中要用到,列名和类型相同就认为列一样
+  {
+    if(this == o) {
+      return true;
+    }
+    if(o == null) {
+      return false;
+    }
+    if(!(o instanceof MFieldSchema)) {
+      return false;
+    }
+    MFieldSchema m = (MFieldSchema)o;
+//    return ((this.name == null && m.getName() == null) || this.name.equals(m.getName()))
+//        && ((this.type == null && m.getType() == null) || this.getType().equals(m.getType()) )
+//        && (this.comment == null && m.getComment() == null) ||  this.getComment().equals(m.getComment());
+    return this.name.equals(m.getName()) && this.type.equals(m.getType());
+  }
+
+
+
+  @Override
+  public int hashCode()
+  {
+    return name.hashCode()+type.hashCode();
+  }
 }

@@ -66,6 +66,7 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual void listRoles(std::vector<Role> & _return) = 0;
   virtual bool addNodeGroupAssignment(const NodeGroup& ng, const std::string& dbName) = 0;
   virtual bool deleteNodeGroupAssignment(const NodeGroup& ng, const std::string& dbName) = 0;
+  virtual void pingPong(std::string& _return, const std::string& str) = 0;
   virtual void create_database(const Database& database) = 0;
   virtual void get_database(Database& _return, const std::string& name) = 0;
   virtual void drop_database(const std::string& name, const bool deleteData, const bool cascade) = 0;
@@ -150,6 +151,8 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual int64_t renew_delegation_token(const std::string& token_str_form) = 0;
   virtual void cancel_delegation_token(const std::string& token_str_form) = 0;
   virtual void create_file(SFile& _return, const std::string& node_name, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) = 0;
+  virtual void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) = 0;
+  virtual bool reopen_file(const int64_t fid) = 0;
   virtual int32_t close_file(const SFile& file) = 0;
   virtual bool online_filelocation(const SFile& file) = 0;
   virtual bool toggle_safemode() = 0;
@@ -165,15 +168,16 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual void get_device(Device& _return, const std::string& devid) = 0;
   virtual bool del_device(const std::string& devid) = 0;
   virtual void modify_device(Device& _return, const Device& dev, const Node& node) = 0;
+  virtual void list_device(std::vector<Device> & _return) = 0;
   virtual void alter_node(Node& _return, const std::string& node_name, const std::vector<std::string> & ipl, const int32_t status) = 0;
   virtual void find_best_nodes(std::vector<Node> & _return, const int32_t nr) = 0;
   virtual void find_best_nodes_in_groups(std::vector<Node> & _return, const std::string& dbName, const std::string& tableName, const int32_t nr, const FindNodePolicy::type policy) = 0;
   virtual void get_all_nodes(std::vector<Node> & _return) = 0;
   virtual void getDMStatus(std::string& _return) = 0;
   virtual void getNodeInfo(std::string& _return) = 0;
-  virtual bool migrate_in(const Table& tbl, const std::vector<SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap) = 0;
+  virtual bool migrate_in(const Table& tbl, const std::map<int64_t, SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap) = 0;
   virtual void migrate_stage1(std::vector<SFileLocation> & _return, const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& to_db) = 0;
-  virtual bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid) = 0;
+  virtual bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid, const std::string& user, const std::string& password) = 0;
   virtual bool migrate2_in(const Table& tbl, const std::vector<Partition> & parts, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_nas_devid, const std::map<int64_t, SFileLocation> & fileMap) = 0;
   virtual void migrate2_stage1(std::vector<SFileLocation> & _return, const std::string& dbName, const std::string& tableName, const std::vector<std::string> & partNames, const std::string& to_db) = 0;
   virtual bool migrate2_stage2(const std::string& dbName, const std::string& tableName, const std::vector<std::string> & partNames, const std::string& from_db, const std::string& to_db, const std::string& to_nas_devid) = 0;
@@ -186,8 +190,10 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual void getSchemaByName(GlobalSchema& _return, const std::string& schemaName) = 0;
   virtual void getTableNodeGroups(std::vector<NodeGroup> & _return, const std::string& dbName, const std::string& tabName) = 0;
   virtual void getTableNodeFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::string& nodeName) = 0;
-  virtual void listTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const int16_t max_num) = 0;
-  virtual void filterTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::vector<std::string> & values) = 0;
+  virtual void listTableFiles(std::vector<int64_t> & _return, const std::string& dbName, const std::string& tabName, const int32_t from, const int32_t to) = 0;
+  virtual void listFilesByDigest(std::vector<int64_t> & _return, const std::string& digest) = 0;
+  virtual void filterTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::vector<SplitValue> & values) = 0;
+  virtual void truncTableFiles(const std::string& dbName, const std::string& tabName) = 0;
   virtual bool addNodeGroup(const NodeGroup& ng) = 0;
   virtual bool modifyNodeGroup(const std::string& schemaName, const NodeGroup& ng) = 0;
   virtual bool deleteNodeGroup(const NodeGroup& ng) = 0;
@@ -405,6 +411,9 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   bool deleteNodeGroupAssignment(const NodeGroup& /* ng */, const std::string& /* dbName */) {
     bool _return = false;
     return _return;
+  }
+  void pingPong(std::string& /* _return */, const std::string& /* str */) {
+    return;
   }
   void create_database(const Database& /* database */) {
     return;
@@ -681,6 +690,13 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   void create_file(SFile& /* _return */, const std::string& /* node_name */, const int32_t /* repnr */, const std::string& /* db_name */, const std::string& /* table_name */, const std::vector<SplitValue> & /* values */) {
     return;
   }
+  void create_file_by_policy(SFile& /* _return */, const CreatePolicy& /* policy */, const int32_t /* repnr */, const std::string& /* db_name */, const std::string& /* table_name */, const std::vector<SplitValue> & /* values */) {
+    return;
+  }
+  bool reopen_file(const int64_t /* fid */) {
+    bool _return = false;
+    return _return;
+  }
   int32_t close_file(const SFile& /* file */) {
     int32_t _return = 0;
     return _return;
@@ -734,6 +750,9 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   void modify_device(Device& /* _return */, const Device& /* dev */, const Node& /* node */) {
     return;
   }
+  void list_device(std::vector<Device> & /* _return */) {
+    return;
+  }
   void alter_node(Node& /* _return */, const std::string& /* node_name */, const std::vector<std::string> & /* ipl */, const int32_t /* status */) {
     return;
   }
@@ -752,14 +771,14 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   void getNodeInfo(std::string& /* _return */) {
     return;
   }
-  bool migrate_in(const Table& /* tbl */, const std::vector<SFile> & /* files */, const std::vector<Index> & /* idxs */, const std::string& /* from_db */, const std::string& /* to_devid */, const std::map<int64_t, SFileLocation> & /* fileMap */) {
+  bool migrate_in(const Table& /* tbl */, const std::map<int64_t, SFile> & /* files */, const std::vector<Index> & /* idxs */, const std::string& /* from_db */, const std::string& /* to_devid */, const std::map<int64_t, SFileLocation> & /* fileMap */) {
     bool _return = false;
     return _return;
   }
   void migrate_stage1(std::vector<SFileLocation> & /* _return */, const std::string& /* dbName */, const std::string& /* tableName */, const std::vector<int64_t> & /* files */, const std::string& /* to_db */) {
     return;
   }
-  bool migrate_stage2(const std::string& /* dbName */, const std::string& /* tableName */, const std::vector<int64_t> & /* files */, const std::string& /* from_db */, const std::string& /* to_db */, const std::string& /* to_devid */) {
+  bool migrate_stage2(const std::string& /* dbName */, const std::string& /* tableName */, const std::vector<int64_t> & /* files */, const std::string& /* from_db */, const std::string& /* to_db */, const std::string& /* to_devid */, const std::string& /* user */, const std::string& /* password */) {
     bool _return = false;
     return _return;
   }
@@ -805,10 +824,16 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   void getTableNodeFiles(std::vector<SFile> & /* _return */, const std::string& /* dbName */, const std::string& /* tabName */, const std::string& /* nodeName */) {
     return;
   }
-  void listTableFiles(std::vector<SFile> & /* _return */, const std::string& /* dbName */, const std::string& /* tabName */, const int16_t /* max_num */) {
+  void listTableFiles(std::vector<int64_t> & /* _return */, const std::string& /* dbName */, const std::string& /* tabName */, const int32_t /* from */, const int32_t /* to */) {
     return;
   }
-  void filterTableFiles(std::vector<SFile> & /* _return */, const std::string& /* dbName */, const std::string& /* tabName */, const std::vector<std::string> & /* values */) {
+  void listFilesByDigest(std::vector<int64_t> & /* _return */, const std::string& /* digest */) {
+    return;
+  }
+  void filterTableFiles(std::vector<SFile> & /* _return */, const std::string& /* dbName */, const std::string& /* tabName */, const std::vector<SplitValue> & /* values */) {
+    return;
+  }
+  void truncTableFiles(const std::string& /* dbName */, const std::string& /* tabName */) {
     return;
   }
   bool addNodeGroup(const NodeGroup& /* ng */) {
@@ -7066,6 +7091,124 @@ class ThriftHiveMetastore_deleteNodeGroupAssignment_presult {
   MetaException o1;
 
   _ThriftHiveMetastore_deleteNodeGroupAssignment_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _ThriftHiveMetastore_pingPong_args__isset {
+  _ThriftHiveMetastore_pingPong_args__isset() : str(false) {}
+  bool str;
+} _ThriftHiveMetastore_pingPong_args__isset;
+
+class ThriftHiveMetastore_pingPong_args {
+ public:
+
+  ThriftHiveMetastore_pingPong_args() : str() {
+  }
+
+  virtual ~ThriftHiveMetastore_pingPong_args() throw() {}
+
+  std::string str;
+
+  _ThriftHiveMetastore_pingPong_args__isset __isset;
+
+  void __set_str(const std::string& val) {
+    str = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_pingPong_args & rhs) const
+  {
+    if (!(str == rhs.str))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_pingPong_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_pingPong_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_pingPong_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_pingPong_pargs() throw() {}
+
+  const std::string* str;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_pingPong_result__isset {
+  _ThriftHiveMetastore_pingPong_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_pingPong_result__isset;
+
+class ThriftHiveMetastore_pingPong_result {
+ public:
+
+  ThriftHiveMetastore_pingPong_result() : success() {
+  }
+
+  virtual ~ThriftHiveMetastore_pingPong_result() throw() {}
+
+  std::string success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_pingPong_result__isset __isset;
+
+  void __set_success(const std::string& val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_pingPong_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_pingPong_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_pingPong_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_pingPong_presult__isset {
+  _ThriftHiveMetastore_pingPong_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_pingPong_presult__isset;
+
+class ThriftHiveMetastore_pingPong_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_pingPong_presult() throw() {}
+
+  std::string* success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_pingPong_presult__isset __isset;
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
 
@@ -18838,6 +18981,288 @@ class ThriftHiveMetastore_create_file_presult {
 
 };
 
+typedef struct _ThriftHiveMetastore_create_file_by_policy_args__isset {
+  _ThriftHiveMetastore_create_file_by_policy_args__isset() : policy(false), repnr(false), db_name(false), table_name(false), values(false) {}
+  bool policy;
+  bool repnr;
+  bool db_name;
+  bool table_name;
+  bool values;
+} _ThriftHiveMetastore_create_file_by_policy_args__isset;
+
+class ThriftHiveMetastore_create_file_by_policy_args {
+ public:
+
+  ThriftHiveMetastore_create_file_by_policy_args() : repnr(0), db_name(), table_name() {
+  }
+
+  virtual ~ThriftHiveMetastore_create_file_by_policy_args() throw() {}
+
+  CreatePolicy policy;
+  int32_t repnr;
+  std::string db_name;
+  std::string table_name;
+  std::vector<SplitValue>  values;
+
+  _ThriftHiveMetastore_create_file_by_policy_args__isset __isset;
+
+  void __set_policy(const CreatePolicy& val) {
+    policy = val;
+  }
+
+  void __set_repnr(const int32_t val) {
+    repnr = val;
+  }
+
+  void __set_db_name(const std::string& val) {
+    db_name = val;
+  }
+
+  void __set_table_name(const std::string& val) {
+    table_name = val;
+  }
+
+  void __set_values(const std::vector<SplitValue> & val) {
+    values = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_create_file_by_policy_args & rhs) const
+  {
+    if (!(policy == rhs.policy))
+      return false;
+    if (!(repnr == rhs.repnr))
+      return false;
+    if (!(db_name == rhs.db_name))
+      return false;
+    if (!(table_name == rhs.table_name))
+      return false;
+    if (!(values == rhs.values))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_create_file_by_policy_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_create_file_by_policy_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_create_file_by_policy_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_create_file_by_policy_pargs() throw() {}
+
+  const CreatePolicy* policy;
+  const int32_t* repnr;
+  const std::string* db_name;
+  const std::string* table_name;
+  const std::vector<SplitValue> * values;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_create_file_by_policy_result__isset {
+  _ThriftHiveMetastore_create_file_by_policy_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_create_file_by_policy_result__isset;
+
+class ThriftHiveMetastore_create_file_by_policy_result {
+ public:
+
+  ThriftHiveMetastore_create_file_by_policy_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_create_file_by_policy_result() throw() {}
+
+  SFile success;
+  FileOperationException o1;
+
+  _ThriftHiveMetastore_create_file_by_policy_result__isset __isset;
+
+  void __set_success(const SFile& val) {
+    success = val;
+  }
+
+  void __set_o1(const FileOperationException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_create_file_by_policy_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_create_file_by_policy_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_create_file_by_policy_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_create_file_by_policy_presult__isset {
+  _ThriftHiveMetastore_create_file_by_policy_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_create_file_by_policy_presult__isset;
+
+class ThriftHiveMetastore_create_file_by_policy_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_create_file_by_policy_presult() throw() {}
+
+  SFile* success;
+  FileOperationException o1;
+
+  _ThriftHiveMetastore_create_file_by_policy_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _ThriftHiveMetastore_reopen_file_args__isset {
+  _ThriftHiveMetastore_reopen_file_args__isset() : fid(false) {}
+  bool fid;
+} _ThriftHiveMetastore_reopen_file_args__isset;
+
+class ThriftHiveMetastore_reopen_file_args {
+ public:
+
+  ThriftHiveMetastore_reopen_file_args() : fid(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_reopen_file_args() throw() {}
+
+  int64_t fid;
+
+  _ThriftHiveMetastore_reopen_file_args__isset __isset;
+
+  void __set_fid(const int64_t val) {
+    fid = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_reopen_file_args & rhs) const
+  {
+    if (!(fid == rhs.fid))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_reopen_file_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_reopen_file_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_reopen_file_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_reopen_file_pargs() throw() {}
+
+  const int64_t* fid;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_reopen_file_result__isset {
+  _ThriftHiveMetastore_reopen_file_result__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_reopen_file_result__isset;
+
+class ThriftHiveMetastore_reopen_file_result {
+ public:
+
+  ThriftHiveMetastore_reopen_file_result() : success(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_reopen_file_result() throw() {}
+
+  bool success;
+  FileOperationException o1;
+  MetaException o2;
+
+  _ThriftHiveMetastore_reopen_file_result__isset __isset;
+
+  void __set_success(const bool val) {
+    success = val;
+  }
+
+  void __set_o1(const FileOperationException& val) {
+    o1 = val;
+  }
+
+  void __set_o2(const MetaException& val) {
+    o2 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_reopen_file_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    if (!(o2 == rhs.o2))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_reopen_file_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_reopen_file_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_reopen_file_presult__isset {
+  _ThriftHiveMetastore_reopen_file_presult__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_reopen_file_presult__isset;
+
+class ThriftHiveMetastore_reopen_file_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_reopen_file_presult() throw() {}
+
+  bool* success;
+  FileOperationException o1;
+  MetaException o2;
+
+  _ThriftHiveMetastore_reopen_file_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 typedef struct _ThriftHiveMetastore_close_file_args__isset {
   _ThriftHiveMetastore_close_file_args__isset() : file(false) {}
   bool file;
@@ -20718,6 +21143,110 @@ class ThriftHiveMetastore_modify_device_presult {
 
 };
 
+
+class ThriftHiveMetastore_list_device_args {
+ public:
+
+  ThriftHiveMetastore_list_device_args() {
+  }
+
+  virtual ~ThriftHiveMetastore_list_device_args() throw() {}
+
+
+  bool operator == (const ThriftHiveMetastore_list_device_args & /* rhs */) const
+  {
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_list_device_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_list_device_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_list_device_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_list_device_pargs() throw() {}
+
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_list_device_result__isset {
+  _ThriftHiveMetastore_list_device_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_list_device_result__isset;
+
+class ThriftHiveMetastore_list_device_result {
+ public:
+
+  ThriftHiveMetastore_list_device_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_list_device_result() throw() {}
+
+  std::vector<Device>  success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_list_device_result__isset __isset;
+
+  void __set_success(const std::vector<Device> & val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_list_device_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_list_device_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_list_device_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_list_device_presult__isset {
+  _ThriftHiveMetastore_list_device_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_list_device_presult__isset;
+
+class ThriftHiveMetastore_list_device_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_list_device_presult() throw() {}
+
+  std::vector<Device> * success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_list_device_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 typedef struct _ThriftHiveMetastore_alter_node_args__isset {
   _ThriftHiveMetastore_alter_node_args__isset() : node_name(false), ipl(false), status(false) {}
   bool node_name;
@@ -21448,7 +21977,7 @@ class ThriftHiveMetastore_migrate_in_args {
   virtual ~ThriftHiveMetastore_migrate_in_args() throw() {}
 
   Table tbl;
-  std::vector<SFile>  files;
+  std::map<int64_t, SFile>  files;
   std::vector<Index>  idxs;
   std::string from_db;
   std::string to_devid;
@@ -21460,7 +21989,7 @@ class ThriftHiveMetastore_migrate_in_args {
     tbl = val;
   }
 
-  void __set_files(const std::vector<SFile> & val) {
+  void __set_files(const std::map<int64_t, SFile> & val) {
     files = val;
   }
 
@@ -21515,7 +22044,7 @@ class ThriftHiveMetastore_migrate_in_pargs {
   virtual ~ThriftHiveMetastore_migrate_in_pargs() throw() {}
 
   const Table* tbl;
-  const std::vector<SFile> * files;
+  const std::map<int64_t, SFile> * files;
   const std::vector<Index> * idxs;
   const std::string* from_db;
   const std::string* to_devid;
@@ -21738,19 +22267,21 @@ class ThriftHiveMetastore_migrate_stage1_presult {
 };
 
 typedef struct _ThriftHiveMetastore_migrate_stage2_args__isset {
-  _ThriftHiveMetastore_migrate_stage2_args__isset() : dbName(false), tableName(false), files(false), from_db(false), to_db(false), to_devid(false) {}
+  _ThriftHiveMetastore_migrate_stage2_args__isset() : dbName(false), tableName(false), files(false), from_db(false), to_db(false), to_devid(false), user(false), password(false) {}
   bool dbName;
   bool tableName;
   bool files;
   bool from_db;
   bool to_db;
   bool to_devid;
+  bool user;
+  bool password;
 } _ThriftHiveMetastore_migrate_stage2_args__isset;
 
 class ThriftHiveMetastore_migrate_stage2_args {
  public:
 
-  ThriftHiveMetastore_migrate_stage2_args() : dbName(), tableName(), from_db(), to_db(), to_devid() {
+  ThriftHiveMetastore_migrate_stage2_args() : dbName(), tableName(), from_db(), to_db(), to_devid(), user(), password() {
   }
 
   virtual ~ThriftHiveMetastore_migrate_stage2_args() throw() {}
@@ -21761,6 +22292,8 @@ class ThriftHiveMetastore_migrate_stage2_args {
   std::string from_db;
   std::string to_db;
   std::string to_devid;
+  std::string user;
+  std::string password;
 
   _ThriftHiveMetastore_migrate_stage2_args__isset __isset;
 
@@ -21788,6 +22321,14 @@ class ThriftHiveMetastore_migrate_stage2_args {
     to_devid = val;
   }
 
+  void __set_user(const std::string& val) {
+    user = val;
+  }
+
+  void __set_password(const std::string& val) {
+    password = val;
+  }
+
   bool operator == (const ThriftHiveMetastore_migrate_stage2_args & rhs) const
   {
     if (!(dbName == rhs.dbName))
@@ -21801,6 +22342,10 @@ class ThriftHiveMetastore_migrate_stage2_args {
     if (!(to_db == rhs.to_db))
       return false;
     if (!(to_devid == rhs.to_devid))
+      return false;
+    if (!(user == rhs.user))
+      return false;
+    if (!(password == rhs.password))
       return false;
     return true;
   }
@@ -21828,6 +22373,8 @@ class ThriftHiveMetastore_migrate_stage2_pargs {
   const std::string* from_db;
   const std::string* to_db;
   const std::string* to_devid;
+  const std::string* user;
+  const std::string* password;
 
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
 
@@ -23481,23 +24028,25 @@ class ThriftHiveMetastore_getTableNodeFiles_presult {
 };
 
 typedef struct _ThriftHiveMetastore_listTableFiles_args__isset {
-  _ThriftHiveMetastore_listTableFiles_args__isset() : dbName(false), tabName(false), max_num(false) {}
+  _ThriftHiveMetastore_listTableFiles_args__isset() : dbName(false), tabName(false), from(false), to(false) {}
   bool dbName;
   bool tabName;
-  bool max_num;
+  bool from;
+  bool to;
 } _ThriftHiveMetastore_listTableFiles_args__isset;
 
 class ThriftHiveMetastore_listTableFiles_args {
  public:
 
-  ThriftHiveMetastore_listTableFiles_args() : dbName(), tabName(), max_num(0) {
+  ThriftHiveMetastore_listTableFiles_args() : dbName(), tabName(), from(0), to(0) {
   }
 
   virtual ~ThriftHiveMetastore_listTableFiles_args() throw() {}
 
   std::string dbName;
   std::string tabName;
-  int16_t max_num;
+  int32_t from;
+  int32_t to;
 
   _ThriftHiveMetastore_listTableFiles_args__isset __isset;
 
@@ -23509,8 +24058,12 @@ class ThriftHiveMetastore_listTableFiles_args {
     tabName = val;
   }
 
-  void __set_max_num(const int16_t val) {
-    max_num = val;
+  void __set_from(const int32_t val) {
+    from = val;
+  }
+
+  void __set_to(const int32_t val) {
+    to = val;
   }
 
   bool operator == (const ThriftHiveMetastore_listTableFiles_args & rhs) const
@@ -23519,7 +24072,9 @@ class ThriftHiveMetastore_listTableFiles_args {
       return false;
     if (!(tabName == rhs.tabName))
       return false;
-    if (!(max_num == rhs.max_num))
+    if (!(from == rhs.from))
+      return false;
+    if (!(to == rhs.to))
       return false;
     return true;
   }
@@ -23543,7 +24098,8 @@ class ThriftHiveMetastore_listTableFiles_pargs {
 
   const std::string* dbName;
   const std::string* tabName;
-  const int16_t* max_num;
+  const int32_t* from;
+  const int32_t* to;
 
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
 
@@ -23563,12 +24119,12 @@ class ThriftHiveMetastore_listTableFiles_result {
 
   virtual ~ThriftHiveMetastore_listTableFiles_result() throw() {}
 
-  std::vector<SFile>  success;
+  std::vector<int64_t>  success;
   MetaException o1;
 
   _ThriftHiveMetastore_listTableFiles_result__isset __isset;
 
-  void __set_success(const std::vector<SFile> & val) {
+  void __set_success(const std::vector<int64_t> & val) {
     success = val;
   }
 
@@ -23607,10 +24163,128 @@ class ThriftHiveMetastore_listTableFiles_presult {
 
   virtual ~ThriftHiveMetastore_listTableFiles_presult() throw() {}
 
-  std::vector<SFile> * success;
+  std::vector<int64_t> * success;
   MetaException o1;
 
   _ThriftHiveMetastore_listTableFiles_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _ThriftHiveMetastore_listFilesByDigest_args__isset {
+  _ThriftHiveMetastore_listFilesByDigest_args__isset() : digest(false) {}
+  bool digest;
+} _ThriftHiveMetastore_listFilesByDigest_args__isset;
+
+class ThriftHiveMetastore_listFilesByDigest_args {
+ public:
+
+  ThriftHiveMetastore_listFilesByDigest_args() : digest() {
+  }
+
+  virtual ~ThriftHiveMetastore_listFilesByDigest_args() throw() {}
+
+  std::string digest;
+
+  _ThriftHiveMetastore_listFilesByDigest_args__isset __isset;
+
+  void __set_digest(const std::string& val) {
+    digest = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_listFilesByDigest_args & rhs) const
+  {
+    if (!(digest == rhs.digest))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_listFilesByDigest_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_listFilesByDigest_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_listFilesByDigest_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_listFilesByDigest_pargs() throw() {}
+
+  const std::string* digest;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_listFilesByDigest_result__isset {
+  _ThriftHiveMetastore_listFilesByDigest_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_listFilesByDigest_result__isset;
+
+class ThriftHiveMetastore_listFilesByDigest_result {
+ public:
+
+  ThriftHiveMetastore_listFilesByDigest_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_listFilesByDigest_result() throw() {}
+
+  std::vector<int64_t>  success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_listFilesByDigest_result__isset __isset;
+
+  void __set_success(const std::vector<int64_t> & val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_listFilesByDigest_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_listFilesByDigest_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_listFilesByDigest_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_listFilesByDigest_presult__isset {
+  _ThriftHiveMetastore_listFilesByDigest_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_listFilesByDigest_presult__isset;
+
+class ThriftHiveMetastore_listFilesByDigest_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_listFilesByDigest_presult() throw() {}
+
+  std::vector<int64_t> * success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_listFilesByDigest_presult__isset __isset;
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
 
@@ -23633,7 +24307,7 @@ class ThriftHiveMetastore_filterTableFiles_args {
 
   std::string dbName;
   std::string tabName;
-  std::vector<std::string>  values;
+  std::vector<SplitValue>  values;
 
   _ThriftHiveMetastore_filterTableFiles_args__isset __isset;
 
@@ -23645,7 +24319,7 @@ class ThriftHiveMetastore_filterTableFiles_args {
     tabName = val;
   }
 
-  void __set_values(const std::vector<std::string> & val) {
+  void __set_values(const std::vector<SplitValue> & val) {
     values = val;
   }
 
@@ -23679,7 +24353,7 @@ class ThriftHiveMetastore_filterTableFiles_pargs {
 
   const std::string* dbName;
   const std::string* tabName;
-  const std::vector<std::string> * values;
+  const std::vector<SplitValue> * values;
 
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
 
@@ -23747,6 +24421,123 @@ class ThriftHiveMetastore_filterTableFiles_presult {
   MetaException o1;
 
   _ThriftHiveMetastore_filterTableFiles_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _ThriftHiveMetastore_truncTableFiles_args__isset {
+  _ThriftHiveMetastore_truncTableFiles_args__isset() : dbName(false), tabName(false) {}
+  bool dbName;
+  bool tabName;
+} _ThriftHiveMetastore_truncTableFiles_args__isset;
+
+class ThriftHiveMetastore_truncTableFiles_args {
+ public:
+
+  ThriftHiveMetastore_truncTableFiles_args() : dbName(), tabName() {
+  }
+
+  virtual ~ThriftHiveMetastore_truncTableFiles_args() throw() {}
+
+  std::string dbName;
+  std::string tabName;
+
+  _ThriftHiveMetastore_truncTableFiles_args__isset __isset;
+
+  void __set_dbName(const std::string& val) {
+    dbName = val;
+  }
+
+  void __set_tabName(const std::string& val) {
+    tabName = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_truncTableFiles_args & rhs) const
+  {
+    if (!(dbName == rhs.dbName))
+      return false;
+    if (!(tabName == rhs.tabName))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_truncTableFiles_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_truncTableFiles_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_truncTableFiles_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_truncTableFiles_pargs() throw() {}
+
+  const std::string* dbName;
+  const std::string* tabName;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_truncTableFiles_result__isset {
+  _ThriftHiveMetastore_truncTableFiles_result__isset() : o1(false) {}
+  bool o1;
+} _ThriftHiveMetastore_truncTableFiles_result__isset;
+
+class ThriftHiveMetastore_truncTableFiles_result {
+ public:
+
+  ThriftHiveMetastore_truncTableFiles_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_truncTableFiles_result() throw() {}
+
+  MetaException o1;
+
+  _ThriftHiveMetastore_truncTableFiles_result__isset __isset;
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_truncTableFiles_result & rhs) const
+  {
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_truncTableFiles_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_truncTableFiles_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_truncTableFiles_presult__isset {
+  _ThriftHiveMetastore_truncTableFiles_presult__isset() : o1(false) {}
+  bool o1;
+} _ThriftHiveMetastore_truncTableFiles_presult__isset;
+
+class ThriftHiveMetastore_truncTableFiles_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_truncTableFiles_presult() throw() {}
+
+  MetaException o1;
+
+  _ThriftHiveMetastore_truncTableFiles_presult__isset __isset;
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
 
@@ -25200,6 +25991,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   bool deleteNodeGroupAssignment(const NodeGroup& ng, const std::string& dbName);
   void send_deleteNodeGroupAssignment(const NodeGroup& ng, const std::string& dbName);
   bool recv_deleteNodeGroupAssignment();
+  void pingPong(std::string& _return, const std::string& str);
+  void send_pingPong(const std::string& str);
+  void recv_pingPong(std::string& _return);
   void create_database(const Database& database);
   void send_create_database(const Database& database);
   void recv_create_database();
@@ -25452,6 +26246,12 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void create_file(SFile& _return, const std::string& node_name, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
   void send_create_file(const std::string& node_name, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
   void recv_create_file(SFile& _return);
+  void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
+  void send_create_file_by_policy(const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
+  void recv_create_file_by_policy(SFile& _return);
+  bool reopen_file(const int64_t fid);
+  void send_reopen_file(const int64_t fid);
+  bool recv_reopen_file();
   int32_t close_file(const SFile& file);
   void send_close_file(const SFile& file);
   int32_t recv_close_file();
@@ -25497,6 +26297,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void modify_device(Device& _return, const Device& dev, const Node& node);
   void send_modify_device(const Device& dev, const Node& node);
   void recv_modify_device(Device& _return);
+  void list_device(std::vector<Device> & _return);
+  void send_list_device();
+  void recv_list_device(std::vector<Device> & _return);
   void alter_node(Node& _return, const std::string& node_name, const std::vector<std::string> & ipl, const int32_t status);
   void send_alter_node(const std::string& node_name, const std::vector<std::string> & ipl, const int32_t status);
   void recv_alter_node(Node& _return);
@@ -25515,14 +26318,14 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void getNodeInfo(std::string& _return);
   void send_getNodeInfo();
   void recv_getNodeInfo(std::string& _return);
-  bool migrate_in(const Table& tbl, const std::vector<SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap);
-  void send_migrate_in(const Table& tbl, const std::vector<SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap);
+  bool migrate_in(const Table& tbl, const std::map<int64_t, SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap);
+  void send_migrate_in(const Table& tbl, const std::map<int64_t, SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap);
   bool recv_migrate_in();
   void migrate_stage1(std::vector<SFileLocation> & _return, const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& to_db);
   void send_migrate_stage1(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& to_db);
   void recv_migrate_stage1(std::vector<SFileLocation> & _return);
-  bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid);
-  void send_migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid);
+  bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid, const std::string& user, const std::string& password);
+  void send_migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid, const std::string& user, const std::string& password);
   bool recv_migrate_stage2();
   bool migrate2_in(const Table& tbl, const std::vector<Partition> & parts, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_nas_devid, const std::map<int64_t, SFileLocation> & fileMap);
   void send_migrate2_in(const Table& tbl, const std::vector<Partition> & parts, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_nas_devid, const std::map<int64_t, SFileLocation> & fileMap);
@@ -25560,12 +26363,18 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void getTableNodeFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::string& nodeName);
   void send_getTableNodeFiles(const std::string& dbName, const std::string& tabName, const std::string& nodeName);
   void recv_getTableNodeFiles(std::vector<SFile> & _return);
-  void listTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const int16_t max_num);
-  void send_listTableFiles(const std::string& dbName, const std::string& tabName, const int16_t max_num);
-  void recv_listTableFiles(std::vector<SFile> & _return);
-  void filterTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::vector<std::string> & values);
-  void send_filterTableFiles(const std::string& dbName, const std::string& tabName, const std::vector<std::string> & values);
+  void listTableFiles(std::vector<int64_t> & _return, const std::string& dbName, const std::string& tabName, const int32_t from, const int32_t to);
+  void send_listTableFiles(const std::string& dbName, const std::string& tabName, const int32_t from, const int32_t to);
+  void recv_listTableFiles(std::vector<int64_t> & _return);
+  void listFilesByDigest(std::vector<int64_t> & _return, const std::string& digest);
+  void send_listFilesByDigest(const std::string& digest);
+  void recv_listFilesByDigest(std::vector<int64_t> & _return);
+  void filterTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::vector<SplitValue> & values);
+  void send_filterTableFiles(const std::string& dbName, const std::string& tabName, const std::vector<SplitValue> & values);
   void recv_filterTableFiles(std::vector<SFile> & _return);
+  void truncTableFiles(const std::string& dbName, const std::string& tabName);
+  void send_truncTableFiles(const std::string& dbName, const std::string& tabName);
+  void recv_truncTableFiles();
   bool addNodeGroup(const NodeGroup& ng);
   void send_addNodeGroup(const NodeGroup& ng);
   bool recv_addNodeGroup();
@@ -25656,6 +26465,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_listRoles(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_addNodeGroupAssignment(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_deleteNodeGroupAssignment(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_pingPong(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_create_database(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_get_database(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_drop_database(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -25740,6 +26550,8 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_renew_delegation_token(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_cancel_delegation_token(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_create_file(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_create_file_by_policy(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_reopen_file(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_close_file(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_online_filelocation(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_toggle_safemode(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -25755,6 +26567,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_get_device(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_del_device(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_modify_device(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_list_device(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_alter_node(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_find_best_nodes(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_find_best_nodes_in_groups(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -25777,7 +26590,9 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_getTableNodeGroups(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_getTableNodeFiles(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_listTableFiles(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_listFilesByDigest(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_filterTableFiles(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_truncTableFiles(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_addNodeGroup(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_modifyNodeGroup(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_deleteNodeGroup(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -25842,6 +26657,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["listRoles"] = &ThriftHiveMetastoreProcessor::process_listRoles;
     processMap_["addNodeGroupAssignment"] = &ThriftHiveMetastoreProcessor::process_addNodeGroupAssignment;
     processMap_["deleteNodeGroupAssignment"] = &ThriftHiveMetastoreProcessor::process_deleteNodeGroupAssignment;
+    processMap_["pingPong"] = &ThriftHiveMetastoreProcessor::process_pingPong;
     processMap_["create_database"] = &ThriftHiveMetastoreProcessor::process_create_database;
     processMap_["get_database"] = &ThriftHiveMetastoreProcessor::process_get_database;
     processMap_["drop_database"] = &ThriftHiveMetastoreProcessor::process_drop_database;
@@ -25926,6 +26742,8 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["renew_delegation_token"] = &ThriftHiveMetastoreProcessor::process_renew_delegation_token;
     processMap_["cancel_delegation_token"] = &ThriftHiveMetastoreProcessor::process_cancel_delegation_token;
     processMap_["create_file"] = &ThriftHiveMetastoreProcessor::process_create_file;
+    processMap_["create_file_by_policy"] = &ThriftHiveMetastoreProcessor::process_create_file_by_policy;
+    processMap_["reopen_file"] = &ThriftHiveMetastoreProcessor::process_reopen_file;
     processMap_["close_file"] = &ThriftHiveMetastoreProcessor::process_close_file;
     processMap_["online_filelocation"] = &ThriftHiveMetastoreProcessor::process_online_filelocation;
     processMap_["toggle_safemode"] = &ThriftHiveMetastoreProcessor::process_toggle_safemode;
@@ -25941,6 +26759,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["get_device"] = &ThriftHiveMetastoreProcessor::process_get_device;
     processMap_["del_device"] = &ThriftHiveMetastoreProcessor::process_del_device;
     processMap_["modify_device"] = &ThriftHiveMetastoreProcessor::process_modify_device;
+    processMap_["list_device"] = &ThriftHiveMetastoreProcessor::process_list_device;
     processMap_["alter_node"] = &ThriftHiveMetastoreProcessor::process_alter_node;
     processMap_["find_best_nodes"] = &ThriftHiveMetastoreProcessor::process_find_best_nodes;
     processMap_["find_best_nodes_in_groups"] = &ThriftHiveMetastoreProcessor::process_find_best_nodes_in_groups;
@@ -25963,7 +26782,9 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["getTableNodeGroups"] = &ThriftHiveMetastoreProcessor::process_getTableNodeGroups;
     processMap_["getTableNodeFiles"] = &ThriftHiveMetastoreProcessor::process_getTableNodeFiles;
     processMap_["listTableFiles"] = &ThriftHiveMetastoreProcessor::process_listTableFiles;
+    processMap_["listFilesByDigest"] = &ThriftHiveMetastoreProcessor::process_listFilesByDigest;
     processMap_["filterTableFiles"] = &ThriftHiveMetastoreProcessor::process_filterTableFiles;
+    processMap_["truncTableFiles"] = &ThriftHiveMetastoreProcessor::process_truncTableFiles;
     processMap_["addNodeGroup"] = &ThriftHiveMetastoreProcessor::process_addNodeGroup;
     processMap_["modifyNodeGroup"] = &ThriftHiveMetastoreProcessor::process_modifyNodeGroup;
     processMap_["deleteNodeGroup"] = &ThriftHiveMetastoreProcessor::process_deleteNodeGroup;
@@ -26472,6 +27293,16 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
       ifaces_[i]->deleteNodeGroupAssignment(ng, dbName);
     }
     return ifaces_[i]->deleteNodeGroupAssignment(ng, dbName);
+  }
+
+  void pingPong(std::string& _return, const std::string& str) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->pingPong(_return, str);
+    }
+    ifaces_[i]->pingPong(_return, str);
+    return;
   }
 
   void create_database(const Database& database) {
@@ -27275,6 +28106,25 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
     return;
   }
 
+  void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->create_file_by_policy(_return, policy, repnr, db_name, table_name, values);
+    }
+    ifaces_[i]->create_file_by_policy(_return, policy, repnr, db_name, table_name, values);
+    return;
+  }
+
+  bool reopen_file(const int64_t fid) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->reopen_file(fid);
+    }
+    return ifaces_[i]->reopen_file(fid);
+  }
+
   int32_t close_file(const SFile& file) {
     size_t sz = ifaces_.size();
     size_t i = 0;
@@ -27417,6 +28267,16 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
     return;
   }
 
+  void list_device(std::vector<Device> & _return) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->list_device(_return);
+    }
+    ifaces_[i]->list_device(_return);
+    return;
+  }
+
   void alter_node(Node& _return, const std::string& node_name, const std::vector<std::string> & ipl, const int32_t status) {
     size_t sz = ifaces_.size();
     size_t i = 0;
@@ -27477,7 +28337,7 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
     return;
   }
 
-  bool migrate_in(const Table& tbl, const std::vector<SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap) {
+  bool migrate_in(const Table& tbl, const std::map<int64_t, SFile> & files, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_devid, const std::map<int64_t, SFileLocation> & fileMap) {
     size_t sz = ifaces_.size();
     size_t i = 0;
     for (; i < (sz - 1); ++i) {
@@ -27496,13 +28356,13 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
     return;
   }
 
-  bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid) {
+  bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid, const std::string& user, const std::string& password) {
     size_t sz = ifaces_.size();
     size_t i = 0;
     for (; i < (sz - 1); ++i) {
-      ifaces_[i]->migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid);
+      ifaces_[i]->migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid, user, password);
     }
-    return ifaces_[i]->migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid);
+    return ifaces_[i]->migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid, user, password);
   }
 
   bool migrate2_in(const Table& tbl, const std::vector<Partition> & parts, const std::vector<Index> & idxs, const std::string& from_db, const std::string& to_nas_devid, const std::map<int64_t, SFileLocation> & fileMap) {
@@ -27619,17 +28479,27 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
     return;
   }
 
-  void listTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const int16_t max_num) {
+  void listTableFiles(std::vector<int64_t> & _return, const std::string& dbName, const std::string& tabName, const int32_t from, const int32_t to) {
     size_t sz = ifaces_.size();
     size_t i = 0;
     for (; i < (sz - 1); ++i) {
-      ifaces_[i]->listTableFiles(_return, dbName, tabName, max_num);
+      ifaces_[i]->listTableFiles(_return, dbName, tabName, from, to);
     }
-    ifaces_[i]->listTableFiles(_return, dbName, tabName, max_num);
+    ifaces_[i]->listTableFiles(_return, dbName, tabName, from, to);
     return;
   }
 
-  void filterTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::vector<std::string> & values) {
+  void listFilesByDigest(std::vector<int64_t> & _return, const std::string& digest) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->listFilesByDigest(_return, digest);
+    }
+    ifaces_[i]->listFilesByDigest(_return, digest);
+    return;
+  }
+
+  void filterTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::vector<SplitValue> & values) {
     size_t sz = ifaces_.size();
     size_t i = 0;
     for (; i < (sz - 1); ++i) {
@@ -27637,6 +28507,15 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
     }
     ifaces_[i]->filterTableFiles(_return, dbName, tabName, values);
     return;
+  }
+
+  void truncTableFiles(const std::string& dbName, const std::string& tabName) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->truncTableFiles(dbName, tabName);
+    }
+    ifaces_[i]->truncTableFiles(dbName, tabName);
   }
 
   bool addNodeGroup(const NodeGroup& ng) {

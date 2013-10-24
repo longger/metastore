@@ -81,6 +81,7 @@ import org.apache.hadoop.hive.metastore.api.Role;
 import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;
+import org.apache.hadoop.hive.metastore.api.SplitValue;
 import org.apache.hadoop.hive.metastore.api.Subpartition;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -111,7 +112,6 @@ public class Hive {
   private IMetaStoreClient metaStoreClient;
 
   private String currentDatabase;
-
   //added by liulichao
   private static String rootName = "root";//root
   private static String rootPWD = "111111";//root
@@ -2509,8 +2509,8 @@ public class Hive {
     if (metaStoreClient == null) {
       metaStoreClient = createMetaStoreClient();
       // do authentication here
-      String user_name = conf.get(HiveConf.ConfVars.HIVE_USER.varname, "root");
-      String passwd = conf.get(HiveConf.ConfVars.HIVE_USERPWD.varname, "111111");
+      String user_name = conf.getVar(HiveConf.ConfVars.HIVE_USER);
+      String passwd = conf.getVar(HiveConf.ConfVars.HIVE_USERPWD);
       try {
         metaStoreClient.authentication(user_name, passwd);
       } catch (NoSuchObjectException e) {
@@ -2525,15 +2525,30 @@ public class Hive {
   }
 
   private IMetaStoreClient getRemoteDbMSC(String db_name) throws HiveException {
+    IMetaStoreClient r = null;
+
     try{
       Database db = getMSC().get_attribution(db_name);
       if(db == null){
         throw new MetaException("There is no Attribution named:"+db_name+",or top attribution is not reachable.");
       }
-      return getMSC().getRemoteDbMSC(db_name);
+      r = getMSC().getRemoteDbMSC(db_name);
+      // do authentication here
+      String user_name = conf.getVar(HiveConf.ConfVars.HIVE_USER);
+      String passwd = conf.getVar(HiveConf.ConfVars.HIVE_USERPWD);
+      try {
+        r.authentication(user_name, passwd);
+      } catch (NoSuchObjectException e) {
+        e.printStackTrace();
+        throw new MetaException(e.getMessage());
+      } catch (TException e) {
+        e.printStackTrace();
+        throw new MetaException(e.getMessage());
+      }
     } catch (TException e) {
       throw new HiveException("Unable to alter getRemoteDcMSC,metastore service unreachable.", e);
     }
+    return r;
   }
 
   private String getUserName() {
@@ -2926,7 +2941,7 @@ public class Hive {
 
   public void addNodeAssignment(NodeAssignment gd) throws HiveException {
     try {
-      getMSC().addNodeAssignment(gd.nodeName, gd.dbName);
+      getMSC().addNodeAssignment(gd.getNodeName(), gd.getDbName());
     } catch (Exception e) {
       throw new HiveException(e);
     }
@@ -2934,7 +2949,7 @@ public class Hive {
 
   public void dropNodeAssignment(NodeAssignment gd) throws HiveException {
     try {
-      getMSC().deleteNodeAssignment(gd.nodeName, gd.dbName);
+      getMSC().deleteNodeAssignment(gd.getNodeName(), gd.getDbName());
     } catch (Exception e) {
       throw new HiveException(e);
     }
@@ -3000,9 +3015,9 @@ public class Hive {
 
 
 
-  public List<SFile> listTableFiles(String dbName, String tabName, short max_num) throws HiveException {
+  public List<Long> listTableFiles(String dbName, String tabName, int begin, int end) throws HiveException {
     try {
-    return getMSC().listTableFiles(dbName, tabName, max_num);
+    return getMSC().listTableFiles(dbName, tabName, begin, end);
     } catch (Exception e) {
       throw new HiveException(e);
     }
@@ -3062,7 +3077,7 @@ public class Hive {
   }
 
 
-  public List<SFile> filterTableFiles(String dbName, String tabName, List<String> values) throws HiveException {
+  public List<SFile> filterTableFiles(String dbName, String tabName, List<SplitValue> values) throws HiveException {
     try {
     return getMSC().filterTableFiles(dbName, tabName, values);
     } catch (Exception e) {
@@ -3228,7 +3243,8 @@ public class Hive {
 
   public void addNodeGroupAssignment(NodeGroupAssignment nga) throws HiveException {
       try {
-        //getMSC().addNodeGroupAssignment(nga.getDbName(), nga.getNodeGroupName());
+        NodeGroup ng = new NodeGroup();//getMSC().getNodeGroupByName(nga.getNodeGroupName());
+        getMSC().addNodeGroupAssignment(ng, nga.getDbName());
       } catch (Exception e) {
         throw new HiveException(e);
       }
@@ -3236,7 +3252,8 @@ public class Hive {
 
   public void dropNodeGroupAssignment(NodeGroupAssignment nga) throws HiveException {
     try {
-      //getMSC().deleteNodeGroupAssignment(nga.getDbName(),nga.getNodeGroupName());
+      NodeGroup ng = new NodeGroup();//getMSC().getNodeGroupByName(nga.getNodeGroupName());
+      getMSC().deleteNodeGroupAssignment(ng, nga.getDbName());
     } catch (Exception e) {
       throw new HiveException(e);
     }
@@ -3255,7 +3272,7 @@ public class Hive {
 
   public void addRoleAssignment(RoleAssignment ra) throws HiveException {
     try {
-      //getMSC().addRoleAssignment(ra.getDbName(), ra.getRoleName());
+      getMSC().addRoleAssignment(ra.getRoleName(),ra.getDbName());
     } catch (Exception e) {
       throw new HiveException(e);
     }
@@ -3263,7 +3280,7 @@ public class Hive {
 
   public void dropRoleAssignment(RoleAssignment ra) throws HiveException {
     try {
-      //getMSC().deleteRoleAssignment(ra.getDbName(),ra.getRoleName());
+      getMSC().deleteRoleAssignment(ra.getRoleName(),ra.getDbName());
     } catch (Exception e) {
       throw new HiveException(e);
     }
@@ -3282,7 +3299,7 @@ public class Hive {
 
   public void addUserAssignment(UserAssignment ua) throws HiveException {
     try {
-      //getMSC().addUserAssignment(ua.getDbName(), ua.getUserName());
+      getMSC().addUserAssignment(ua.getUserName(),ua.getDbName());
     } catch (Exception e) {
       throw new HiveException(e);
     }
@@ -3290,7 +3307,7 @@ public class Hive {
 
   public void dropUserAssignment(UserAssignment ua) throws HiveException {
       try {
-        //getMSC().deleteUserAssignment(ua.getDbName(),ua.getUserName());
+        getMSC().deleteUserAssignment(ua.getUserName(),ua.getDbName());
       } catch (Exception e) {
         throw new HiveException(e);
       }
@@ -3308,10 +3325,10 @@ public class Hive {
   }
 
 
-  public void dropSchema(org.apache.hadoop.hive.ql.metadata.GlobalSchema schema) throws HiveException {
+  public void dropSchema(String schemaName) throws HiveException {
 
     try {
-      GlobalSchema gls = getMSC().getSchemaByName(schema.getSchemaName());
+      GlobalSchema gls = getMSC().getSchemaByName(schemaName);
       getMSC().deleteSchema(gls.getSchemaName());
     } catch (Exception e) {
       throw new HiveException(e);
@@ -3340,5 +3357,38 @@ public class Hive {
     }
     return gl;
   }
-
+  /**
+   * Updates the existing table metadata with the new metadata.
+   *
+   * @param glsName
+   *          name of the existing schema
+   * @param newSch
+   *          new name of the schema. could be the old name
+   * @throws InvalidOperationException
+   *           if the changes in metadata is not acceptable
+   * @throws TException
+   */
+  public void alterSchema(String schName, org.apache.hadoop.hive.ql.metadata.GlobalSchema newSch)
+      throws InvalidOperationException, HiveException, Exception {
+    org.apache.hadoop.hive.ql.metadata.GlobalSchema gls = new org.apache.hadoop.hive.ql.metadata.GlobalSchema(schName);
+    try {
+      // Remove the DDL_TIME so it gets refreshed
+      if (newSch.getParameters() != null) {
+        LOG.info("****************zqh****************newSch.getParameters()" + newSch.getParameters());
+        newSch.getParameters().remove(hive_metastoreConstants.DDL_TIME);
+      }
+      LOG.info("****************zqh****************modifySchema" + gls.getSchemaName());
+      getMSC().modifySchema(gls.getSchemaName(), newSch.getTSchema());
+      LOG.info("****************zqh****************modifySchemaSuccessfully");
+    } catch (MetaException e) {
+      LOG.error("Unable to modify schema MetaException:" + e.getMessage());
+      throw new HiveException("Unable to alter schema.", e);
+    } catch (TException e) {
+      LOG.error("Unable to modify schema TException:" + e.getMessage());
+      throw new HiveException("Unable to alter schema.", e);
+    } catch (Exception e) {
+      LOG.error("Unable to modify schema Exception:" + e.getMessage());
+      throw new Exception("Unable to alter schema.", e);
+    }
+  }
 };
