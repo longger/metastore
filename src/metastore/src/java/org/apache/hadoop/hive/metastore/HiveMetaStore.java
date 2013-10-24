@@ -134,6 +134,7 @@ import org.apache.hadoop.hive.metastore.events.PreEventContext;
 import org.apache.hadoop.hive.metastore.events.PreLoadPartitionDoneEvent;
 import org.apache.hadoop.hive.metastore.events.PreUserAuthorityCheckEvent;
 import org.apache.hadoop.hive.metastore.ha.MetaMaster;
+import org.apache.hadoop.hive.metastore.metalog.MetaStoreClientManager;
 import org.apache.hadoop.hive.metastore.model.MDBPrivilege;
 import org.apache.hadoop.hive.metastore.model.MGlobalPrivilege;
 import org.apache.hadoop.hive.metastore.model.MPartitionColumnPrivilege;
@@ -212,6 +213,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
   public static class HMSHandler extends FacebookBase implements
       IHMSHandler {
     public static IMetaStoreClient topdcli = null;
+    public MetaStoreClientManager metaStoreClientManager = null;
     public static String msUri = null;
     public static final Log LOG = HiveMetaStore.LOG;
 
@@ -425,6 +427,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         Timer cleaner = new Timer("Metastore Events Cleaner Thread", true);
         cleaner.schedule(new EventCleanerTask(this), cleanFreq, cleanFreq);
       }
+
+      MetaStoreClientManager.setTopClient(topdcli);
+      metaStoreClientManager = MetaStoreClientManager.getInstance(hiveConf);
+
       return true;
     }
 
