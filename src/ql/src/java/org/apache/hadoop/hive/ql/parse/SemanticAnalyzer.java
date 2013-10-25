@@ -988,6 +988,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
               getMsg("Table " + getUnescapedName(qb.getParseInfo().getSrcForAlias(alias))));
         }
 
+        LOG.info("---zjw--tab.isView():"+tab.isView());
         if (tab.isView()) {
           if (qb.getParseInfo().isAnalyzeCommand()) {
             throw new SemanticException(ErrorMsg.ANALYZE_VIEW.getMsg());
@@ -9596,6 +9597,8 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       tableName, cols, comment, tblProps, partColNames, ifNotExists,isHeter, orReplace);
     unparseTranslator.enable();
     LOG.info("---zjw--createView.isHeter:"+createVwDesc.isHeter());
+
+    LOG.info("---zjw--createView.getViewExpandedText:"+createVwDesc.getViewExpandedText());
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         createVwDesc), conf));
     qb.setViewDesc(createVwDesc);
