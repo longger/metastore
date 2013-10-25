@@ -255,6 +255,9 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     case HiveParser.TOK_ALTERTABLE_RENAME:
       analyzeAlterTableRename(ast, false);
       break;
+    case HiveParser.TOK_ALTERTABLE_FILESPLIT:
+      analyzeAlterTableFileSplit(ast, AlterTableTypes.ALTERFILESPLIT);
+      break;
     case HiveParser.TOK_ALTERTABLE_TOUCH:
       analyzeAlterTableTouch(ast);
       break;
@@ -1739,15 +1742,22 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       throws SemanticException {
     PrivilegeObjectDesc subject = new PrivilegeObjectDesc();
     subject.setObject(unescapeIdentifier(ast.getChild(0).getText()));
-    if (ast.getChildCount() > 1) {
+    if ("TABLE".equals(unescapeIdentifier(ast.getChild(1).getText()))) {
+      LOG.info("****************zqh****************PrivilegeObjectDesc####unescapeIdentifier(ast.getChild(1).getText()):" + unescapeIdentifier(ast.getChild(1).getText()));
       for (int i = 0; i < ast.getChildCount(); i++) {
         ASTNode astChild = (ASTNode) ast.getChild(i);
         if (astChild.getToken().getType() == HiveParser.TOK_PARTSPEC) {
           subject.setPartSpec(DDLSemanticAnalyzer.getPartSpec(astChild));
         } else {
           subject.setTable(ast.getChild(0) != null);
+          subject.setSchema(ast.getChild(0) == null);
+          LOG.info("****************zqh****************PrivilegeObjectDesc####ast.getChild(0) != null:" + ast.getChild(0) != null);
         }
       }
+    }else if ("SCHEMA".equals(unescapeIdentifier(ast.getChild(1).getText()))){
+      LOG.info("****************zqh****************PrivilegeObjectDesc####ast.getChild(0) != null:" + ast.getChild(0) != null);
+      subject.setTable(ast.getChild(0) == null);
+      subject.setSchema(ast.getChild(0) != null);
     }
 
     try {
@@ -2202,6 +2212,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       case RENAMEPARTITION:
       case ADDPROPS:
       case RENAME:
+      case ALTERFILESPLIT:
         // allow this form
         break;
       default:
@@ -3512,6 +3523,27 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         alterTblDesc), conf));
   }
+
+  private void analyzeAlterTableFileSplit(ASTNode ast, AlterTableTypes alterType)
+      throws SemanticException {
+    String tblName = getUnescapedName((ASTNode) ast.getChild(0));
+    LOG.info("*****************zqh****************" +tblName);
+    //List<FieldSchema> newCols = getColumns((ASTNode) ast.getChild(1));
+    //LOG.info("*****************zqh****************" +newCols);
+    PartitionDefinition pd = new PartitionDefinition();
+    List<FieldSchema> splitCols = new ArrayList<FieldSchema>();
+    pd.setTableName(tblName);
+    splitCols = analyzePartitionClause((ASTNode) ast.getChild(1), pd);
+    AlterTableDesc alterTblDesc = new AlterTableDesc(splitCols, tblName,
+        alterType);
+    addInputsOutputsAlterTable(tblName, null, alterTblDesc);
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterTblDesc), conf));
+
+  }
+
+
+
 
   private void analyzeAlterTableDropParts(ASTNode ast, boolean expectView)
       throws SemanticException {

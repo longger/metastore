@@ -1221,18 +1221,25 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
         LOG.info("--zjw--before crt");
         try{
-
+        LOG.info("*****************zqh*****************" + tbl);
+        LOG.info("*****************zqh*****************" + tbl.getTableType());
+        LOG.info("*****************zqh*****************" + tbl.getDbName()+tbl.getSchemaName());
+        LOG.info("*****************zqh*****************" + TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()));
 
         /**********added by zjw for schema and table when creating view********/
         /**********with what need to notice is that table cache syn    ********/
         /********** *  should compermise with schema                   ********/
         /********** *  视图的table对象仅在全局点存储，视图的schema对象全局保存 ********/
+        LOG.info("*****************zqh*****************" + TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()));
         if (TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType())) {
           GlobalSchema schema = copySchemaFromtable(tbl);
           tbl.setSchemaName(schema.getSchemaName());
+          LOG.info("--zjw--TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()");
           createSchema(copySchemaFromtable(tbl));
         }
         /**********end ofadded by zjw for creating view********/
+        ms.createTable(tbl);
+        LOG.info("*****************zqh*****************ms.createTable(tbl)successfully");
 
 
         ms.createTable(tbl);
@@ -2671,7 +2678,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throws InvalidOperationException, MetaException {
       startFunction("alter_table", ": db=" + dbname + " tbl=" + name
           + " newtbl=" + newTable.getTableName());
-
+      LOG.info("*****************zqh**************** alter_table: db=" + dbname + " tbl=" + name
+          + " newtbl=" + newTable.getTableName());
       // Update the time if it hasn't been specified.
       if (newTable.getParameters() == null ||
           newTable.getParameters().get(hive_metastoreConstants.DDL_TIME) == null) {
@@ -2682,6 +2690,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       Exception ex = null;
       try {
         Table oldt = get_table(dbname, name);
+        LOG.info("*****************zqh****************oldt.getTableName()" +oldt.getTableName());
         firePreEvent(new PreAlterTableEvent(oldt, newTable, this));
         alterHandler.alterTable(getMS(), wh, dbname, name, newTable);
         success = true;

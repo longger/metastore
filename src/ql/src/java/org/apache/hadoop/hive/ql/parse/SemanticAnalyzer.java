@@ -999,8 +999,11 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
                 " detected (cycle: " + StringUtils.join(viewsExpanded, " -> ") +
                 " -> " + fullViewName + ").");
           }
+          LOG.info("---zjw--getting pre view sql:"+tab.getViewOriginalText());
           replaceViewReferenceWithDefinition(qb, tab, tab_name, alias);
           aliasToViewName.put(alias, fullViewName);
+
+          LOG.info("---zjw--getting suf view sql:"+tab.getViewOriginalText());
           // This is the last time we'll see the Table objects for views, so add it to the inputs
           // now
           inputs.add(new ReadEntity(tab));
@@ -8600,6 +8603,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       SchemaUtil su = new SchemaUtil();
       su.setOriginNameMap(resRR.getOriginNameMap());
       for(FieldSchema col : resultSchema){
+        LOG.info("--zjw------FieldSchema.col:"+col.getName());
         LinkedHashMap<String,String> tab_cols = resRR.getOriginNameMap().get(col.getName());
         StringBuilder col_cmt = new StringBuilder();
         col_cmt.append("{");

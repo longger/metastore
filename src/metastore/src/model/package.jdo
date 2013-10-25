@@ -847,6 +847,46 @@
         <column name="GRANT_OPTION" jdbc-type="SMALLINT"/>
       </field>
     </class>
+    
+     <class name="MSchemaPrivilege" table="SCH_PRIVS" identity-type="datastore" detachable="true">
+    
+      <index name="SchemaPrivilegeIndex" unique="false">
+        <column name="SCH_ID"/>
+        <column name="PRINCIPAL_NAME"/>
+        <column name="PRINCIPAL_TYPE"/>
+        <column name="SCH_PRIV"/>
+        <column name="GRANTOR"/>
+        <column name="GRANTOR_TYPE"/>
+      </index>
+
+      <datastore-identity>
+        <column name="SCH_GRANT_ID"/>
+      </datastore-identity>
+
+      <field name="principalName">
+        <column name="PRINCIPAL_NAME" length="128" jdbc-type="VARCHAR"/>
+      </field>
+      <field name="principalType">
+        <column name="PRINCIPAL_TYPE" length="128" jdbc-type="VARCHAR"/>
+      </field>
+      <field name="schema">
+        <column name="SCH_ID"/>
+      </field>
+      <field name="privilege">
+      </field>
+      <field name="createTime">
+        <column name="CREATE_TIME" jdbc-type="integer"/>
+      </field>
+      <field name="grantor">
+        <column name="GRANTOR" length="128" jdbc-type="VARCHAR"/>
+      </field>
+      <field name="grantorType">
+        <column name="GRANTOR_TYPE" length="128" jdbc-type="VARCHAR"/>
+      </field>
+      <field name="grantOption">
+        <column name="GRANT_OPTION" jdbc-type="SMALLINT"/>
+      </field>
+    </class>
 
     <class name="MPartitionPrivilege" table="PART_PRIVS" identity-type="datastore" detachable="true">
     

@@ -380,6 +380,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
    */
   public void alter_table(String dbname, String tbl_name, Table new_tbl)
       throws InvalidOperationException, MetaException, TException {
+    LOG.info("*****************zqh**************** before alter_table");
     client.alter_table(dbname, tbl_name, new_tbl);
   }
 
