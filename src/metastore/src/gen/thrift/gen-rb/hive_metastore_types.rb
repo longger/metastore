@@ -43,8 +43,9 @@ module FOFailReason
   NOTEXIST = 11
   SAFEMODE = 12
   INVALID_STATE = 13
-  VALUE_MAP = {1 => "INVALID_NODE", 2 => "INVALID_TABLE", 3 => "INVALID_FILE", 4 => "INVALID_SPLIT_VALUES", 5 => "INVALID_ATTRIBUTION", 6 => "INVALID_NODE_GROUPS", 10 => "NOSPACE", 11 => "NOTEXIST", 12 => "SAFEMODE", 13 => "INVALID_STATE"}
-  VALID_VALUES = Set.new([INVALID_NODE, INVALID_TABLE, INVALID_FILE, INVALID_SPLIT_VALUES, INVALID_ATTRIBUTION, INVALID_NODE_GROUPS, NOSPACE, NOTEXIST, SAFEMODE, INVALID_STATE]).freeze
+  TRY_AGAIN = 14
+  VALUE_MAP = {1 => "INVALID_NODE", 2 => "INVALID_TABLE", 3 => "INVALID_FILE", 4 => "INVALID_SPLIT_VALUES", 5 => "INVALID_ATTRIBUTION", 6 => "INVALID_NODE_GROUPS", 10 => "NOSPACE", 11 => "NOTEXIST", 12 => "SAFEMODE", 13 => "INVALID_STATE", 14 => "TRY_AGAIN"}
+  VALID_VALUES = Set.new([INVALID_NODE, INVALID_TABLE, INVALID_FILE, INVALID_SPLIT_VALUES, INVALID_ATTRIBUTION, INVALID_NODE_GROUPS, NOSPACE, NOTEXIST, SAFEMODE, INVALID_STATE, TRY_AGAIN]).freeze
 end
 
 module FindNodePolicy
@@ -799,6 +800,7 @@ class SFile
   LENGTH = 10
   REF_FILES = 11
   VALUES = 12
+  LOAD_STATUS = 13
 
   FIELDS = {
     FID => {:type => ::Thrift::Types::I64, :name => 'fid'},
@@ -812,7 +814,8 @@ class SFile
     LOCATIONS => {:type => ::Thrift::Types::LIST, :name => 'locations', :element => {:type => ::Thrift::Types::STRUCT, :class => ::SFileLocation}},
     LENGTH => {:type => ::Thrift::Types::I64, :name => 'length'},
     REF_FILES => {:type => ::Thrift::Types::LIST, :name => 'ref_files', :element => {:type => ::Thrift::Types::I64}},
-    VALUES => {:type => ::Thrift::Types::LIST, :name => 'values', :element => {:type => ::Thrift::Types::STRUCT, :class => ::SplitValue}}
+    VALUES => {:type => ::Thrift::Types::LIST, :name => 'values', :element => {:type => ::Thrift::Types::STRUCT, :class => ::SplitValue}},
+    LOAD_STATUS => {:type => ::Thrift::Types::I32, :name => 'load_status'}
   }
 
   def struct_fields; FIELDS; end

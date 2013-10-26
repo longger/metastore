@@ -46,6 +46,7 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
   private static final org.apache.thrift.protocol.TField LENGTH_FIELD_DESC = new org.apache.thrift.protocol.TField("length", org.apache.thrift.protocol.TType.I64, (short)10);
   private static final org.apache.thrift.protocol.TField REF_FILES_FIELD_DESC = new org.apache.thrift.protocol.TField("ref_files", org.apache.thrift.protocol.TType.LIST, (short)11);
   private static final org.apache.thrift.protocol.TField VALUES_FIELD_DESC = new org.apache.thrift.protocol.TField("values", org.apache.thrift.protocol.TType.LIST, (short)12);
+  private static final org.apache.thrift.protocol.TField LOAD_STATUS_FIELD_DESC = new org.apache.thrift.protocol.TField("load_status", org.apache.thrift.protocol.TType.I32, (short)13);
 
   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
   static {
@@ -65,6 +66,7 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
   private long length; // required
   private List<Long> ref_files; // required
   private List<SplitValue> values; // required
+  private int load_status; // required
 
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
@@ -79,7 +81,8 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
     LOCATIONS((short)9, "locations"),
     LENGTH((short)10, "length"),
     REF_FILES((short)11, "ref_files"),
-    VALUES((short)12, "values");
+    VALUES((short)12, "values"),
+    LOAD_STATUS((short)13, "load_status");
 
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -118,6 +121,8 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
           return REF_FILES;
         case 12: // VALUES
           return VALUES;
+        case 13: // LOAD_STATUS
+          return LOAD_STATUS;
         default:
           return null;
       }
@@ -164,6 +169,7 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
   private static final int __RECORD_NR_ISSET_ID = 3;
   private static final int __ALL_RECORD_NR_ISSET_ID = 4;
   private static final int __LENGTH_ISSET_ID = 5;
+  private static final int __LOAD_STATUS_ISSET_ID = 6;
   private byte __isset_bitfield = 0;
   public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
   static {
@@ -195,6 +201,8 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
     tmpMap.put(_Fields.VALUES, new org.apache.thrift.meta_data.FieldMetaData("values", org.apache.thrift.TFieldRequirementType.DEFAULT, 
         new org.apache.thrift.meta_data.ListMetaData(org.apache.thrift.protocol.TType.LIST, 
             new org.apache.thrift.meta_data.StructMetaData(org.apache.thrift.protocol.TType.STRUCT, SplitValue.class))));
+    tmpMap.put(_Fields.LOAD_STATUS, new org.apache.thrift.meta_data.FieldMetaData("load_status", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+        new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I32)));
     metaDataMap = Collections.unmodifiableMap(tmpMap);
     org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(SFile.class, metaDataMap);
   }
@@ -214,7 +222,8 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
     List<SFileLocation> locations,
     long length,
     List<Long> ref_files,
-    List<SplitValue> values)
+    List<SplitValue> values,
+    int load_status)
   {
     this();
     this.fid = fid;
@@ -235,6 +244,8 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
     setLengthIsSet(true);
     this.ref_files = ref_files;
     this.values = values;
+    this.load_status = load_status;
+    setLoad_statusIsSet(true);
   }
 
   /**
@@ -278,6 +289,7 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
       }
       this.values = __this__values;
     }
+    this.load_status = other.load_status;
   }
 
   public SFile deepCopy() {
@@ -304,6 +316,8 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
     this.length = 0;
     this.ref_files = null;
     this.values = null;
+    setLoad_statusIsSet(false);
+    this.load_status = 0;
   }
 
   public long getFid() {
@@ -621,6 +635,28 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
     }
   }
 
+  public int getLoad_status() {
+    return this.load_status;
+  }
+
+  public void setLoad_status(int load_status) {
+    this.load_status = load_status;
+    setLoad_statusIsSet(true);
+  }
+
+  public void unsetLoad_status() {
+    __isset_bitfield = EncodingUtils.clearBit(__isset_bitfield, __LOAD_STATUS_ISSET_ID);
+  }
+
+  /** Returns true if field load_status is set (has been assigned a value) and false otherwise */
+  public boolean isSetLoad_status() {
+    return EncodingUtils.testBit(__isset_bitfield, __LOAD_STATUS_ISSET_ID);
+  }
+
+  public void setLoad_statusIsSet(boolean value) {
+    __isset_bitfield = EncodingUtils.setBit(__isset_bitfield, __LOAD_STATUS_ISSET_ID, value);
+  }
+
   public void setFieldValue(_Fields field, Object value) {
     switch (field) {
     case FID:
@@ -719,6 +755,14 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
       }
       break;
 
+    case LOAD_STATUS:
+      if (value == null) {
+        unsetLoad_status();
+      } else {
+        setLoad_status((Integer)value);
+      }
+      break;
+
     }
   }
 
@@ -760,6 +804,9 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
     case VALUES:
       return getValues();
 
+    case LOAD_STATUS:
+      return Integer.valueOf(getLoad_status());
+
     }
     throw new IllegalStateException();
   }
@@ -795,6 +842,8 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
       return isSetRef_files();
     case VALUES:
       return isSetValues();
+    case LOAD_STATUS:
+      return isSetLoad_status();
     }
     throw new IllegalStateException();
   }
@@ -920,6 +969,15 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
         return false;
     }
 
+    boolean this_present_load_status = true;
+    boolean that_present_load_status = true;
+    if (this_present_load_status || that_present_load_status) {
+      if (!(this_present_load_status && that_present_load_status))
+        return false;
+      if (this.load_status != that.load_status)
+        return false;
+    }
+
     return true;
   }
 
@@ -986,6 +1044,11 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
     builder.append(present_values);
     if (present_values)
       builder.append(values);
+
+    boolean present_load_status = true;
+    builder.append(present_load_status);
+    if (present_load_status)
+      builder.append(load_status);
 
     return builder.toHashCode();
   }
@@ -1118,6 +1181,16 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
         return lastComparison;
       }
     }
+    lastComparison = Boolean.valueOf(isSetLoad_status()).compareTo(typedOther.isSetLoad_status());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (isSetLoad_status()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.load_status, typedOther.load_status);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
     return 0;
   }
 
@@ -1208,6 +1281,10 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
     } else {
       sb.append(this.values);
     }
+    first = false;
+    if (!first) sb.append(", ");
+    sb.append("load_status:");
+    sb.append(this.load_status);
     first = false;
     sb.append(")");
     return sb.toString();
@@ -1382,6 +1459,14 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
+          case 13: // LOAD_STATUS
+            if (schemeField.type == org.apache.thrift.protocol.TType.I32) {
+              struct.load_status = iprot.readI32();
+              struct.setLoad_statusIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
           default:
             org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
         }
@@ -1464,6 +1549,9 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
         }
         oprot.writeFieldEnd();
       }
+      oprot.writeFieldBegin(LOAD_STATUS_FIELD_DESC);
+      oprot.writeI32(struct.load_status);
+      oprot.writeFieldEnd();
       oprot.writeFieldStop();
       oprot.writeStructEnd();
     }
@@ -1518,7 +1606,10 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
       if (struct.isSetValues()) {
         optionals.set(11);
       }
-      oprot.writeBitSet(optionals, 12);
+      if (struct.isSetLoad_status()) {
+        optionals.set(12);
+      }
+      oprot.writeBitSet(optionals, 13);
       if (struct.isSetFid()) {
         oprot.writeI64(struct.fid);
       }
@@ -1573,12 +1664,15 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
           }
         }
       }
+      if (struct.isSetLoad_status()) {
+        oprot.writeI32(struct.load_status);
+      }
     }
 
     @Override
     public void read(org.apache.thrift.protocol.TProtocol prot, SFile struct) throws org.apache.thrift.TException {
       TTupleProtocol iprot = (TTupleProtocol) prot;
-      BitSet incoming = iprot.readBitSet(12);
+      BitSet incoming = iprot.readBitSet(13);
       if (incoming.get(0)) {
         struct.fid = iprot.readI64();
         struct.setFidIsSet(true);
@@ -1655,6 +1749,10 @@ public class SFile implements org.apache.thrift.TBase<SFile, SFile._Fields>, jav
           }
         }
         struct.setValuesIsSet(true);
+      }
+      if (incoming.get(12)) {
+        struct.load_status = iprot.readI32();
+        struct.setLoad_statusIsSet(true);
       }
     }
   }

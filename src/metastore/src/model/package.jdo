@@ -1156,7 +1156,6 @@
     
     <class name="MNode" table="NODES" identity-type="datastore" detachable="true">
       <index name="UniqueNode" unique="true">
-        <column name="NODE_ID"/>
         <column name="NODE_NAME"/>
       </index>
       
@@ -1186,7 +1185,6 @@
     
     <class name="MDevice" table="DEVICES" identity-type="datastore" detachable="true">
       <index name="UniqueDevice" unique="true">
-        <column name="DEV_ID"/>
         <column name="DEV_NAME"/>
       </index>
       
@@ -1210,7 +1208,6 @@
     
     <class name="MFile" table="FILES" identity-type="datastore" detachable="true">
       <index name="UniqueFile" unique="true">
-        <column name="FILE_ID"/>
         <column name="FID"/>
       </index>
       
@@ -1277,12 +1274,29 @@
           </embedded>
         </element>
       </field>
+      
+      <field name="load_status">
+        <column name="LOAD_STATUS"/>
+      </field>
     </class>
     
     <class name="MFileLocation" table="FILE_LOCATION" identity-type="datastore" detachable="true">
       <datastore-identity>
         <column name="LOCATION_ID"/>
       </datastore-identity>
+      
+      <index name="FastFileLocationSearch">
+        <column name="FILE_ID"/>
+      </index>
+      
+      <index name="FastFileLocaitonSearchByStatus">
+        <column name="visit_status"/>
+      </index>
+      
+      <index name="FastFLSByDL">
+        <column name="DEV_ID"/>
+        <column name="LOCATION"/>
+      </index>
       
       <field name="file">
         <column name="FILE_ID"/>

@@ -896,11 +896,23 @@ public class MSGFactory {
         if (msg.getOld_object_params().containsKey("f_id")) {
           params.put("f_id", msg.getOld_object_params().get("f_id"));
         }
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        }
+        if (msg.getOld_object_params().containsKey("table_name")) {
+          params.put("table_name", msg.getOld_object_params().get("table_name"));
+        }
         break;
       case MSGType.MSG_DEL_FILE:
         //删除文件
         if (msg.getOld_object_params().containsKey("f_id")) {
           params.put("f_id", msg.getOld_object_params().get("f_id"));
+        }
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        }
+        if (msg.getOld_object_params().containsKey("table_name")) {
+          params.put("table_name", msg.getOld_object_params().get("table_name"));
         }
         break;
     }//end of switch

@@ -2258,14 +2258,16 @@ public boolean authentication(String user_name, String passwd)
 
   @Override
   public boolean migrate_stage2(String dbName, String tableName, List<Long> files, String from_db,
-      String to_db, String to_devid) throws MetaException, TException {
+      String to_db, String to_devid, String user, String password) throws MetaException, TException {
     assert dbName != null;
     assert tableName != null;
     assert files != null;
     assert from_db != null;
     assert to_db != null;
     assert to_devid != null;
-    return client.migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid);
+    assert user != null;
+    assert password != null;
+    return client.migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid, user, password);
   }
 
   @Override
@@ -2295,6 +2297,11 @@ public boolean authentication(String user_name, String passwd)
     assert table_name != null;
     assert values != null;
     return client.create_file_by_policy(policy, repnr, db_name, table_name, values);
+  }
+
+  @Override
+  public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException {
+    return client.reopen_file(fid);
   }
 
 }

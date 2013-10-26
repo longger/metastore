@@ -702,6 +702,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("create_file_by_policy\n");
   }
 
+  bool reopen_file(const int64_t fid) {
+    // Your implementation goes here
+    printf("reopen_file\n");
+  }
+
   int32_t close_file(const SFile& file) {
     // Your implementation goes here
     printf("close_file\n");
@@ -817,7 +822,7 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("migrate_stage1\n");
   }
 
-  bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid) {
+  bool migrate_stage2(const std::string& dbName, const std::string& tableName, const std::vector<int64_t> & files, const std::string& from_db, const std::string& to_db, const std::string& to_devid, const std::string& user, const std::string& password) {
     // Your implementation goes here
     printf("migrate_stage2\n");
   }

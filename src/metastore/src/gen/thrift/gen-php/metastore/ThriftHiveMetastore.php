@@ -152,6 +152,7 @@ interface ThriftHiveMetastoreIf extends \FacebookServiceIf {
   public function cancel_delegation_token($token_str_form);
   public function create_file($node_name, $repnr, $db_name, $table_name, $values);
   public function create_file_by_policy(\metastore\CreatePolicy $policy, $repnr, $db_name, $table_name, $values);
+  public function reopen_file($fid);
   public function close_file(\metastore\SFile $file);
   public function online_filelocation(\metastore\SFile $file);
   public function toggle_safemode();
@@ -175,7 +176,7 @@ interface ThriftHiveMetastoreIf extends \FacebookServiceIf {
   public function getNodeInfo();
   public function migrate_in(\metastore\Table $tbl, $files, $idxs, $from_db, $to_devid, $fileMap);
   public function migrate_stage1($dbName, $tableName, $files, $to_db);
-  public function migrate_stage2($dbName, $tableName, $files, $from_db, $to_db, $to_devid);
+  public function migrate_stage2($dbName, $tableName, $files, $from_db, $to_db, $to_devid, $user, $password);
   public function migrate2_in(\metastore\Table $tbl, $parts, $idxs, $from_db, $to_nas_devid, $fileMap);
   public function migrate2_stage1($dbName, $tableName, $partNames, $to_db);
   public function migrate2_stage2($dbName, $tableName, $partNames, $from_db, $to_db, $to_nas_devid);
@@ -7978,6 +7979,63 @@ class ThriftHiveMetastoreClient extends \FacebookServiceClient implements \metas
     throw new \Exception("create_file_by_policy failed: unknown result");
   }
 
+  public function reopen_file($fid)
+  {
+    $this->send_reopen_file($fid);
+    return $this->recv_reopen_file();
+  }
+
+  public function send_reopen_file($fid)
+  {
+    $args = new \metastore\ThriftHiveMetastore_reopen_file_args();
+    $args->fid = $fid;
+    $bin_accel = ($this->output_ instanceof TProtocol::$TBINARYPROTOCOLACCELERATED) && function_exists('thrift_protocol_write_binary');
+    if ($bin_accel)
+    {
+      thrift_protocol_write_binary($this->output_, 'reopen_file', TMessageType::CALL, $args, $this->seqid_, $this->output_->isStrictWrite());
+    }
+    else
+    {
+      $this->output_->writeMessageBegin('reopen_file', TMessageType::CALL, $this->seqid_);
+      $args->write($this->output_);
+      $this->output_->writeMessageEnd();
+      $this->output_->getTransport()->flush();
+    }
+  }
+
+  public function recv_reopen_file()
+  {
+    $bin_accel = ($this->input_ instanceof TProtocol::$TBINARYPROTOCOLACCELERATED) && function_exists('thrift_protocol_read_binary');
+    if ($bin_accel) $result = thrift_protocol_read_binary($this->input_, '\metastore\ThriftHiveMetastore_reopen_file_result', $this->input_->isStrictRead());
+    else
+    {
+      $rseqid = 0;
+      $fname = null;
+      $mtype = 0;
+
+      $this->input_->readMessageBegin($fname, $mtype, $rseqid);
+      if ($mtype == TMessageType::EXCEPTION) {
+        $x = new TApplicationException();
+        $x->read($this->input_);
+        $this->input_->readMessageEnd();
+        throw $x;
+      }
+      $result = new \metastore\ThriftHiveMetastore_reopen_file_result();
+      $result->read($this->input_);
+      $this->input_->readMessageEnd();
+    }
+    if ($result->success !== null) {
+      return $result->success;
+    }
+    if ($result->o1 !== null) {
+      throw $result->o1;
+    }
+    if ($result->o2 !== null) {
+      throw $result->o2;
+    }
+    throw new \Exception("reopen_file failed: unknown result");
+  }
+
   public function close_file(\metastore\SFile $file)
   {
     $this->send_close_file($file);
@@ -9256,13 +9314,13 @@ class ThriftHiveMetastoreClient extends \FacebookServiceClient implements \metas
     throw new \Exception("migrate_stage1 failed: unknown result");
   }
 
-  public function migrate_stage2($dbName, $tableName, $files, $from_db, $to_db, $to_devid)
+  public function migrate_stage2($dbName, $tableName, $files, $from_db, $to_db, $to_devid, $user, $password)
   {
-    $this->send_migrate_stage2($dbName, $tableName, $files, $from_db, $to_db, $to_devid);
+    $this->send_migrate_stage2($dbName, $tableName, $files, $from_db, $to_db, $to_devid, $user, $password);
     return $this->recv_migrate_stage2();
   }
 
-  public function send_migrate_stage2($dbName, $tableName, $files, $from_db, $to_db, $to_devid)
+  public function send_migrate_stage2($dbName, $tableName, $files, $from_db, $to_db, $to_devid, $user, $password)
   {
     $args = new \metastore\ThriftHiveMetastore_migrate_stage2_args();
     $args->dbName = $dbName;
@@ -9271,6 +9329,8 @@ class ThriftHiveMetastoreClient extends \FacebookServiceClient implements \metas
     $args->from_db = $from_db;
     $args->to_db = $to_db;
     $args->to_devid = $to_devid;
+    $args->user = $user;
+    $args->password = $password;
     $bin_accel = ($this->output_ instanceof TProtocol::$TBINARYPROTOCOLACCELERATED) && function_exists('thrift_protocol_write_binary');
     if ($bin_accel)
     {
@@ -40919,6 +40979,194 @@ class ThriftHiveMetastore_create_file_by_policy_result {
 
 }
 
+class ThriftHiveMetastore_reopen_file_args {
+  static $_TSPEC;
+
+  public $fid = null;
+
+  public function __construct($vals=null) {
+    if (!isset(self::$_TSPEC)) {
+      self::$_TSPEC = array(
+        1 => array(
+          'var' => 'fid',
+          'type' => TType::I64,
+          ),
+        );
+    }
+    if (is_array($vals)) {
+      if (isset($vals['fid'])) {
+        $this->fid = $vals['fid'];
+      }
+    }
+  }
+
+  public function getName() {
+    return 'ThriftHiveMetastore_reopen_file_args';
+  }
+
+  public function read($input)
+  {
+    $xfer = 0;
+    $fname = null;
+    $ftype = 0;
+    $fid = 0;
+    $xfer += $input->readStructBegin($fname);
+    while (true)
+    {
+      $xfer += $input->readFieldBegin($fname, $ftype, $fid);
+      if ($ftype == TType::STOP) {
+        break;
+      }
+      switch ($fid)
+      {
+        case 1:
+          if ($ftype == TType::I64) {
+            $xfer += $input->readI64($this->fid);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        default:
+          $xfer += $input->skip($ftype);
+          break;
+      }
+      $xfer += $input->readFieldEnd();
+    }
+    $xfer += $input->readStructEnd();
+    return $xfer;
+  }
+
+  public function write($output) {
+    $xfer = 0;
+    $xfer += $output->writeStructBegin('ThriftHiveMetastore_reopen_file_args');
+    if ($this->fid !== null) {
+      $xfer += $output->writeFieldBegin('fid', TType::I64, 1);
+      $xfer += $output->writeI64($this->fid);
+      $xfer += $output->writeFieldEnd();
+    }
+    $xfer += $output->writeFieldStop();
+    $xfer += $output->writeStructEnd();
+    return $xfer;
+  }
+
+}
+
+class ThriftHiveMetastore_reopen_file_result {
+  static $_TSPEC;
+
+  public $success = null;
+  public $o1 = null;
+  public $o2 = null;
+
+  public function __construct($vals=null) {
+    if (!isset(self::$_TSPEC)) {
+      self::$_TSPEC = array(
+        0 => array(
+          'var' => 'success',
+          'type' => TType::BOOL,
+          ),
+        1 => array(
+          'var' => 'o1',
+          'type' => TType::STRUCT,
+          'class' => '\metastore\FileOperationException',
+          ),
+        2 => array(
+          'var' => 'o2',
+          'type' => TType::STRUCT,
+          'class' => '\metastore\MetaException',
+          ),
+        );
+    }
+    if (is_array($vals)) {
+      if (isset($vals['success'])) {
+        $this->success = $vals['success'];
+      }
+      if (isset($vals['o1'])) {
+        $this->o1 = $vals['o1'];
+      }
+      if (isset($vals['o2'])) {
+        $this->o2 = $vals['o2'];
+      }
+    }
+  }
+
+  public function getName() {
+    return 'ThriftHiveMetastore_reopen_file_result';
+  }
+
+  public function read($input)
+  {
+    $xfer = 0;
+    $fname = null;
+    $ftype = 0;
+    $fid = 0;
+    $xfer += $input->readStructBegin($fname);
+    while (true)
+    {
+      $xfer += $input->readFieldBegin($fname, $ftype, $fid);
+      if ($ftype == TType::STOP) {
+        break;
+      }
+      switch ($fid)
+      {
+        case 0:
+          if ($ftype == TType::BOOL) {
+            $xfer += $input->readBool($this->success);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        case 1:
+          if ($ftype == TType::STRUCT) {
+            $this->o1 = new \metastore\FileOperationException();
+            $xfer += $this->o1->read($input);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        case 2:
+          if ($ftype == TType::STRUCT) {
+            $this->o2 = new \metastore\MetaException();
+            $xfer += $this->o2->read($input);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        default:
+          $xfer += $input->skip($ftype);
+          break;
+      }
+      $xfer += $input->readFieldEnd();
+    }
+    $xfer += $input->readStructEnd();
+    return $xfer;
+  }
+
+  public function write($output) {
+    $xfer = 0;
+    $xfer += $output->writeStructBegin('ThriftHiveMetastore_reopen_file_result');
+    if ($this->success !== null) {
+      $xfer += $output->writeFieldBegin('success', TType::BOOL, 0);
+      $xfer += $output->writeBool($this->success);
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->o1 !== null) {
+      $xfer += $output->writeFieldBegin('o1', TType::STRUCT, 1);
+      $xfer += $this->o1->write($output);
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->o2 !== null) {
+      $xfer += $output->writeFieldBegin('o2', TType::STRUCT, 2);
+      $xfer += $this->o2->write($output);
+      $xfer += $output->writeFieldEnd();
+    }
+    $xfer += $output->writeFieldStop();
+    $xfer += $output->writeStructEnd();
+    return $xfer;
+  }
+
+}
+
 class ThriftHiveMetastore_close_file_args {
   static $_TSPEC;
 
@@ -45562,6 +45810,8 @@ class ThriftHiveMetastore_migrate_stage2_args {
   public $from_db = null;
   public $to_db = null;
   public $to_devid = null;
+  public $user = null;
+  public $password = null;
 
   public function __construct($vals=null) {
     if (!isset(self::$_TSPEC)) {
@@ -45594,6 +45844,14 @@ class ThriftHiveMetastore_migrate_stage2_args {
           'var' => 'to_devid',
           'type' => TType::STRING,
           ),
+        7 => array(
+          'var' => 'user',
+          'type' => TType::STRING,
+          ),
+        8 => array(
+          'var' => 'password',
+          'type' => TType::STRING,
+          ),
         );
     }
     if (is_array($vals)) {
@@ -45614,6 +45872,12 @@ class ThriftHiveMetastore_migrate_stage2_args {
       }
       if (isset($vals['to_devid'])) {
         $this->to_devid = $vals['to_devid'];
+      }
+      if (isset($vals['user'])) {
+        $this->user = $vals['user'];
+      }
+      if (isset($vals['password'])) {
+        $this->password = $vals['password'];
       }
     }
   }
@@ -45689,6 +45953,20 @@ class ThriftHiveMetastore_migrate_stage2_args {
             $xfer += $input->skip($ftype);
           }
           break;
+        case 7:
+          if ($ftype == TType::STRING) {
+            $xfer += $input->readString($this->user);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        case 8:
+          if ($ftype == TType::STRING) {
+            $xfer += $input->readString($this->password);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
         default:
           $xfer += $input->skip($ftype);
           break;
@@ -45742,6 +46020,16 @@ class ThriftHiveMetastore_migrate_stage2_args {
     if ($this->to_devid !== null) {
       $xfer += $output->writeFieldBegin('to_devid', TType::STRING, 6);
       $xfer += $output->writeString($this->to_devid);
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->user !== null) {
+      $xfer += $output->writeFieldBegin('user', TType::STRING, 7);
+      $xfer += $output->writeString($this->user);
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->password !== null) {
+      $xfer += $output->writeFieldBegin('password', TType::STRING, 8);
+      $xfer += $output->writeString($this->password);
       $xfer += $output->writeFieldEnd();
     }
     $xfer += $output->writeFieldStop();

@@ -1219,6 +1219,12 @@ public class DummyRawStoreForJdoConnection implements RawStore {
     return null;
   }
 
+  @Override
+  public boolean reopenSFile(SFile file) throws MetaException {
+    // TODO Auto-generated method stub
+    return false;
+  }
+
 }
 
 
