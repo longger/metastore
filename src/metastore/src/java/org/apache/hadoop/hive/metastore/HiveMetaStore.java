@@ -6583,11 +6583,19 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             throw new FileOperationException("Split type " + pi.getP_type() + " shouldn't be set values.", FOFailReason.INVALID_SPLIT_VALUES);
           case interval:
             if (low == -1) {
-              low = Long.parseLong(sv.getValue());
+              try {
+                low = Long.parseLong(sv.getValue());
+              } catch (NumberFormatException e) {
+                throw new FileOperationException("Split value expect Long for interval: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+              }
               break;
             }
             if (high == -1) {
-              high = Long.parseLong(sv.getValue());
+              try {
+                high = Long.parseLong(sv.getValue());
+              } catch (NumberFormatException e) {
+                throw new FileOperationException("Split value expect Long for interval: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+              }
               // check range
               String interval_unit = pi.getArgs().get(0);
               Double d = Double.parseDouble(pi.getArgs().get(1));
@@ -6618,7 +6626,12 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             break;
           case hash:
             low = high = -1;
-            long v = Long.parseLong(sv.getValue());
+            long v;
+            try {
+              v = Long.parseLong(sv.getValue());
+            } catch (NumberFormatException e) {
+              throw new FileOperationException("Split value expect Long for hash: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+            }
             if (v < 0 && v >= pi.getP_num()) {
               throw new FileOperationException("Hash value exceeds valid range: [0, " + pi.getP_num() + ").", FOFailReason.INVALID_SPLIT_VALUES);
             }
@@ -6626,7 +6639,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           }
           // check version, column name here
           if (sv.getVerison() != pi.getP_version() ||
-              pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
+              !pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
             throw new FileOperationException("Version or SplitKeyName mismatch, please check your metadata.", FOFailReason.INVALID_SPLIT_VALUES);
           }
 

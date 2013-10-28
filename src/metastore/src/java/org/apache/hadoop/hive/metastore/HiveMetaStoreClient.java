@@ -2113,6 +2113,9 @@ public boolean authentication(String user_name, String passwd)
   @Override
   public List<SFile> filterTableFiles(String dbName, String tabName, List<SplitValue> values)
       throws MetaException, TException {
+    assert dbName != null;
+    assert tabName != null;
+    assert values != null;
     return client.filterTableFiles(dbName, tabName, values);
   }
 
