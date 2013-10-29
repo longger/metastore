@@ -139,6 +139,7 @@ import org.apache.hadoop.hive.metastore.model.MPartitionPrivilege;
 import org.apache.hadoop.hive.metastore.model.MRole;
 import org.apache.hadoop.hive.metastore.model.MRoleMap;
 import org.apache.hadoop.hive.metastore.model.MSchema;
+import org.apache.hadoop.hive.metastore.model.MSchemaPrivilege;
 import org.apache.hadoop.hive.metastore.model.MSerDeInfo;
 import org.apache.hadoop.hive.metastore.model.MSplitValue;
 import org.apache.hadoop.hive.metastore.model.MStorageDescriptor;
@@ -5980,6 +5981,31 @@ public MUser getMUser(String userName) {
                 persistentObjs.add(mTab);
               }
             }
+          }  else if (hiveObject.getObjectType() == HiveObjectType.SCHEMA) {
+            MSchema schemaObj = getMSchema(hiveObject.getObjectName());
+            if (schemaObj != null) {
+              List<MSchemaPrivilege> schemaPrivs = this
+                  .listAllSchemaGrants(userName, principalType, hiveObject.getObjectName());
+              if (schemaPrivs != null) {
+                for (MSchemaPrivilege priv : schemaPrivs) {
+                  if (priv.getGrantor() != null
+                      && priv.getGrantor().equalsIgnoreCase(grantor)) {
+                    privSet.add(priv.getPrivilege());
+                  }
+                }
+              }
+              for (String privilege : privs) {
+                if (privSet.contains(privilege)) {
+                  throw new InvalidObjectException(privilege
+                      + " is already granted on schema ["
+                      + hiveObject.getObjectName() + "] by " + grantor);
+                }
+                MSchemaPrivilege mSch = new MSchemaPrivilege(
+                    userName, principalType.toString(), schemaObj,
+                    privilege, now, grantor, grantorType, grantOption);
+                persistentObjs.add(mSch);
+              }
+            }
           } else if (hiveObject.getObjectType() == HiveObjectType.PARTITION) {
             // TODO: fix it
             MPartition partObj = this.getMPartition(hiveObject.getDbName(),
@@ -6624,6 +6650,37 @@ public MUser getMUser(String userName) {
     }
     return mSecurityTabPartList;
   }
+
+  @SuppressWarnings("unchecked")
+  public List<MSchemaPrivilege> listAllSchemaGrants(
+      String principalName, PrincipalType principalType, String schemaName) {
+    schemaName = schemaName.toLowerCase().trim();
+
+    boolean success = false;
+    List<MSchemaPrivilege> mSecuritySchPartList = null;
+    try {
+      openTransaction();
+      LOG.debug("Executing listAllSchemaGrants");
+      Query query = pm.newQuery(
+          MSchemaPrivilege.class,
+              "principalName == t1 && principalType == t2 && schema.schemaName == t3");
+      query.declareParameters(
+          "java.lang.String t1, java.lang.String t2, java.lang.String t3");
+      mSecuritySchPartList = (List<MSchemaPrivilege>) query
+          .executeWithArray(principalName, principalType.toString(), schemaName);
+      LOG.debug("Done executing query for listAllSchemaGrants");
+      pm.retrieveAll(mSecuritySchPartList);
+      success = commitTransaction();
+      LOG
+          .debug("Done retrieving all objects for listAllSchemaGrants");
+    } finally {
+      if (!success) {
+        rollbackTransaction();
+      }
+    }
+    return mSecuritySchPartList;
+  }
+
 
   @SuppressWarnings("unchecked")
   @Override

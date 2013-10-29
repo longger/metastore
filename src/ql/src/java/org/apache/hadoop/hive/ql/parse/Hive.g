@@ -794,7 +794,7 @@ alterNodeStatement
 createDatabaseStatement
 @init { msgs.push("create database statement"); }
 @after { msgs.pop(); }
-    : KW_CREATE ()
+    : KW_CREATE  KW_DATABASE
         ifNotExists?
         name=Identifier
         databaseComment?
@@ -835,7 +835,7 @@ switchDatabaseStatement
 dropDatabaseStatement
 @init { msgs.push("drop database statement"); }
 @after { msgs.pop(); }
-    : KW_DROP  ifExists? Identifier restrictOrCascade?
+    : KW_DROP KW_DATABASE ifExists? Identifier restrictOrCascade?
     -> ^(TOK_DROPDATABASE Identifier ifExists? restrictOrCascade?)
     ;
 
@@ -1721,8 +1721,8 @@ privilegeIncludeColObject
 privilegeObject
 @init {msgs.push("privilege subject");}
 @after {msgs.pop();}
-    : KW_ON (table=KW_TABLE|KW_DATABASE) Identifier partitionSpec?
-    -> ^(TOK_PRIV_OBJECT Identifier $table? partitionSpec?)
+    : KW_ON (table=(KW_TABLE|KW_DATABASE|KW_SCHEMA)) Identifier partitionSpec?
+    -> ^(TOK_PRIV_OBJECT Identifier $table partitionSpec?)
     ;
 
 privilegeList

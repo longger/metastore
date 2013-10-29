@@ -8596,6 +8596,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       SchemaUtil su = new SchemaUtil();
       su.setOriginNameMap(resRR.getOriginNameMap());
       for(FieldSchema col : resultSchema){
+        LOG.info("--zjw------FieldSchema.col:"+col.getName());
         LinkedHashMap<String,String> tab_cols = resRR.getOriginNameMap().get(col.getName());
         StringBuilder col_cmt = new StringBuilder();
         col_cmt.append("{");

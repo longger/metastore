@@ -1506,9 +1506,10 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
 
     String dbName = null;
     String tableName = null;
+    String schemaName = null;
     Table tableObj = null;
     Database dbObj = null;
-
+    org.apache.hadoop.hive.metastore.api.GlobalSchema schemaObj = null;
     try {
 
       if (privSubjectDesc != null) {
@@ -1529,6 +1530,11 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
           dbObj = db.getDatabase(dbName);
           tableObj = db.getTable(dbName, tableName);
           notFound = (dbObj == null || tableObj == null);
+        } else if(privSubjectDesc.getSchema()){
+          schemaName = privSubjectDesc.getObject();
+          schemaObj = db.getSchemaByName(schemaName);
+          notFound = (schemaObj == null);
+
         } else {
           dbName = privSubjectDesc.getObject();
           dbObj = db.getDatabase(dbName);
@@ -1603,6 +1609,10 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
                         new HiveObjectRef(HiveObjectType.TABLE, dbName,
                             tableName, null, null), null, null, new PrivilegeGrantInfo(priv.toString(), 0, grantor, grantorType, grantOption)));
               }
+            } else if(privSubjectDesc.getSchema()){
+              privBag.addToPrivileges(new HiveObjectPrivilege(
+                  new HiveObjectRef(HiveObjectType.SCHEMA, null, null,
+                      null, null), null, null, new PrivilegeGrantInfo(priv.toString(), 0, grantor, grantorType, grantOption)));
             } else {
               privBag.addToPrivileges(new HiveObjectPrivilege(
                   new HiveObjectRef(HiveObjectType.DATABASE, dbName, null,

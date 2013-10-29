@@ -1739,15 +1739,22 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       throws SemanticException {
     PrivilegeObjectDesc subject = new PrivilegeObjectDesc();
     subject.setObject(unescapeIdentifier(ast.getChild(0).getText()));
-    if (ast.getChildCount() > 1) {
+    if ("TABLE".equals(unescapeIdentifier(ast.getChild(1).getText()))) {
+      LOG.info("****************zqh****************PrivilegeObjectDesc####unescapeIdentifier(ast.getChild(1).getText()):" + unescapeIdentifier(ast.getChild(1).getText()));
       for (int i = 0; i < ast.getChildCount(); i++) {
         ASTNode astChild = (ASTNode) ast.getChild(i);
         if (astChild.getToken().getType() == HiveParser.TOK_PARTSPEC) {
           subject.setPartSpec(DDLSemanticAnalyzer.getPartSpec(astChild));
         } else {
           subject.setTable(ast.getChild(0) != null);
+          subject.setSchema(ast.getChild(0) == null);
+          LOG.info("****************zqh****************PrivilegeObjectDesc####ast.getChild(0) != null:" + ast.getChild(0) != null);
         }
       }
+    }else if ("SCHEMA".equals(unescapeIdentifier(ast.getChild(1).getText()))){
+      LOG.info("****************zqh****************PrivilegeObjectDesc####ast.getChild(0) != null:" + ast.getChild(0) != null);
+      subject.setTable(ast.getChild(0) == null);
+      subject.setSchema(ast.getChild(0) != null);
     }
 
     try {

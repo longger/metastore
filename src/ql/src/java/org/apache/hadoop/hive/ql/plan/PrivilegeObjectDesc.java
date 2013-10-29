@@ -24,7 +24,7 @@ import java.util.HashMap;
 public class PrivilegeObjectDesc {
 
   private boolean table;
-
+  private boolean schema;
   private String object;
 
   private HashMap<String, String> partSpec;
@@ -33,6 +33,15 @@ public class PrivilegeObjectDesc {
       HashMap<String, String> partSpec) {
     super();
     this.table = isTable;
+    this.object = object;
+    this.partSpec = partSpec;
+  }
+
+  public PrivilegeObjectDesc(boolean isTable, boolean isSchema, String object,
+      HashMap<String, String> partSpec) {
+    super();
+    this.table = isTable;
+    this.schema = isSchema;
     this.object = object;
     this.partSpec = partSpec;
   }
@@ -47,6 +56,15 @@ public class PrivilegeObjectDesc {
 
   public void setTable(boolean isTable) {
     this.table = isTable;
+  }
+
+  @Explain(displayName="is schema")
+  public boolean getSchema() {
+    return schema;
+  }
+
+  public void setSchema(boolean isSchema) {
+    this.schema = isSchema;
   }
 
   @Explain(displayName="object")
