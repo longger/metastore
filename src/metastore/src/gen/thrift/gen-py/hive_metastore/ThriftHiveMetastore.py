@@ -1087,6 +1087,13 @@ class Iface(fb303.FacebookService.Iface):
     """
     pass
 
+  def reopen_file(self, fid):
+    """
+    Parameters:
+     - fid
+    """
+    pass
+
   def close_file(self, file):
     """
     Parameters:
@@ -1251,7 +1258,7 @@ class Iface(fb303.FacebookService.Iface):
     """
     pass
 
-  def migrate_stage2(self, dbName, tableName, files, from_db, to_db, to_devid):
+  def migrate_stage2(self, dbName, tableName, files, from_db, to_db, to_devid, user, password):
     """
     Parameters:
      - dbName
@@ -1260,6 +1267,8 @@ class Iface(fb303.FacebookService.Iface):
      - from_db
      - to_db
      - to_devid
+     - user
+     - password
     """
     pass
 
@@ -6274,6 +6283,40 @@ class Client(fb303.FacebookService.Client, Iface):
       raise result.o1
     raise TApplicationException(TApplicationException.MISSING_RESULT, "create_file_by_policy failed: unknown result");
 
+  def reopen_file(self, fid):
+    """
+    Parameters:
+     - fid
+    """
+    self.send_reopen_file(fid)
+    return self.recv_reopen_file()
+
+  def send_reopen_file(self, fid):
+    self._oprot.writeMessageBegin('reopen_file', TMessageType.CALL, self._seqid)
+    args = reopen_file_args()
+    args.fid = fid
+    args.write(self._oprot)
+    self._oprot.writeMessageEnd()
+    self._oprot.trans.flush()
+
+  def recv_reopen_file(self, ):
+    (fname, mtype, rseqid) = self._iprot.readMessageBegin()
+    if mtype == TMessageType.EXCEPTION:
+      x = TApplicationException()
+      x.read(self._iprot)
+      self._iprot.readMessageEnd()
+      raise x
+    result = reopen_file_result()
+    result.read(self._iprot)
+    self._iprot.readMessageEnd()
+    if result.success is not None:
+      return result.success
+    if result.o1 is not None:
+      raise result.o1
+    if result.o2 is not None:
+      raise result.o2
+    raise TApplicationException(TApplicationException.MISSING_RESULT, "reopen_file failed: unknown result");
+
   def close_file(self, file):
     """
     Parameters:
@@ -7042,7 +7085,7 @@ class Client(fb303.FacebookService.Client, Iface):
       raise result.o1
     raise TApplicationException(TApplicationException.MISSING_RESULT, "migrate_stage1 failed: unknown result");
 
-  def migrate_stage2(self, dbName, tableName, files, from_db, to_db, to_devid):
+  def migrate_stage2(self, dbName, tableName, files, from_db, to_db, to_devid, user, password):
     """
     Parameters:
      - dbName
@@ -7051,11 +7094,13 @@ class Client(fb303.FacebookService.Client, Iface):
      - from_db
      - to_db
      - to_devid
+     - user
+     - password
     """
-    self.send_migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid)
+    self.send_migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid, user, password)
     return self.recv_migrate_stage2()
 
-  def send_migrate_stage2(self, dbName, tableName, files, from_db, to_db, to_devid):
+  def send_migrate_stage2(self, dbName, tableName, files, from_db, to_db, to_devid, user, password):
     self._oprot.writeMessageBegin('migrate_stage2', TMessageType.CALL, self._seqid)
     args = migrate_stage2_args()
     args.dbName = dbName
@@ -7064,6 +7109,8 @@ class Client(fb303.FacebookService.Client, Iface):
     args.from_db = from_db
     args.to_db = to_db
     args.to_devid = to_devid
+    args.user = user
+    args.password = password
     args.write(self._oprot)
     self._oprot.writeMessageEnd()
     self._oprot.trans.flush()
@@ -8119,6 +8166,7 @@ class Processor(fb303.FacebookService.Processor, Iface, TProcessor):
     self._processMap["cancel_delegation_token"] = Processor.process_cancel_delegation_token
     self._processMap["create_file"] = Processor.process_create_file
     self._processMap["create_file_by_policy"] = Processor.process_create_file_by_policy
+    self._processMap["reopen_file"] = Processor.process_reopen_file
     self._processMap["close_file"] = Processor.process_close_file
     self._processMap["online_filelocation"] = Processor.process_online_filelocation
     self._processMap["toggle_safemode"] = Processor.process_toggle_safemode
@@ -10305,6 +10353,22 @@ class Processor(fb303.FacebookService.Processor, Iface, TProcessor):
     oprot.writeMessageEnd()
     oprot.trans.flush()
 
+  def process_reopen_file(self, seqid, iprot, oprot):
+    args = reopen_file_args()
+    args.read(iprot)
+    iprot.readMessageEnd()
+    result = reopen_file_result()
+    try:
+      result.success = self._handler.reopen_file(args.fid)
+    except FileOperationException as o1:
+      result.o1 = o1
+    except MetaException as o2:
+      result.o2 = o2
+    oprot.writeMessageBegin("reopen_file", TMessageType.REPLY, seqid)
+    result.write(oprot)
+    oprot.writeMessageEnd()
+    oprot.trans.flush()
+
   def process_close_file(self, seqid, iprot, oprot):
     args = close_file_args()
     args.read(iprot)
@@ -10647,7 +10711,7 @@ class Processor(fb303.FacebookService.Processor, Iface, TProcessor):
     iprot.readMessageEnd()
     result = migrate_stage2_result()
     try:
-      result.success = self._handler.migrate_stage2(args.dbName, args.tableName, args.files, args.from_db, args.to_db, args.to_devid)
+      result.success = self._handler.migrate_stage2(args.dbName, args.tableName, args.files, args.from_db, args.to_db, args.to_devid, args.user, args.password)
     except MetaException as o1:
       result.o1 = o1
     oprot.writeMessageBegin("migrate_stage2", TMessageType.REPLY, seqid)
@@ -32693,6 +32757,151 @@ class create_file_by_policy_result:
   def __ne__(self, other):
     return not (self == other)
 
+class reopen_file_args:
+  """
+  Attributes:
+   - fid
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.I64, 'fid', None, None, ), # 1
+  )
+
+  def __init__(self, fid=None,):
+    self.fid = fid
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.I64:
+          self.fid = iprot.readI64();
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('reopen_file_args')
+    if self.fid is not None:
+      oprot.writeFieldBegin('fid', TType.I64, 1)
+      oprot.writeI64(self.fid)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class reopen_file_result:
+  """
+  Attributes:
+   - success
+   - o1
+   - o2
+  """
+
+  thrift_spec = (
+    (0, TType.BOOL, 'success', None, None, ), # 0
+    (1, TType.STRUCT, 'o1', (FileOperationException, FileOperationException.thrift_spec), None, ), # 1
+    (2, TType.STRUCT, 'o2', (MetaException, MetaException.thrift_spec), None, ), # 2
+  )
+
+  def __init__(self, success=None, o1=None, o2=None,):
+    self.success = success
+    self.o1 = o1
+    self.o2 = o2
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 0:
+        if ftype == TType.BOOL:
+          self.success = iprot.readBool();
+        else:
+          iprot.skip(ftype)
+      elif fid == 1:
+        if ftype == TType.STRUCT:
+          self.o1 = FileOperationException()
+          self.o1.read(iprot)
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.STRUCT:
+          self.o2 = MetaException()
+          self.o2.read(iprot)
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('reopen_file_result')
+    if self.success is not None:
+      oprot.writeFieldBegin('success', TType.BOOL, 0)
+      oprot.writeBool(self.success)
+      oprot.writeFieldEnd()
+    if self.o1 is not None:
+      oprot.writeFieldBegin('o1', TType.STRUCT, 1)
+      self.o1.write(oprot)
+      oprot.writeFieldEnd()
+    if self.o2 is not None:
+      oprot.writeFieldBegin('o2', TType.STRUCT, 2)
+      self.o2.write(oprot)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
 class close_file_args:
   """
   Attributes:
@@ -36092,6 +36301,8 @@ class migrate_stage2_args:
    - from_db
    - to_db
    - to_devid
+   - user
+   - password
   """
 
   thrift_spec = (
@@ -36102,15 +36313,19 @@ class migrate_stage2_args:
     (4, TType.STRING, 'from_db', None, None, ), # 4
     (5, TType.STRING, 'to_db', None, None, ), # 5
     (6, TType.STRING, 'to_devid', None, None, ), # 6
+    (7, TType.STRING, 'user', None, None, ), # 7
+    (8, TType.STRING, 'password', None, None, ), # 8
   )
 
-  def __init__(self, dbName=None, tableName=None, files=None, from_db=None, to_db=None, to_devid=None,):
+  def __init__(self, dbName=None, tableName=None, files=None, from_db=None, to_db=None, to_devid=None, user=None, password=None,):
     self.dbName = dbName
     self.tableName = tableName
     self.files = files
     self.from_db = from_db
     self.to_db = to_db
     self.to_devid = to_devid
+    self.user = user
+    self.password = password
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -36156,6 +36371,16 @@ class migrate_stage2_args:
           self.to_devid = iprot.readString();
         else:
           iprot.skip(ftype)
+      elif fid == 7:
+        if ftype == TType.STRING:
+          self.user = iprot.readString();
+        else:
+          iprot.skip(ftype)
+      elif fid == 8:
+        if ftype == TType.STRING:
+          self.password = iprot.readString();
+        else:
+          iprot.skip(ftype)
       else:
         iprot.skip(ftype)
       iprot.readFieldEnd()
@@ -36192,6 +36417,14 @@ class migrate_stage2_args:
     if self.to_devid is not None:
       oprot.writeFieldBegin('to_devid', TType.STRING, 6)
       oprot.writeString(self.to_devid)
+      oprot.writeFieldEnd()
+    if self.user is not None:
+      oprot.writeFieldBegin('user', TType.STRING, 7)
+      oprot.writeString(self.user)
+      oprot.writeFieldEnd()
+    if self.password is not None:
+      oprot.writeFieldBegin('password', TType.STRING, 8)
+      oprot.writeString(self.password)
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()

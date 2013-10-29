@@ -60,6 +60,7 @@ final class FOFailReason {
   const NOTEXIST = 11;
   const SAFEMODE = 12;
   const INVALID_STATE = 13;
+  const TRY_AGAIN = 14;
   static public $__names = array(
     1 => 'INVALID_NODE',
     2 => 'INVALID_TABLE',
@@ -71,6 +72,7 @@ final class FOFailReason {
     11 => 'NOTEXIST',
     12 => 'SAFEMODE',
     13 => 'INVALID_STATE',
+    14 => 'TRY_AGAIN',
   );
 }
 
@@ -5548,6 +5550,7 @@ class SFile {
   public $length = null;
   public $ref_files = null;
   public $values = null;
+  public $load_status = null;
 
   public function __construct($vals=null) {
     if (!isset(self::$_TSPEC)) {
@@ -5614,6 +5617,10 @@ class SFile {
             'class' => '\metastore\SplitValue',
             ),
           ),
+        13 => array(
+          'var' => 'load_status',
+          'type' => TType::I32,
+          ),
         );
     }
     if (is_array($vals)) {
@@ -5652,6 +5659,9 @@ class SFile {
       }
       if (isset($vals['values'])) {
         $this->values = $vals['values'];
+      }
+      if (isset($vals['load_status'])) {
+        $this->load_status = $vals['load_status'];
       }
     }
   }
@@ -5791,6 +5801,13 @@ class SFile {
             $xfer += $input->skip($ftype);
           }
           break;
+        case 13:
+          if ($ftype == TType::I32) {
+            $xfer += $input->readI32($this->load_status);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
         default:
           $xfer += $input->skip($ftype);
           break;
@@ -5898,6 +5915,11 @@ class SFile {
         }
         $output->writeListEnd();
       }
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->load_status !== null) {
+      $xfer += $output->writeFieldBegin('load_status', TType::I32, 13);
+      $xfer += $output->writeI32($this->load_status);
       $xfer += $output->writeFieldEnd();
     }
     $xfer += $output->writeFieldStop();

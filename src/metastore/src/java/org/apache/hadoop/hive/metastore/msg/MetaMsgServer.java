@@ -78,9 +78,9 @@ public class MetaMsgServer {
       while(true ){
         try{
           if(queue.isEmpty()){
-            LOG.info("---in sendThread before ac");
+            LOG.debug("---in sendThread before ac");
             sem.acquire();
-            LOG.info("---in sendThread after ac");
+            LOG.debug("---in sendThread after ac");
             if(queue.isEmpty()){
               continue;
             }

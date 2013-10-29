@@ -672,4 +672,6 @@ public interface RawStore extends Configurable {
 
   public abstract void truncTableFiles(String dbName, String tableName) throws MetaException, NoSuchObjectException;
 
+  public abstract boolean reopenSFile(SFile file) throws MetaException;
+
 }

@@ -1137,7 +1137,7 @@ public interface IMetaStoreClient {
       String to_db) throws MetaException, TException;
 
   public boolean migrate_stage2(String dbName, String tableName, List<Long> files,
-      String from_db, String to_db, String to_devid) throws MetaException, TException;
+      String from_db, String to_db, String to_devid, String user, String password) throws MetaException, TException;
 
   public List<SFileLocation> migrate2_stage1(String dbName, String tableName, List<String> partNames, String to_dc)
       throws MetaException, TException;
@@ -1269,6 +1269,8 @@ public interface IMetaStoreClient {
   public boolean addNodeGroupAssignment(NodeGroup ng, String dbName) throws MetaException, NoSuchObjectException, TException;
 
   public boolean deleteNodeGroupAssignment(NodeGroup ng, String dbName) throws MetaException, NoSuchObjectException, TException;
+
+  public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException;
 
   public String pingPong(String str) throws MetaException, TException;
 
