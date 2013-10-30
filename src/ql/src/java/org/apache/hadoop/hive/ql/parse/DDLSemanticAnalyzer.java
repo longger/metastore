@@ -255,6 +255,9 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     case HiveParser.TOK_ALTERTABLE_RENAME:
       analyzeAlterTableRename(ast, false);
       break;
+    case HiveParser.TOK_ALTERTABLE_FILESPLIT:
+      analyzeAlterTableFileSplit(ast, AlterTableTypes.ALTERFILESPLIT);
+      break;
     case HiveParser.TOK_ALTERTABLE_TOUCH:
       analyzeAlterTableTouch(ast);
       break;
@@ -2209,6 +2212,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       case RENAMEPARTITION:
       case ADDPROPS:
       case RENAME:
+      case ALTERFILESPLIT:
         // allow this form
         break;
       default:
@@ -3519,6 +3523,37 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         alterTblDesc), conf));
   }
+
+  /**
+   * modify split by to a table.
+   *
+   * @param ast
+   *          The parsed command tree.
+   *
+   * @param expectView
+   *          True for ALTER VIEW, false for ALTER TABLE.
+   *
+   * @throws SemanticException
+   *           Parsing failed
+   */
+  private void analyzeAlterTableFileSplit(ASTNode ast, AlterTableTypes alterType)
+      throws SemanticException {
+    String tblName = getUnescapedName((ASTNode) ast.getChild(0));
+    List<FieldSchema> newCols = getColumns((ASTNode) ast.getChild(1));
+    PartitionDefinition pd = new PartitionDefinition();
+    List<FieldSchema> splitCols = new ArrayList<FieldSchema>();
+    pd.setTableName(tblName);
+    splitCols = analyzePartitionClause((ASTNode) ast.getChild(1), pd);
+    AlterTableDesc alterTblDesc = new AlterTableDesc(tblName, splitCols,
+        alterType);
+    addInputsOutputsAlterTable(tblName, null, alterTblDesc);
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterTblDesc), conf));
+
+  }
+
+
+
 
   private void analyzeAlterTableDropParts(ASTNode ast, boolean expectView)
       throws SemanticException {

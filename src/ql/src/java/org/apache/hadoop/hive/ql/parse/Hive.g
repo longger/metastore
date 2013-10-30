@@ -1,5 +1,5 @@
 /**
-   Licensed to the Apache Software Foundation (ASF) under one or more
+   LialterStatementChangeColPositionoundation (ASF) under one or more
    contributor license agreements.  See the NOTICE file distributed with
    this work for additional information regarding copyright ownership.
    The ASF licenses this file to You under the Apache License, Version 2.0
@@ -378,7 +378,7 @@ TOK_SHOWUSERASSIGNMENT;
 TOK_CREATEROLEASSIGNMENT;
 TOK_DROPROLEASSIGNMENT;
 TOK_SHOWROLEASSIGNMENT;
-
+TOK_ALTERTABLE_FILESPLIT;
 TOK_SHOWSCHEMAS;
 TOK_DESCSCHEMA;
 
@@ -1089,6 +1089,7 @@ alterTableStatementSuffix
     : alterStatementSuffixRename
     | alterStatementSuffixAddCol
     | alterStatementSuffixRenameCol
+    | alterStatementSuffixFileSplit
     | alterStatementSuffixDropPartitions
     | alterStatementSuffixAddPartitions
     | alterStatementSuffixModiFyPartitionDropFiles
@@ -1232,6 +1233,13 @@ alterSchemaStatementSuffixAddCol
     : Identifier (add=KW_ADD | replace=KW_REPLACE) KW_COLUMNS LPAREN columnNameTypeList RPAREN
     -> {$add != null}? ^(TOK_ALTERSCHEMA_ADDCOLS Identifier columnNameTypeList)
     ->                 ^(TOK_ALTERSCHEMA_REPLACECOLS Identifier columnNameTypeList)
+    ;
+    
+alterStatementSuffixFileSplit
+@init { msgs.push("alter file split"); }
+@after { msgs.pop(); }
+    : Identifier fileSplit
+    ->^(TOK_ALTERTABLE_FILESPLIT fileSplit)
     ;
     
 alterStatementSuffixRenameCol
