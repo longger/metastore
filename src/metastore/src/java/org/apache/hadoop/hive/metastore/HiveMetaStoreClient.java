@@ -2307,4 +2307,9 @@ public boolean authentication(String user_name, String passwd)
     return client.reopen_file(fid);
   }
 
+  @Override
+  public List<Device> listDevice() throws MetaException, TException {
+    return client.list_device();
+  }
+
 }

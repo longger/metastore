@@ -148,7 +148,7 @@ public class MSGFactory {
 
 
       String jsonData = jsonObject.toString();
-      LOG.warn("---zjw--json:"+jsonData);
+      LOG.debug("---zjw--json:"+jsonData);
 
       return jsonData;
     }
@@ -233,7 +233,7 @@ public class MSGFactory {
        Object objectId = pm.getObjectId(eventObject);
        if(objectId != null)
        {
-         LOG.info("Sending DDL message:"+event_id+"---"+objectId.toString());
+         LOG.debug("Sending DDL message:"+event_id+"---"+objectId.toString());
          try{
            id = Long.parseLong(getIDFromJdoObjectId(objectId.toString()));
          }catch(Exception e){

@@ -79,6 +79,10 @@ public class DiskManager {
     public long fileSizeThreshold = 64 * 1024 * 1024;
     public Set<String> backupDevs = new TreeSet<String>();
 
+    // TODO: REP limiting for low I/O bandwidth env
+    public Long closeRepLimit = 0L;
+    public Long fixRepLimit = 0L;
+
     public static class SFLTriple implements Comparable<SFLTriple> {
       public String node;
       public String devid;
@@ -661,24 +665,36 @@ public class DiskManager {
       private int times = 0;
       private boolean isRunning = false;
       private final Long syncIsRunning = new Long(0);
-      public static final long timeout = 60 * 1000; //in millisecond
-      public static final long repDelCheck = 60 * 1000;
-      public static final long voidFileCheck = 30 * 60 * 1000;
-      public static final long voidFileTimeout = 12 * 3600 * 1000; // 12 hours
-      public static final long repTimeout = 15 * 60 * 1000;
-      public static final long delTimeout = 5 * 60 * 1000;
-      public static final long rerepTimeout = 30 * 1000;
+      public long timeout = 60 * 1000; //in millisecond
+      public long repDelCheck = 60 * 1000;
+      public long voidFileCheck = 30 * 60 * 1000;
+      public long voidFileTimeout = 12 * 3600 * 1000; // 12 hours
+      public long repTimeout = 15 * 60 * 1000;
+      public long delTimeout = 5 * 60 * 1000;
+      public long rerepTimeout = 30 * 1000;
 
-      public static final long offlineDelTimeout = 3600 * 1000; // 1 hour
+      public long offlineDelTimeout = 3600 * 1000; // 1 hour
 
       private long last_repTs = System.currentTimeMillis();
       private long last_rerepTs = System.currentTimeMillis();
       private long last_unspcTs = System.currentTimeMillis();
       private long last_voidTs = System.currentTimeMillis();
 
+      private long ff_start = 0;
+      private final long ff_range = 1000;
+
       private boolean useVoidCheck = false;
 
       public void init(HiveConf conf) throws MetaException {
+        timeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_INVALIDATE_TIMEOUT);
+        repDelCheck = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_REPDELCHECK_INTERVAL);
+        voidFileCheck = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_VOIDFILECHECK);
+        voidFileTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_VOIDFILETIMEOUT);
+        repTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_REP_TIMEOUT);
+        delTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_DEL_TIMEOUT);
+        rerepTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_REREP_TIMEOUT);
+        offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
+
         String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
         Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
             rawStoreClassName);
@@ -752,6 +768,7 @@ public class DiskManager {
           }
           if (f.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
             valid_idx = i;
+            f.getLocations().get(i).setNode_name(getAnyNode());
             no_valid_fl = false;
             break;
           }
@@ -816,7 +833,10 @@ public class DiskManager {
               NodeInfo ni = ndmap.get(f.getLocations().get(valid_idx).getNode_name());
 
               if (ni == null) {
-                throw new IOException("Can not find Node '" + node_name + "' in nodemap now, is it offline?");
+                if (nloc != null) {
+                  trs.delSFileLocation(nloc.getDevid(), nloc.getLocation());
+                }
+                throw new IOException("Can not find Node '" + f.getLocations().get(valid_idx).getNode_name() + "' in nodemap now, is it offline?");
                                  }
               j.put("node_name", f.getLocations().get(valid_idx).getNode_name());
               j.put("devid", f.getLocations().get(valid_idx).getDevid());
@@ -825,14 +845,14 @@ public class DiskManager {
               jo.put("from", j);
 
               j = new JSONObject();
-              ni = ndmap.get(f.getLocations().get(i).getNode_name());
+              ni = ndmap.get(nloc.getNode_name());
               if (ni == null) {
-                throw new IOException("Can not find Node '" + node_name + "' in nodemap now, is it offline?");
+                throw new IOException("Can not find Node '" + nloc.getNode_name() + "' in nodemap now, is it offline?");
               }
-              j.put("node_name", f.getLocations().get(i).getNode_name());
-              j.put("devid", f.getLocations().get(i).getDevid());
-              j.put("mp", ni.getMP(f.getLocations().get(i).getDevid()));
-              j.put("location", f.getLocations().get(i).getLocation());
+              j.put("node_name", nloc.getNode_name());
+              j.put("devid", nloc.getDevid());
+              j.put("mp", ni.getMP(nloc.getDevid()));
+              j.put("location", nloc.getLocation());
               jo.put("to", j);
             } catch (JSONException e) {
               LOG.error(e, e);
@@ -906,10 +926,14 @@ public class DiskManager {
           Map<SFile, Integer> munder = new TreeMap<SFile, Integer>();
           Map<SFile, Integer> mover = new TreeMap<SFile, Integer>();
 
-          LOG.info("Check Under/Over Replicated or Lingering Files [" + times + "]");
+          LOG.info("Check Under/Over Replicated or Lingering Files R{" + ff_start + "," + (ff_start + ff_range) + "} [" + times + "]");
           synchronized (trs) {
             try {
-              trs.findFiles(under, over, linger);
+              trs.findFiles(under, over, linger, ff_start, ff_start + ff_range);
+              ff_start += ff_range;
+              if (ff_start > trs.getCurrentFID()) {
+                ff_start = 0;
+              }
             } catch (MetaException e) {
               LOG.error(e, e);
               updateRunningState();
@@ -956,6 +980,20 @@ public class DiskManager {
           }
           for (Map.Entry<SFile, Integer> entry : mover.entrySet()) {
             do_delete(entry.getKey(), entry.getValue().intValue());
+            // double check the file status, if it is CLOSED, change it to REPLICATED
+            if (entry.getKey().getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
+              synchronized (trs) {
+                try {
+                  SFile saved = trs.getSFile(entry.getKey().getFid());
+                  if (saved.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
+                    saved.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
+                    trs.updateSFile(saved);
+                  }
+                } catch (MetaException e) {
+                  LOG.error(e, e);
+                }
+              }
+            }
           }
 
           // handle lingering files
@@ -1152,6 +1190,8 @@ public class DiskManager {
       this.rs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
+      closeRepLimit = hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT);
+      fixRepLimit = hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT);
       init();
     }
 
@@ -1476,7 +1516,7 @@ public class DiskManager {
     public NodeInfo removeFromNDMapWTO(String node, long cts) {
       NodeInfo ni = ndmap.get(node);
 
-      if (ni.lastRptTs + DMTimerTask.timeout < cts) {
+      if (ni.lastRptTs + dmtt.timeout < cts) {
         if (ni.toDelete.size() == 0 && ni.toRep.size() == 0) {
           ni = ndmap.remove(node);
           if (ni.toDelete.size() > 0 || ni.toRep.size() > 0) {
@@ -1859,7 +1899,7 @@ public class DiskManager {
       return largestNode;
     }
 
-    private void findBackupDevice(Set<String> dev, Set<String> node) {
+    public void findBackupDevice(Set<String> dev, Set<String> node) {
       for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
         List<DeviceInfo> dis = e.getValue().dis;
         if (dis != null) {
@@ -1993,6 +2033,33 @@ public class DiskManager {
       }
     }
 
+    // this is user provided SFL, should check on node_name
+    public void asyncDelSFL(SFileLocation sfl) {
+      synchronized (ndmap) {
+        if (sfl.getNode_name().equals("")) {
+          // this is a BACKUP/SHARE device;
+          try {
+            Device d = rs.getDevice(sfl.getDevid());
+
+            sfl.setNode_name(d.getNode_name());
+          } catch (MetaException e) {
+            LOG.error(e, e);
+            return;
+          } catch (NoSuchObjectException e) {
+            LOG.error(e, e);
+            return;
+          }
+        }
+        NodeInfo ni = ndmap.get(sfl.getNode_name());
+        if (ni != null) {
+          synchronized (ni.toDelete) {
+            ni.toDelete.add(sfl);
+            LOG.info("----> Add toDelete " + sfl.getLocation() + ", qs " + cleanQ.size());
+          }
+        }
+      }
+    }
+
     public class DMRepThread implements Runnable {
       private RawStore rrs = null;
       Thread runner;
@@ -2023,8 +2090,34 @@ public class DiskManager {
         runner.start();
       }
 
+      public void release_rep_limit() {
+        synchronized (closeRepLimit) {
+          closeRepLimit++;
+        }
+      }
+
       public void run() {
         while (true) {
+          // check limiting
+          do {
+            boolean do_sleep = false;
+
+            synchronized (closeRepLimit) {
+              if (closeRepLimit > 0) {
+                closeRepLimit--;
+                break;
+              } else {
+                do_sleep = true;
+              }
+            }
+            if (do_sleep) {
+              try {
+                  Thread.sleep(1000);
+              } catch (InterruptedException e) {
+              }
+            }
+          } while (true);
+
           // dequeue requests from the rep queue
           DMRequest r = repQ.poll();
           if (r == null) {
@@ -2035,6 +2128,7 @@ public class DiskManager {
             } catch (InterruptedException e) {
               LOG.debug(e, e);
             }
+            release_rep_limit();
             continue;
           }
           if (r.op == DMRequest.DMROperation.REPLICATE) {
@@ -2056,6 +2150,8 @@ public class DiskManager {
               // mark master copy id
               if (!master_marked && r.file.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
                 master = i;
+                // BUG: if the master replica is a SHARED/BACKUP device, get any node
+                r.file.getLocations().get(i).setNode_name(getAnyNode());
                 master_marked = true;
               }
               excludes.add(r.file.getLocations().get(i).getNode_name());
@@ -2067,6 +2163,8 @@ public class DiskManager {
             }
             if (!master_marked) {
               LOG.error("No active master copy for file FID " + r.file.getFid() + ". BAD FAIL!");
+              // release counter here!
+              release_rep_limit();
               continue;
             }
 
@@ -2089,6 +2187,7 @@ public class DiskManager {
                   synchronized (repQ) {
                     repQ.add(r);
                   }
+                  release_rep_limit();
                   break;
                 }
                 // if we are selecting backup device, try to use local shortcut
@@ -2104,6 +2203,7 @@ public class DiskManager {
                   synchronized (repQ) {
                     repQ.add(r);
                   }
+                  release_rep_limit();
                   break;
                 }
                 excl_dev.add(devid);
@@ -2142,7 +2242,10 @@ public class DiskManager {
                   NodeInfo ni = ndmap.get(r.file.getLocations().get(master).getNode_name());
 
                   if (ni == null) {
-                    throw new IOException("Can not find Node '" + node_name + "' in nodemap now, is it offline?");
+                    if (nloc != null) {
+                      getRS().delSFileLocation(nloc.getDevid(), nloc.getLocation());
+                    }
+                    throw new IOException("Can not find Node '" + r.file.getLocations().get(master).getNode_name() + "' in nodemap now, is it offline?");
                   }
                   j.put("node_name", r.file.getLocations().get(master).getNode_name());
                   j.put("devid", r.file.getLocations().get(master).getDevid());
@@ -2151,47 +2254,55 @@ public class DiskManager {
                   jo.put("from", j);
 
                   j = new JSONObject();
-                  ni = ndmap.get(r.file.getLocations().get(i).getNode_name());
+                  ni = ndmap.get(nloc.getNode_name());
                   if (ni == null) {
-                    throw new IOException("Can not find Node '" + node_name + "' in nodemap now, is it offline?");
+                    if (nloc != null) {
+                      getRS().delSFileLocation(nloc.getDevid(), nloc.getLocation());
+                    }
+                    throw new IOException("Can not find Node '" + nloc.getNode_name() + "' in nodemap now, is it offline?");
                   }
-                  j.put("node_name", r.file.getLocations().get(i).getNode_name());
-                  j.put("devid", r.file.getLocations().get(i).getDevid());
-                  j.put("mp", ni.getMP(r.file.getLocations().get(i).getDevid()));
-                  j.put("location", r.file.getLocations().get(i).getLocation());
+                  j.put("node_name", nloc.getNode_name());
+                  j.put("devid", nloc.getDevid());
+                  j.put("mp", ni.getMP(nloc.getDevid()));
+                  j.put("location", nloc.getLocation());
                   jo.put("to", j);
                 } catch (JSONException e) {
                   LOG.error(e, e);
+                  release_rep_limit();
                   continue;
                 }
-                //FIXME: synchronized (ndmap) {
+                synchronized (ndmap) {
                   NodeInfo ni = ndmap.get(node_name);
                   if (ni == null) {
                     LOG.error("Can not find Node '" + node_name + "' in nodemap now, is it offline?");
+                    release_rep_limit();
                   } else {
                     synchronized (ni.toRep) {
                       ni.toRep.add(jo);
                       LOG.info("----> ADD to Node " + node_name + "'s toRep " + jo);
                     }
                   }
-                //}
+                }
               } catch (IOException e) {
                 LOG.error(e, e);
                 r.begin_idx = i;
                 // insert back to the queue;
                 synchronized (repQ) {
                   repQ.add(r);
-                  try {
-                    Thread.sleep(100);
-                  } catch (InterruptedException e1) {
-                  }
                   repQ.notify();
                 }
+                try {
+                  Thread.sleep(100);
+                } catch (InterruptedException e1) {
+                }
+                release_rep_limit();
                 break;
               } catch (MetaException e) {
                 LOG.error(e, e);
+                release_rep_limit();
               } catch (InvalidObjectException e) {
                 LOG.error(e, e);
+                release_rep_limit();
               }
             }
           } else if (r.op == DMRequest.DMROperation.MIGRATE) {
@@ -2200,6 +2311,7 @@ public class DiskManager {
             // select a source node
             if (r.file == null || r.tfile == null) {
               LOG.error("Invalid DMRequest provided, NULL SFile!");
+              release_rep_limit();
               continue;
             }
             if (r.file.getLocationsSize() > 0) {
@@ -2237,15 +2349,18 @@ public class DiskManager {
               jo.put("to", j);
             } catch (JSONException e) {
               LOG.error(e, e);
+              release_rep_limit();
               continue;
             } catch (IOException e) {
               LOG.error(e, e);
+              release_rep_limit();
               continue;
             }
             synchronized (ndmap) {
               NodeInfo ni = ndmap.get(source.getNode_name());
               if (ni == null) {
                 LOG.error("Can not find Node '" + source.getNode_name() + "' in nodemap.");
+                release_rep_limit();
               } else {
                 synchronized (ni.toRep) {
                   ni.toRep.add(jo);
@@ -2475,6 +2590,22 @@ public class DiskManager {
             dmr.type = DMReply.DMReplyType.FAILED_REP;
             dmr.args = cmds[i].substring(10);
             r.add(dmr);
+            // release limit
+            boolean release_fix_limit = false;
+
+            synchronized (closeRepLimit) {
+              if (closeRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
+                closeRepLimit++;
+              } else {
+                release_fix_limit = true;
+              }
+            }
+            if (release_fix_limit) {
+              synchronized (fixRepLimit) {
+                fixRepLimit++;
+              }
+            }
+            //TODO: delete the SFL now
           } else if (cmds[i].startsWith("+FAIL:DEL:")) {
             LOG.error("RECV ERR: " + cmds[i]);
             dmr.type = DMReply.DMReplyType.FAILED_DEL;
@@ -2645,6 +2776,21 @@ public class DiskManager {
                 String[] args = r.args.split(",");
                 switch (r.type) {
                 case REPLICATED:
+                  // release limiting
+                  boolean release_fix_limit = false;
+
+                  synchronized (closeRepLimit) {
+                    if (closeRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
+                      closeRepLimit++;
+                    } else {
+                      release_fix_limit = true;
+                    }
+                  }
+                  if (release_fix_limit) {
+                    synchronized (fixRepLimit) {
+                      fixRepLimit++;
+                    }
+                  }
                   if (args.length < 3) {
                     LOG.warn("Invalid REP report: " + r.args);
                   } else {
@@ -2734,6 +2880,9 @@ public class DiskManager {
                     List<SFileLocation> sfl = rs.getSFileLocations(f.getFid());
                     if (sfl.size() == 0) {
                       // delete this file
+                      if (f.getStore_status() != MetaStoreConst.MFileStoreStatus.RM_PHYSICAL) {
+                        LOG.warn("FID " + f.getFid() + " will be deleted, however it's status is " + f.getStore_status());
+                      }
                       rs.delSFile(f.getFid());
                     }
                   }

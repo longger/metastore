@@ -782,6 +782,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("modify_device\n");
   }
 
+  void list_device(std::vector<Device> & _return) {
+    // Your implementation goes here
+    printf("list_device\n");
+  }
+
   void alter_node(Node& _return, const std::string& node_name, const std::vector<std::string> & ipl, const int32_t status) {
     // Your implementation goes here
     printf("alter_node\n");
