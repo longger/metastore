@@ -3544,7 +3544,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     List<FieldSchema> splitCols = new ArrayList<FieldSchema>();
     pd.setTableName(tblName);
     splitCols = analyzePartitionClause((ASTNode) ast.getChild(1), pd);
-    AlterTableDesc alterTblDesc = new AlterTableDesc(tblName, splitCols,
+    AlterTableDesc alterTblDesc = new AlterTableDesc(splitCols, tblName,
         alterType);
     addInputsOutputsAlterTable(tblName, null, alterTblDesc);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),

@@ -1218,6 +1218,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         /********** *  should compermise with schema                   ********/
         /********** *  视图的table对象仅在全局点存储，视图的schema对象全局保存 ********/
         if (TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType())) {
+          LOG.info("--zjw--TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()");
           createSchema(copySchemaFromtable(tbl));
         }
         /**********end ofadded by zjw for creating view********/

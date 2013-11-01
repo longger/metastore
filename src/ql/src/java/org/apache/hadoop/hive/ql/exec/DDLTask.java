@@ -84,6 +84,7 @@ import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.SkewedInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory;
+import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.hive.ql.Context;
 import org.apache.hadoop.hive.ql.DriverContext;
 import org.apache.hadoop.hive.ql.QueryPlan;
@@ -3906,6 +3907,19 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       LOG.info("=======================2 RENAME");
       tbl.setTableName(alterTbl.getNewName());
     } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ADDCOLS) {
+      List<FieldSchema> newCols = alterTbl.getFileSplitCols();
+      List<PartitionInfo> newpis = PartitionInfo.getPartitionInfo(newCols);
+
+      List<PartitionInfo> old_pis = PartitionInfo.getPartitionInfo(oldTbl.getFileSplitKeys());
+//      for(PartitionInfo :old){//get max
+//
+//      }
+//
+//      for(new){//set max+1
+//        pis.get(0).setP_version(max+1);
+//      }
+
+    }else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ADDCOLS) {
       LOG.info("=======================23 ADDCOLS");
       List<FieldSchema> newCols = alterTbl.getNewCols();
       List<FieldSchema> oldCols = tbl.getCols();

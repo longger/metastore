@@ -138,6 +138,13 @@ public class AlterTableDesc extends DDLDesc implements Serializable {
     this.newCols = new ArrayList<FieldSchema>(newCols);
   }
 
+  public AlterTableDesc(List<FieldSchema> fileSplitCols,String name,
+      AlterTableTypes alterType) {
+    op = alterType;
+    oldName = name;
+    this.fileSplitCols = new ArrayList<FieldSchema>(fileSplitCols);
+  }
+
   /**
    * @param alterType
    *          type of alter op
