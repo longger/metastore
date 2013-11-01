@@ -168,6 +168,7 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual void get_device(Device& _return, const std::string& devid) = 0;
   virtual bool del_device(const std::string& devid) = 0;
   virtual void modify_device(Device& _return, const Device& dev, const Node& node) = 0;
+  virtual void list_device(std::vector<Device> & _return) = 0;
   virtual void alter_node(Node& _return, const std::string& node_name, const std::vector<std::string> & ipl, const int32_t status) = 0;
   virtual void find_best_nodes(std::vector<Node> & _return, const int32_t nr) = 0;
   virtual void find_best_nodes_in_groups(std::vector<Node> & _return, const std::string& dbName, const std::string& tableName, const int32_t nr, const FindNodePolicy::type policy) = 0;
@@ -747,6 +748,9 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
     return _return;
   }
   void modify_device(Device& /* _return */, const Device& /* dev */, const Node& /* node */) {
+    return;
+  }
+  void list_device(std::vector<Device> & /* _return */) {
     return;
   }
   void alter_node(Node& /* _return */, const std::string& /* node_name */, const std::vector<std::string> & /* ipl */, const int32_t /* status */) {
@@ -21139,6 +21143,110 @@ class ThriftHiveMetastore_modify_device_presult {
 
 };
 
+
+class ThriftHiveMetastore_list_device_args {
+ public:
+
+  ThriftHiveMetastore_list_device_args() {
+  }
+
+  virtual ~ThriftHiveMetastore_list_device_args() throw() {}
+
+
+  bool operator == (const ThriftHiveMetastore_list_device_args & /* rhs */) const
+  {
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_list_device_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_list_device_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_list_device_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_list_device_pargs() throw() {}
+
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_list_device_result__isset {
+  _ThriftHiveMetastore_list_device_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_list_device_result__isset;
+
+class ThriftHiveMetastore_list_device_result {
+ public:
+
+  ThriftHiveMetastore_list_device_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_list_device_result() throw() {}
+
+  std::vector<Device>  success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_list_device_result__isset __isset;
+
+  void __set_success(const std::vector<Device> & val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_list_device_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_list_device_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_list_device_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_list_device_presult__isset {
+  _ThriftHiveMetastore_list_device_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_list_device_presult__isset;
+
+class ThriftHiveMetastore_list_device_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_list_device_presult() throw() {}
+
+  std::vector<Device> * success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_list_device_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 typedef struct _ThriftHiveMetastore_alter_node_args__isset {
   _ThriftHiveMetastore_alter_node_args__isset() : node_name(false), ipl(false), status(false) {}
   bool node_name;
@@ -26189,6 +26297,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void modify_device(Device& _return, const Device& dev, const Node& node);
   void send_modify_device(const Device& dev, const Node& node);
   void recv_modify_device(Device& _return);
+  void list_device(std::vector<Device> & _return);
+  void send_list_device();
+  void recv_list_device(std::vector<Device> & _return);
   void alter_node(Node& _return, const std::string& node_name, const std::vector<std::string> & ipl, const int32_t status);
   void send_alter_node(const std::string& node_name, const std::vector<std::string> & ipl, const int32_t status);
   void recv_alter_node(Node& _return);
@@ -26456,6 +26567,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_get_device(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_del_device(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_modify_device(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_list_device(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_alter_node(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_find_best_nodes(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_find_best_nodes_in_groups(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -26647,6 +26759,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["get_device"] = &ThriftHiveMetastoreProcessor::process_get_device;
     processMap_["del_device"] = &ThriftHiveMetastoreProcessor::process_del_device;
     processMap_["modify_device"] = &ThriftHiveMetastoreProcessor::process_modify_device;
+    processMap_["list_device"] = &ThriftHiveMetastoreProcessor::process_list_device;
     processMap_["alter_node"] = &ThriftHiveMetastoreProcessor::process_alter_node;
     processMap_["find_best_nodes"] = &ThriftHiveMetastoreProcessor::process_find_best_nodes;
     processMap_["find_best_nodes_in_groups"] = &ThriftHiveMetastoreProcessor::process_find_best_nodes_in_groups;
@@ -28151,6 +28264,16 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
       ifaces_[i]->modify_device(_return, dev, node);
     }
     ifaces_[i]->modify_device(_return, dev, node);
+    return;
+  }
+
+  void list_device(std::vector<Device> & _return) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->list_device(_return);
+    }
+    ifaces_[i]->list_device(_return);
     return;
   }
 

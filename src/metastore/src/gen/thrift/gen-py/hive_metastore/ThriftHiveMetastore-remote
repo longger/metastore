@@ -175,6 +175,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '  Device get_device(string devid)'
   print '  bool del_device(string devid)'
   print '  Device modify_device(Device dev, Node node)'
+  print '   list_device()'
   print '  Node alter_node(string node_name,  ipl, i32 status)'
   print '   find_best_nodes(i32 nr)'
   print '   find_best_nodes_in_groups(string dbName, string tableName, i32 nr, FindNodePolicy policy)'
@@ -1172,6 +1173,12 @@ elif cmd == 'modify_device':
     print 'modify_device requires 2 args'
     sys.exit(1)
   pp.pprint(client.modify_device(eval(args[0]),eval(args[1]),))
+
+elif cmd == 'list_device':
+  if len(args) != 0:
+    print 'list_device requires 0 args'
+    sys.exit(1)
+  pp.pprint(client.list_device())
 
 elif cmd == 'alter_node':
   if len(args) != 3:

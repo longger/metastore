@@ -2113,6 +2113,9 @@ public boolean authentication(String user_name, String passwd)
   @Override
   public List<SFile> filterTableFiles(String dbName, String tabName, List<SplitValue> values)
       throws MetaException, TException {
+    assert dbName != null;
+    assert tabName != null;
+    assert values != null;
     return client.filterTableFiles(dbName, tabName, values);
   }
 
@@ -2302,6 +2305,11 @@ public boolean authentication(String user_name, String passwd)
   @Override
   public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException {
     return client.reopen_file(fid);
+  }
+
+  @Override
+  public List<Device> listDevice() throws MetaException, TException {
+    return client.list_device();
   }
 
 }

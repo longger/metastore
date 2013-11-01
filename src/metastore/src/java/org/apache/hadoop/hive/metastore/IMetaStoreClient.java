@@ -1175,6 +1175,8 @@ public interface IMetaStoreClient {
 
   public boolean offlineDevice(String devid) throws MetaException, TException;
 
+  public List<Device> listDevice() throws MetaException, TException;
+
   public Device changeDeviceLocation(Device dev, Node node) throws MetaException, TException;
 
   public boolean user_authority_check(User user, Table tbl, List<MSOperation> ops) throws MetaException, TException;

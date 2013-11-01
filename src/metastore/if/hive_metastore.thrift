@@ -976,6 +976,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   Device modify_device(1:Device dev, 2:Node node) throws (1:MetaException o1)
   
+  list<Device> list_device() throws (1:MetaException o1)
+  
   Node alter_node(1:string node_name, 2:list<string> ipl, 3:i32 status) throws (1:MetaException o1)
   
   list<Node> find_best_nodes(1:i32 nr) throws (1:MetaException o1)

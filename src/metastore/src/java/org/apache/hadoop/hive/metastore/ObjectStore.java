@@ -161,6 +161,7 @@ import org.apache.hadoop.hive.metastore.parser.FilterParser;
 import org.apache.hadoop.hive.metastore.tools.MetaUtil;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TException;
+import org.datanucleus.FetchPlan;
 
 import com.taobao.metamorphosis.exception.MetaClientException;
 /**
@@ -212,6 +213,11 @@ public class ObjectStore implements RawStore, Configurable {
     synchronized (g_fid_syncer) {
       return g_fid++;
     }
+  }
+
+  @Override
+  public long getCurrentFID() {
+    return g_fid;
   }
 
   private static final Map<String, Class> PINCLASSMAP;
@@ -1017,7 +1023,8 @@ public class ObjectStore implements RawStore, Configurable {
     }
   }
 
-  public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering) throws MetaException {
+  public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering,
+      long from, long to) throws MetaException {
     long node_nr = countNode();
     boolean commited = false;
 
@@ -1029,6 +1036,7 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query q = pm.newQuery(MFile.class, "this.store_status != increate");
       q.declareParameters("int increate");
+      q.setRange(from, to);
       Collection allFiles = (Collection)q.execute(MetaStoreConst.MFileStoreStatus.INCREATE);
       Iterator iter = allFiles.iterator();
       while (iter.hasNext()) {
@@ -1427,8 +1435,10 @@ public class ObjectStore implements RawStore, Configurable {
     }
   }
 
-  public void createFile(SFile file) throws InvalidObjectException, MetaException {
+  public SFile createFile(SFile file) throws InvalidObjectException, MetaException {
+    SFile newf = null;
     boolean commited = false;
+
     do {
       file.setFid(getNextFID());
       // query on this fid to check if it is a valid fid
@@ -1443,8 +1453,9 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       MFile mfile = convertToMFile(file);
       pm.makePersistent(mfile);
-
+      newf = convertToSFile(mfile);
       commited = commitTransaction();
+
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", mfile.getFid());
       old_params.put("db_name", file.getDbName());
@@ -1454,11 +1465,16 @@ public class ObjectStore implements RawStore, Configurable {
       if(commited) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_FILE, -1l, -1l, pm, mfile, old_params));
       }
-
     } finally {
       if (!commited) {
         rollbackTransaction();
       }
+    }
+
+    if (commited) {
+      return newf;
+    } else {
+      return null;
     }
   }
 
@@ -1467,8 +1483,7 @@ public class ObjectStore implements RawStore, Configurable {
     boolean commited = false;
     SFileLocation old = getSFileLocation(location.getDevid(), location.getLocation());
     if (old != null) {
-      r = false;
-      return r;
+      return false;
     }
     MFileLocation mfloc;
 
@@ -1492,7 +1507,41 @@ public class ObjectStore implements RawStore, Configurable {
       old_params.put("location", location.getLocation());
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfloc.getFile(), old_params));
     }
-    return r;
+    return r && commited;
+  }
+
+  public List<Device> convertToDevices(List<MDevice> mds) {
+    List<Device> ds = new ArrayList<Device>();
+
+    if (mds != null) {
+      ds = new ArrayList<Device>();
+      for (MDevice md : mds) {
+        Device d = new Device(md.getDev_name(), md.getProp(), md.getNode().getNode_name(), md.getStatus());
+        ds.add(d);
+      }
+    }
+
+    return ds;
+  }
+
+  @Override
+  public List<Device> listDevice() throws MetaException {
+    List<Device> ds = new ArrayList<Device>();
+    boolean success = false;
+    try {
+      openTransaction();
+      Query query = pm.newQuery(MDevice.class);
+      List<MDevice> mds = (List<MDevice>) query.execute();
+      pm.retrieveAll(mds);
+
+      success = commitTransaction();
+      ds = this.convertToDevices(mds);
+    } finally {
+      if (!success) {
+        rollbackTransaction();
+      }
+    }
+    return ds;
   }
 
   public Device modifyDevice(Device dev, Node node) throws MetaException, NoSuchObjectException, InvalidObjectException {
@@ -2243,6 +2292,7 @@ public class ObjectStore implements RawStore, Configurable {
         changed = true;
         mfl.setVisit_status(newsfl.getVisit_status());
       }
+      mfl.setRep_id(newsfl.getRep_id());
       mfl.setDigest(newsfl.getDigest());
 
       pm.makePersistent(mfl);
@@ -2251,10 +2301,11 @@ public class ObjectStore implements RawStore, Configurable {
     } finally {
       if (!commited) {
         rollbackTransaction();
+        sfl = null;
       }
     }
     if (sfl == null || mfl == null) {
-      throw new MetaException("Invalid SFileLocation provided!");
+      throw new MetaException("Invalid SFileLocation provided or JDO Commit failed!");
     }
 
     if (changed) {
@@ -2544,6 +2595,7 @@ public class ObjectStore implements RawStore, Configurable {
       query.declareParameters("java.lang.String devid, java.lang.String location");
       query.setUnique(true);
       query.getFetchPlan().setMaxFetchDepth(2);
+      query.getFetchPlan().setFetchSize(FetchPlan.FETCH_SIZE_GREEDY);
       mfl = (MFileLocation)query.execute(devid, location);
       if (mfl != null) {
         pm.retrieve(mfl);
@@ -2566,6 +2618,7 @@ public class ObjectStore implements RawStore, Configurable {
       Query query = pm.newQuery(MFileLocation.class, "this.file.fid == fid");
       query.declareParameters("long fid");
       query.getFetchPlan().setMaxFetchDepth(2);
+      query.getFetchPlan().setFetchSize(FetchPlan.FETCH_SIZE_GREEDY);
       List l = (List)query.execute(fid);
       Iterator iter = l.iterator();
       while (iter.hasNext()) {
@@ -2883,11 +2936,6 @@ public class ObjectStore implements RawStore, Configurable {
       return null;
     }
 
-    // get mnode
-    MNode mn = getMNode(location.getNode_name());
-    if (mn == null) {
-      return null;
-    }
     // get mfile
     MFile mf = getMFile(location.getFid());
     if (mf == null) {

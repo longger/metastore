@@ -585,9 +585,9 @@ public class DummyRawStoreForJdoConnection implements RawStore {
   }
 
   @Override
-  public void createFile(SFile file) throws InvalidObjectException, MetaException {
+  public SFile createFile(SFile file) throws InvalidObjectException, MetaException {
     // TODO Auto-generated method stub
-
+    return null;
   }
 
   @Override
@@ -888,7 +888,7 @@ public class DummyRawStoreForJdoConnection implements RawStore {
 
   @Override
   public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated,
-      List<SFile> lingering) throws MetaException {
+      List<SFile> lingering, long from, long to) throws MetaException {
     // TODO Auto-generated method stub
 
   }
@@ -1223,6 +1223,18 @@ public class DummyRawStoreForJdoConnection implements RawStore {
   public boolean reopenSFile(SFile file) throws MetaException {
     // TODO Auto-generated method stub
     return false;
+  }
+
+  @Override
+  public long getCurrentFID() {
+    // TODO Auto-generated method stub
+    return 0;
+  }
+
+  @Override
+  public List<Device> listDevice() throws MetaException {
+    // TODO Auto-generated method stub
+    return null;
   }
 
 }

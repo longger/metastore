@@ -2543,6 +2543,22 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'modify_device failed: unknown result')
     end
 
+    def list_device()
+      send_list_device()
+      return recv_list_device()
+    end
+
+    def send_list_device()
+      send_message('list_device', List_device_args)
+    end
+
+    def recv_list_device()
+      result = receive_message(List_device_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'list_device failed: unknown result')
+    end
+
     def alter_node(node_name, ipl, status)
       send_alter_node(node_name, ipl, status)
       return recv_alter_node()
@@ -5009,6 +5025,17 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'modify_device', seqid)
+    end
+
+    def process_list_device(seqid, iprot, oprot)
+      args = read_args(iprot, List_device_args)
+      result = List_device_result.new()
+      begin
+        result.success = @handler.list_device()
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'list_device', seqid)
     end
 
     def process_alter_node(seqid, iprot, oprot)
@@ -11116,6 +11143,39 @@ module ThriftHiveMetastore
 
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::STRUCT, :name => 'success', :class => ::Device},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class List_device_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+
+    FIELDS = {
+
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class List_device_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::LIST, :name => 'success', :element => {:type => ::Thrift::Types::STRUCT, :class => ::Device}},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
     }
 
