@@ -607,7 +607,9 @@ public class ObjectStore implements RawStore, Configurable {
       committed = commitTransaction();
 
       HashMap<String, Object> params = new HashMap<String, Object>();
-      params.put("param_name",new ArrayList<String>().addAll( mdb.getParameters().keySet()));
+      ArrayList<String>  ps = new ArrayList<String>();
+      ps.addAll(mdb.getParameters().keySet());
+      params.put("param_name",ps);
       if(committed) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALTER_DATABESE_PARAM,db_id,-1, pm, mdb,params));
       }
@@ -1398,7 +1400,6 @@ public class ObjectStore implements RawStore, Configurable {
 
   public void createFileLocaiton(SFileLocation fl) throws InvalidObjectException, MetaException {
     boolean commited = false;
-
     try {
       openTransaction();
       MFileLocation mfl = convertToMFileLocation(fl);
@@ -1431,16 +1432,19 @@ public class ObjectStore implements RawStore, Configurable {
       MFile mfile = convertToMFile(file);
       pm.makePersistent(mfile);
 
-      dbName = mfile.getTable().getDatabase().getName();
-      tableName = mfile.getTable().getTableName();
+//      LOG.info("---zy-- in createfile: table:"+mfile.getTable() == null);
+//      if(mfile.getTable() != null) {
+//        tableName = mfile.getTable().getTableName();
+//      }
+//      if(mfile.getTable() != null && mfile.getTable().getDatabase() != null) {
+//        dbName = mfile.getTable().getDatabase().getName();
+//      }
+      dbName = file.getDbName();
+      tableName = file.getTableName();
 
       commited = commitTransaction();
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", mfile.getFid());
-//      LOG.info("---zy-- in createFile: table="+(mfile.getTable()==null));
-//      if(mfile.getTable() != null) {
-//        LOG.info("---zy-- in createFile: db:"+mfile.getTable().getDatabase()==null);
-//      }
       old_params.put("db_name", dbName);
       old_params.put("table_name", tableName);
 //      long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mfile.getTable().getDatabase()).toString()));
@@ -1466,11 +1470,20 @@ public class ObjectStore implements RawStore, Configurable {
     }
     MFileLocation mfloc;
 
+    String dbName = null,tableName=null;
     try {
       openTransaction();
       mfloc = convertToMFileLocation(location);
       if (mfloc != null) {
         pm.makePersistent(mfloc);
+      }
+//      dbName = mfloc.getFile().getTable().getDatabase().getName();
+//      tableName = mfloc.getFile().getTable().getTableName();
+      if(mfloc.getFile().getTable() != null) {
+        tableName = mfloc.getFile().getTable().getTableName();
+      }
+      if(mfloc.getFile().getTable() != null && mfloc.getFile().getTable().getDatabase() != null) {
+        dbName = mfloc.getFile().getTable().getDatabase().getName();
       }
       commited = commitTransaction();
     } finally {
@@ -1482,9 +1495,10 @@ public class ObjectStore implements RawStore, Configurable {
       // send the sfile rep change message
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", new Long(location.getFid()));
-//      old_params.put("f_id", Long.MAX_VALUE);
       old_params.put("devid", location.getDevid());
       old_params.put("location", location.getLocation());
+      old_params.put("db_name", dbName);
+      old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfloc.getFile(), old_params));
     }
     return r;
@@ -2115,6 +2129,8 @@ public class ObjectStore implements RawStore, Configurable {
     boolean stat_changed = false;
     MFile mf = null;
     SFile f = null;
+
+    String dbName = null,tableName=null;
     try {
       openTransaction();
       mf = getMFile(newfile.getFid());
@@ -2131,9 +2147,16 @@ public class ObjectStore implements RawStore, Configurable {
       mf.setStore_status(newfile.getStore_status());
       mf.setLength(newfile.getLength());
 
+      tableName = newfile.getTableName();
+      dbName = newfile.getDbName();
+
       pm.makePersistent(mf);
       f = convertToSFile(mf);
+
+//      tableName = mf.getTable().getTableName();
+//      dbName = mf.getTable().getDatabase().getName();
       commited = commitTransaction();
+
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -2148,6 +2171,8 @@ public class ObjectStore implements RawStore, Configurable {
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", newfile.getFid());
       old_params.put("new_status", newfile.getStore_status());
+      old_params.put("db_name", dbName);
+      old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, pm, mf, old_params));
     }
     if (repnr_changed) {
@@ -2155,6 +2180,8 @@ public class ObjectStore implements RawStore, Configurable {
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", newfile.getFid());
       old_params.put("new_repnr", newfile.getRep_nr());
+      old_params.put("db_name", dbName);
+      old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_FILE_USER_SET_REP_CHANGE, -1l, -1l, pm, mf, old_params));
     }
     return f;
@@ -2165,9 +2192,18 @@ public class ObjectStore implements RawStore, Configurable {
     boolean changed = false;
     SFileLocation sfl = null;
     MFileLocation mfl = null;
+
+    String dbName=null,tableName=null;
     try {
       openTransaction();
       mfl = getMFileLocation(newsfl.getDevid(), newsfl.getLocation());
+      pm.retrieveAll(mfl);
+      if(mfl.getFile().getTable() != null) {
+        tableName = mfl.getFile().getTable().getTableName();
+      }
+      if(mfl.getFile().getTable() != null && mfl.getFile().getTable().getDatabase() != null) {
+        dbName = mfl.getFile().getTable().getDatabase().getName();
+      }
       mfl.setUpdate_time(System.currentTimeMillis());
       if (mfl.getVisit_status() != newsfl.getVisit_status()) {
         changed = true;
@@ -2177,6 +2213,8 @@ public class ObjectStore implements RawStore, Configurable {
 
       pm.makePersistent(mfl);
       sfl = convertToSFileLocation(mfl);
+
+
       commited = commitTransaction();
     } finally {
       if (!commited) {
@@ -2192,6 +2230,8 @@ public class ObjectStore implements RawStore, Configurable {
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", newsfl.getFid());
       old_params.put("new_status", newsfl.getVisit_status());
+      old_params.put("db_name", dbName);
+      old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, pm, mfl, old_params));
     }
 
@@ -4322,11 +4362,12 @@ public class ObjectStore implements RawStore, Configurable {
 
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(newt.getDatabase()).toString()));
       ArrayList<MSGFactory.DDLMsg> msgs = new ArrayList<MSGFactory.DDLMsg>();     //先把消息存储起来，修改执行成功了再发
-      HashMap<String, Object> params = new HashMap<String, Object>();
+
 
       //alt table name
       if(!oldt.getTableName().toLowerCase().equals(newt.getTableName().toLowerCase()))
       {
+        HashMap<String, Object> params = new HashMap<String, Object>();
         params.put("table_name", newt.getTableName());
         params.put("old_table_name", oldt.getTableName());
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME,db_id,-1, pm, oldt,params));
@@ -4369,6 +4410,7 @@ public class ObjectStore implements RawStore, Configurable {
           ps.put("table_name", oldt.getTableName());
           LOG.info("---zy--in alterTable addCol,colname:"+nmfs.getName());
           ps.put("column_name",nmfs.getName());
+          ps.put("column_type", nmfs.getType());
 //            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL,db_id,-1, pm, oldt.getSd().getCD(),ps));
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL,db_id,-1, pm, newt.getSd().getCD(),ps));
         }
@@ -4385,6 +4427,7 @@ public class ObjectStore implements RawStore, Configurable {
         newCols.removeAll(oldt.getSd().getCD().getCols());
         if(oldCols.size() == 1 && newCols.size() == 1 && !oldCols.get(0).getName().equals(newCols.get(0).getName()))    //说明只有一列是不同的,且是名字不同
         {
+          HashMap<String, Object> params = new HashMap<String, Object>();
           params.put("db_name", oldt.getDatabase().getName());
           params.put("table_name", oldt.getTableName());
           params.put("column_name",newCols.get(0).getName());
@@ -4394,6 +4437,7 @@ public class ObjectStore implements RawStore, Configurable {
         }
         else if(oldCols.size() == 1 && newCols.size() == 1 && !oldCols.get(0).getType().equals(newCols.get(0).getType()))         //修改了列类型
         {
+          HashMap<String, Object> params = new HashMap<String, Object>();
           params.put("db_name", oldt.getDatabase().getName());
           params.put("table_name", oldt.getTableName());
           params.put("column_name", oldCols.get(0).getName());
@@ -4406,20 +4450,32 @@ public class ObjectStore implements RawStore, Configurable {
       //alt table param
       if(!tableParamEquals(oldt.getParameters(), newt.getParameters()) )
       {
+        HashMap<String, Object> params = new HashMap<String, Object>();
         LOG.debug("---zy--in ObjectStore alterTable: alt table param");
         params.put("db_name", oldt.getDatabase().getName());
         params.put("table_name", oldt.getTableName());
-        params.put("tbl_param_keys", new ArrayList<String>().addAll(newt.getParameters().keySet()));
+        ArrayList<String>  ps = new ArrayList<String>();
+        ps.addAll(newt.getParameters().keySet());
+        params.put("tbl_param_keys", ps);
 
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
-        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, newt,params));
+        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
       }
-      //MSG_ALT_TALBE_PARTITIONING
+    //MSG_ALT_TALBE_PARTITIONING
+      HashMap<String, Object> altPartitioningParams = new HashMap<String, Object>();
       if(!oldt.getPartitionKeys().equals(newt.getPartitionKeys()))      //要传什么参数呢．．
       {
-//        params.put("old_table_name", oldt.getTableName());
-//        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,params));
-        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, newt,params));
+        altPartitioningParams.put("table_name", oldt.getTableName());
+        altPartitioningParams.put("db_name", oldt.getDatabase().getName());
+//        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,params));
+      }
+
+      //ALT_TABLE_SPLITKEYS
+      HashMap<String, Object> altSplitKeyParams = new HashMap<String, Object>();
+      if(!oldt.getFileSplitKeys().equals(newt.getFileSplitKeys()))
+      {
+        altSplitKeyParams.put("table_name", oldt.getTableName());
+        altSplitKeyParams.put("db_name", oldt.getDatabase().getName());
       }
       //MSG_ALT_TALBE_DISTRIBUTE        似乎没有修改过..
 
@@ -4454,6 +4510,9 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
       oldt.setPartitionKeys(newFS);
+
+      altPartitioningParams.put("version", cur_version);
+      msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,altPartitioningParams));
       // !NOTE: append new file split keys to old file split key list with new version
       newFS.clear();
       cur_version = 0;
@@ -4474,6 +4533,8 @@ public class ObjectStore implements RawStore, Configurable {
       }
       oldt.setFileSplitKeys(newFS);
 
+      altSplitKeyParams.put("version", cur_version);
+      msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_SPLITKEYS,db_id,-1, pm, oldt,altSplitKeyParams));
       oldt.setTableType(newt.getTableType());
       oldt.setLastAccessTime(newt.getLastAccessTime());
       oldt.setViewOriginalText(newt.getViewOriginalText());
@@ -4568,7 +4629,9 @@ public class ObjectStore implements RawStore, Configurable {
 
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(oldi.getOrigTable().getDatabase()).toString()));
       HashMap<String,Object> params = new HashMap<String,Object>();
-      params.put("param_name", new ArrayList<String>().addAll(oldi.getParameters().keySet()));
+      ArrayList<String>  ps = new ArrayList<String>();
+      ps.addAll(oldi.getParameters().keySet());
+      params.put("param_name", ps);
       if(success) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_INDEX_PARAM, db_id, -1, pm, oldi, params));
       }
@@ -8198,11 +8261,20 @@ public MUser getMUser(String userName) {
 //      long db_id = -1;
       HashMap<String, Object> old_params = new HashMap<String, Object>();
 
+
       if (mf != null) {
+        pm.retrieveAll(mf);
+        String dbName = null,tableName = null;
+        if(mf.getTable() != null) {
+          tableName = mf.getTable().getTableName();
+        }
+        if(mf.getTable() != null && mf.getTable().getDatabase() != null) {
+          dbName = mf.getTable().getDatabase().getName();
+        }
 //        db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mf.getTable().getDatabase()).toString()));
         old_params.put("f_id", mf.getFid());
-//        old_params.put("db_name", mf.getTable().getDatabase().getName());
-//        old_params.put("table_name", mf.getTable().getTableName() );
+        old_params.put("db_name", dbName);
+        old_params.put("table_name", tableName );
         pm.deletePersistent(mf);
       }
       success = commitTransaction();
@@ -9124,7 +9196,9 @@ public MUser getMUser(String userName) {
       if(!tableParamEquals(oldSchema.getParameters(), mSchema.getParameters()) )
       {
         params.put("schema_name", schemaName);
-        params.put("tbl_param_keys", new ArrayList<String>().addAll(mSchema.getParameters().keySet()));
+        ArrayList<String>  ps = new ArrayList<String>();
+        ps.addAll(mSchema.getParameters().keySet());
+        params.put("tbl_param_keys",ps);
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_PARAM,db_id,-1, pm, oldSchema,params));
       }
 

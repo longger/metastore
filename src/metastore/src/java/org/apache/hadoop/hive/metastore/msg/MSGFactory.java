@@ -379,7 +379,7 @@ public class MSGFactory {
           params.put("db_name",alt_partitioning_tbl.getDatabase().getName());
           params.put("table_name",alt_partitioning_tbl.getTableName());
           if(msg.getOld_object_params().containsKey("p_version")){
-            params.put("p_version",msg.getOld_object_params().get("old_table_name"));
+            params.put("p_version",msg.getOld_object_params().get("p_version"));
           }
           break;
       case MSGType.MSG_ALT_TALBE_DEL_COL :
@@ -396,6 +396,9 @@ public class MSGFactory {
           params.put("table_name",msg.getOld_object_params().get("table_name"));
           if(msg.getOld_object_params().containsKey("column_name")){
             params.put("column_name",msg.getOld_object_params().get("column_name"));
+          }
+          if(msg.getOld_object_params().containsKey("column_type")){
+            params.put("column_type",msg.getOld_object_params().get("column_type"));
           }
           break;
       case MSGType.MSG_ALT_TALBE_ALT_COL_NAME :
@@ -711,6 +714,12 @@ public class MSGFactory {
           if(msg.getOld_object_params().containsKey("part_index_store_id")){
             params.put("part_index_store_id",msg.getOld_object_params().get("part_index_store_id"));
           }
+          if (msg.getOld_object_params().containsKey("db_name")) {
+            params.put("db_name", msg.getOld_object_params().get("db_name"));
+          }
+          if (msg.getOld_object_params().containsKey("table_name")) {
+            params.put("table_name", msg.getOld_object_params().get("table_name"));
+          }
           break;
       case MSGType.MSG_ALT_PARTITION_INDEX_FILE :
             //修改分区索引文件
@@ -718,6 +727,12 @@ public class MSGFactory {
           params.put("f_id",alt_idx_file.getFid());
           if(msg.getOld_object_params().containsKey("part_index_store_id")){
             params.put("part_index_store_id",msg.getOld_object_params().get("part_index_store_id"));
+          }
+          if (msg.getOld_object_params().containsKey("db_name")) {
+            params.put("db_name", msg.getOld_object_params().get("db_name"));
+          }
+          if (msg.getOld_object_params().containsKey("table_name")) {
+            params.put("table_name", msg.getOld_object_params().get("table_name"));
           }
           break;
 //      case MSGType.MSG_REP_PARTITION_INDEX_FILE_CHAGE :
@@ -750,6 +765,12 @@ public class MSGFactory {
           params.put("f_id",del_idx_file.getFid());
           if(msg.getOld_object_params().containsKey("part_index_store_id")){
             params.put("part_index_store_id",msg.getOld_object_params().get("part_index_store_id"));
+          }
+          if (msg.getOld_object_params().containsKey("db_name")) {
+            params.put("db_name", msg.getOld_object_params().get("db_name"));
+          }
+          if (msg.getOld_object_params().containsKey("table_name")) {
+            params.put("table_name", msg.getOld_object_params().get("table_name"));
           }
           break;
       case MSGType.MSG_NEW_NODE :
