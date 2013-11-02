@@ -3524,22 +3524,12 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
         alterTblDesc), conf));
   }
 
-  /**
-   * modify split by to a table.
-   *
-   * @param ast
-   *          The parsed command tree.
-   *
-   * @param expectView
-   *          True for ALTER VIEW, false for ALTER TABLE.
-   *
-   * @throws SemanticException
-   *           Parsing failed
-   */
   private void analyzeAlterTableFileSplit(ASTNode ast, AlterTableTypes alterType)
       throws SemanticException {
     String tblName = getUnescapedName((ASTNode) ast.getChild(0));
-    List<FieldSchema> newCols = getColumns((ASTNode) ast.getChild(1));
+    LOG.info("*****************zqh****************" +tblName);
+    //List<FieldSchema> newCols = getColumns((ASTNode) ast.getChild(1));
+    //LOG.info("*****************zqh****************" +newCols);
     PartitionDefinition pd = new PartitionDefinition();
     List<FieldSchema> splitCols = new ArrayList<FieldSchema>();
     pd.setTableName(tblName);

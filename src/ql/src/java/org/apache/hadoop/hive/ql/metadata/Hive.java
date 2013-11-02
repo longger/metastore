@@ -388,9 +388,12 @@ public class Hive {
     try {
       // Remove the DDL_TIME so it gets refreshed
       if (newTbl.getParameters() != null) {
+        LOG.info("*****************zqh****************newTbl.getParameters() != null");
         newTbl.getParameters().remove(hive_metastoreConstants.DDL_TIME);
       }
+      LOG.info("*****************zqh**************** before alterTable");
       getMSC().alter_table(t.getDbName(), t.getTableName(), newTbl.getTTable());
+      LOG.info("*****************zqh****************alterTable successfully");
     } catch (MetaException e) {
       throw new HiveException("Unable to alter table.", e);
     } catch (TException e) {

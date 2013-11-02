@@ -274,7 +274,7 @@ public final class SemanticAnalyzerFactory {
       case HiveParser.TOK_SHOWROLEASSIGNMENT:
       case HiveParser.TOK_SHOWSCHEMAS:
       case HiveParser.TOK_DESCSCHEMA:
-
+      case HiveParser.TOK_ALTERTABLE_FILESPLIT:
 
 
         return new DDLSemanticAnalyzer(conf);

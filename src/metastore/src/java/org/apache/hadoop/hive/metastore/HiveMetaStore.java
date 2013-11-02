@@ -1212,17 +1212,23 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
         LOG.info("--zjw--before crt");
         try{
-        ms.createTable(tbl);
+        LOG.info("*****************zqh*****************" + tbl);
+        LOG.info("*****************zqh*****************" + tbl.getTableType());
+        LOG.info("*****************zqh*****************" + tbl.getDbName()+tbl.getSchemaName());
+        LOG.info("*****************zqh*****************" + TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()));
 
         /**********added by zjw for schema and table when creating view********/
         /**********with what need to notice is that table cache syn    ********/
         /********** *  should compermise with schema                   ********/
         /********** *  视图的table对象仅在全局点存储，视图的schema对象全局保存 ********/
+        LOG.info("*****************zqh*****************" + TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()));
         if (TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType())) {
           LOG.info("--zjw--TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()");
           createSchema(copySchemaFromtable(tbl));
         }
         /**********end ofadded by zjw for creating view********/
+        ms.createTable(tbl);
+        LOG.info("*****************zqh*****************ms.createTable(tbl)successfully");
 
         }catch(Exception e){
           LOG.error(e, e);

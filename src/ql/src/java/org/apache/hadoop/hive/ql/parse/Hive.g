@@ -1239,7 +1239,7 @@ alterStatementSuffixFileSplit
 @init { msgs.push("alter file split"); }
 @after { msgs.pop(); }
     : Identifier fileSplit
-    ->^(TOK_ALTERTABLE_FILESPLIT fileSplit)
+    ->^(TOK_ALTERTABLE_FILESPLIT Identifier fileSplit)
     ;
     
 alterStatementSuffixRenameCol

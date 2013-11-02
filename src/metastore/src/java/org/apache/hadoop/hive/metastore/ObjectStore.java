@@ -525,13 +525,16 @@ public class ObjectStore implements RawStore, Configurable {
     boolean commited = false;
     try {
       openTransaction();
-      name = name.toLowerCase().trim();
+      String dbname = name.toLowerCase().trim();
+      LOG.info("*****************zqh*****************getMDatabase" + dbname);
       Query query = pm.newQuery(MDatabase.class, "name == dbname");
+      LOG.info("*****************zqh*****************query successfully");
       query.declareParameters("java.lang.String dbname");
       query.setUnique(true);
-      mdb = (MDatabase) query.execute(name);
+      mdb = (MDatabase) query.execute(dbname);
       pm.retrieve(mdb);
       commited = commitTransaction();
+      LOG.info("*****************zqh*****************commited successfully");
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -1659,10 +1662,11 @@ public class ObjectStore implements RawStore, Configurable {
 
   public void createTable(Table tbl) throws InvalidObjectException, MetaException {
     boolean commited = false;
-
+    LOG.info("*****************zqh*****************createTable");
     try {
       openTransaction();
       MTable mtbl = convertToMTable(tbl);
+      LOG.info("*****************zqh*****************createTable--convertToMTable");
       boolean make_table = false;
       if(mtbl.getSd().getCD().getCols() != null){//增加业务类型查询支持
         List<MBusiTypeColumn> bcs = new ArrayList<MBusiTypeColumn>();
@@ -2953,14 +2957,20 @@ public class ObjectStore implements RawStore, Configurable {
 
   private MTable convertToMTable(Table tbl) throws InvalidObjectException,
       MetaException {
+    LOG.info("*****************zqh*****************convertToMTable");
     if (tbl == null) {
       return null;
     }
+    LOG.info("*****************zqh*****************convertToMTable!=null");
     MDatabase mdb = null;
     MSchema mSchema = null;
     try {
+      LOG.info("*****************zqh*****************" + tbl.getDbName());
+      LOG.info("*****************zqh*****************" + tbl.getSchemaName());
       mdb = getMDatabase(tbl.getDbName());
+      LOG.info("*****************zqh*****************" + mdb.getName());
       mSchema = getMSchema(tbl.getSchemaName());
+      LOG.info("*****************zqh*****************" + mSchema.getSchemaName());
     } catch (NoSuchObjectException e) {
       LOG.error(StringUtils.stringifyException(e));
       throw new InvalidObjectException("Database " + tbl.getDbName()
@@ -2970,7 +2980,9 @@ public class ObjectStore implements RawStore, Configurable {
     // If the table has property EXTERNAL set, update table type
     // accordingly
     String tableType = tbl.getTableType();
+    LOG.info("*****************zqh*****************" + tableType);
     boolean isExternal = "TRUE".equals(tbl.getParameters().get("EXTERNAL"));
+    LOG.info("*****************zqh*****************" + isExternal);
     if (TableType.MANAGED_TABLE.toString().equals(tableType)) {
       if (isExternal) {
         tableType = TableType.EXTERNAL_TABLE.toString();
