@@ -89,6 +89,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
 import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
+import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
@@ -2310,6 +2311,17 @@ public boolean authentication(String user_name, String passwd)
   @Override
   public List<Device> listDevice() throws MetaException, TException {
     return client.list_device();
+  }
+
+  @Override
+  public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException {
+    assert sfl != null;
+    return client.offline_filelocation(sfl);
+  }
+
+  @Override
+  public statfs statFileSystem(long begin_time, long end_time) throws MetaException, TException {
+    return client.statFileSystem(begin_time, end_time);
   }
 
 }

@@ -7,55 +7,100 @@ package org.apache.hadoop.hive.metastore.msg;
  */
 public class MSGType {
 
-  public static final int MSG_NEW_DATABESE = 1001;
-  //新建库
-  public static final int MSG_ALTER_DATABESE = 1002;
-      //修改库
-  public static final int MSG_ALTER_DATABESE_PARAM = 1003;
-      //修改库属性
-  public static final int MSG_DROP_DATABESE = 1004;
-      //删除库
-  public static final int MSG_NEW_TALBE = 1101;
-      //新建表
-  public static final int MSG_ALT_TALBE_NAME = 1102;
-      //修改表名
-  public static final int MSG_ALT_TALBE_DISTRIBUTE = 1103;          ////这个先不管
-      //修改表数据分布
-  public static final int MSG_ALT_TALBE_PARTITIONING = 1104;
-      //修改表分区方式
-  public static final int MSG_ALT_TALBE_DEL_COL = 1201;
-      //修改表删除列
-  public static final int MSG_ALT_TALBE_ADD_COL = 1202;
-      //修改表新增列
-  public static final int MSG_ALT_TALBE_ALT_COL_NAME = 1203;
-      //修改表修改列名
-  public static final int MSG_ALT_TALBE_ALT_COL_TYPE = 1204;
-      //修改表修改列类型
-  public static final int MSG_ALT_TALBE_ALT_COL_LENGTH = 1205;        ////注意：本事件不会触发！！！
-      //表参数变化
-  public static final int MSG_ALT_TABLE_PARAM = 1206;
-      //修改表修改列类型长度
-  public static final int MSG_DROP_TABLE = 1207;        //删除表
-
-  public static final int MSG_NEW_PARTITION =  1301;
-      // 新建分区
-  public static final int MSG_ALT_PARTITION =  1302;
-      //修改分区
-  public static final int MSG_DEL_PARTITION =  1303;
-      // 删除分区
-  public static final int MSG_ADD_PARTITION_FILE =  1304;
-      //增加分区文件
-  public static final int MSG_ALT_PARTITION_FILE =  1305;           ////分区的先不管
-      //修改分区文件
   /**
-   * 文件副本变化
+   * 新建库
+   */
+  public static final int MSG_NEW_DATABESE = 1001;
+  /**
+   * 修改库
+   */
+  public static final int MSG_ALTER_DATABESE = 1002;
+  /**
+   * 修改库属性
+   */
+  public static final int MSG_ALTER_DATABESE_PARAM = 1003;
+  /**
+   * 删除库
+   */
+  public static final int MSG_DROP_DATABESE = 1004;
+  /**
+   * 新建表
+   */
+  public static final int MSG_NEW_TALBE = 1101;
+  /**
+   * 修改表的名字
+   */
+  public static final int MSG_ALT_TALBE_NAME = 1102;
+  /**
+   * 修改表数据的分布
+   */
+  public static final int MSG_ALT_TALBE_DISTRIBUTE = 1103;          ////这个先不管
+  /**
+   * 修改表分区方式
+   */
+  public static final int MSG_ALT_TALBE_PARTITIONING = 1104;
+  /**
+   * 修改表删除列
+   */
+  public static final int MSG_ALT_TALBE_DEL_COL = 1201;
+  /**
+   * 修改表新增列
+   */
+  public static final int MSG_ALT_TALBE_ADD_COL = 1202;
+  /**
+   * 修改表修改列名
+   */
+  public static final int MSG_ALT_TALBE_ALT_COL_NAME = 1203;
+  /**
+   * 修改表修改列类型
+   */
+  public static final int MSG_ALT_TALBE_ALT_COL_TYPE = 1204;
+  /**
+   * 表参数变化
+   */
+  public static final int MSG_ALT_TALBE_ALT_COL_LENGTH = 1205;        ////注意：本事件不会触发！！！
+  /**
+   * 修改表修改列类型长度
+   */
+  public static final int MSG_ALT_TABLE_PARAM = 1206;
+  /**
+   * 删除表
+   */
+  public static final int MSG_DROP_TABLE = 1207;        //删除表
+  /**
+   * 新建分区
+   */
+  public static final int MSG_NEW_PARTITION =  1301;
+  /**
+   * 修改分区
+   */
+  public static final int MSG_ALT_PARTITION =  1302;
+  /**
+   * 删除分区
+   */
+  public static final int MSG_DEL_PARTITION =  1303;
+  /**
+   * 增加分区文件
+   */
+  public static final int MSG_ADD_PARTITION_FILE =  1304;
+  /**
+   * 修改分区文件
+   */
+  public static final int MSG_ALT_PARTITION_FILE =  1305;           ////分区的先不管
+
+  /**
+   * 文件副本变化：例如，文件中新增或者删除了副本
    */
   public static final int MSG_REP_FILE_CHANGE =  1306;
-
+  /**
+   * 文件状态变化：例如，store_status的状态
+   */
   public static final int MSG_STA_FILE_CHANGE =  1307;
-      //文件状态变化
+  /**
+   * 文件副本上下线变化：例如，文件的副本状态变化，ONLINE or OFFLINE
+   */
   public static final int MSG_REP_FILE_ONOFF =  1308;
-      //文件副本上下线变化
+
   public static final int MSG_DEL_PARTITION_FILE =  1309;
       //删除分区文件
   public static final int MSG_FILE_USER_SET_REP_CHANGE = 1310;
@@ -107,7 +152,13 @@ public class MSGType {
   public static final int MSG_MODIFY_NODEGROUP = 3002;      //修改节点组
   public static final int MSG_DEL_NODEGROUP = 3003;         //删除节点组
 
+  /**
+   * 创建新文件
+   */
   public static final int MSG_CREATE_FILE = 4001;
+  /**
+   * 物理删除文件：后续对该fid的访问将会失败
+   */
   public static final int MSG_DEL_FILE = 4002;
 
 

@@ -114,6 +114,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
 import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
+import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.events.AddPartitionEvent;
 import org.apache.hadoop.hive.metastore.events.AlterPartitionEvent;
 import org.apache.hadoop.hive.metastore.events.AlterTableEvent;
@@ -4489,7 +4490,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         try {
           node_name = dm.findBestNode(flp);
           if (node_name == null) {
-            throw new IOException("Folloing the FLP, we can't find any available node now.");
+            throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
           }
         } catch (IOException e) {
           LOG.error(e, e);
@@ -4564,7 +4565,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public int close_file(SFile file) throws FileOperationException, MetaException, TException {
+      startFunction("close_file ", "fid: " + file.getFid());
+
+      FileOperationException e = null;
       SFile saved = getMS().getSFile(file.getFid());
+
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
       }
@@ -4574,7 +4579,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             FOFailReason.INVALID_STATE);
       }
 
-      // find the valid filelocation, mark it and trigger relication
+      // find the valid filelocation, mark it and trigger replication
       if (file.getLocationsSize() > 0) {
         int valid_nr = 0;
 
@@ -4589,14 +4594,14 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           }
         }
         if (valid_nr > 1) {
-          throw new FileOperationException("Too many file locations provided, expect 1 provided " + valid_nr,
+          throw new FileOperationException("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]",
               FOFailReason.INVALID_FILE);
         } else if (valid_nr < 1) {
-          throw new FileOperationException("Too little file locations provided, expect 1 provided " + valid_nr,
+          e = new FileOperationException("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]",
               FOFailReason.INVALID_FILE);
         }
       } else {
-        throw new FileOperationException("Too little file locations provided, expect 1 provided " + file.getLocationsSize(),
+        e = new FileOperationException("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]",
               FOFailReason.INVALID_FILE);
       }
 
@@ -4604,6 +4609,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       // keep repnr unchanged
       file.setRep_nr(saved.getRep_nr());
       getMS().updateSFile(file);
+
+      if (e != null) {
+        throw e;
+      }
 
       synchronized (dm.repQ) {
         dm.repQ.add(new DMRequest(file, DMRequest.DMROperation.REPLICATE, 1));
@@ -5740,7 +5749,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       SFile stored_file = get_file_by_id(file.getFid());
 
       if (stored_file.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-        throw new MetaException("online filelocation can only do on INCREATE file.");
+        throw new MetaException("online filelocation can only do on INCREATE file " + file.getFid() + 
+            " STATE: " + stored_file.getStore_status());
       }
       if (stored_file.getLocationsSize() != 1) {
         throw new MetaException("Invalid file location in SFile fid: " + stored_file.getFid());
@@ -6560,7 +6570,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public void truncTableFiles(String dbName, String tabName) throws MetaException, TException {
       startFunction("truncTableFiles", "DB: " + dbName + " Table: " + tabName);
-      getMS().truncTableFiles(dbName, tabName);
+      try {
+        getMS().truncTableFiles(dbName, tabName);
+      } finally {
+        endFunction("truncTableFiles", true, null);
+      }
     }
 
     @Override
@@ -6570,7 +6584,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public List<Long> listFilesByDigest(String digest) throws MetaException, TException {
-      startFunction("listFilesByDigest", "digest: " + digest);
+      startFunction("listFilesByDigest:", "digest: " + digest);
       return getMS().findSpecificDigestFiles(digest);
     }
 
@@ -6581,10 +6595,13 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       List<NodeGroup> ngs = null;
       Set<String> ngnodes = new HashSet<String>();
 
+      startFunction("create_file_by_policy:", "CP " + policy.getOperation() +
+          " db: " + db_name + " table: " + table_name + " values: " + values);
       // Step 1: parse the policy and check arguments
       switch (policy.getOperation()) {
       case CREATE_NEW_IN_NODEGROUPS:
       case CREATE_NEW:
+      case CREATE_NEW_RANDOM:
       case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
         // check db, table now
         try {
@@ -6604,7 +6621,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           ngs = tbl.getNodeGroups();
           if (ngs != null && ngs.size() > 0) {
              for (NodeGroup ng : ngs) {
-               ngnodes.add(ng.getNode_group_name());
+               if (ng.getNodesSize() > 0) {
+                 for (Node n : ng.getNodes()) {
+                   ngnodes.add(n.getNode_name());
+                 }
+               }
              }
           }
           for (String ng : policy.getArguments()) {
@@ -6759,12 +6780,21 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           break;
         case CREATE_NEW:
         case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
+        case CREATE_NEW_RANDOM:
           if (ngs != null) {
             // use all available node group's nodes
             for (NodeGroup ng : ngs) {
-              ngnodes.add(ng.getNode_group_name());
+              if (ng.getNodesSize() > 0) {
+                for (Node n : ng.getNodes()) {
+                  ngnodes.add(n.getNode_name());
+                }
+              }
             }
-            flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+            if (policy.getOperation() == CreateOperation.CREATE_NEW_RANDOM) {
+              flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.RANDOM_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+            } else {
+              flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+            }
           }
           break;
         case CREATE_AUX_IDX_FILE:
@@ -6799,7 +6829,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException {
-      startFunction("reopen_file", "fid: " + fid);
+      startFunction("reopen_file ", "fid: " + fid);
 
       SFile saved = getMS().getSFile(fid);
       boolean success = false;
@@ -6829,6 +6859,25 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public List<Device> list_device() throws MetaException, TException {
       return getMS().listDevice();
+    }
+
+    @Override
+    public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException {
+      // try to update the OFFLINE flag immediately
+      startFunction("offline_filelocation:", "dev " + sfl.getDevid() + " loc " + sfl.getLocation());
+      sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+      getMS().updateSFileLocation(sfl);
+      endFunction("offline_filelocation", true, null);
+
+      return true;
+    }
+
+    @Override
+    public statfs statFileSystem(long begin_time, long end_time) throws MetaException, TException {
+      if (end_time < begin_time || begin_time < 0 || end_time < 0) {
+        throw new MetaException("Invalid time range [" + begin_time + ", " + end_time + ").");
+      }
+      return getMS().statFileSystem(begin_time, end_time);
     }
 
   }

@@ -768,7 +768,9 @@ public class DiskManager {
           }
           if (f.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
             valid_idx = i;
-            f.getLocations().get(i).setNode_name(getAnyNode());
+            if (f.getLocations().get(i).getNode_name().equals("")) {
+              f.getLocations().get(i).setNode_name(getAnyNode());
+            }
             no_valid_fl = false;
             break;
           }
@@ -1021,6 +1023,10 @@ public class DiskManager {
                   // this means we should do cleanups
                   do_clean = true;
                 }
+                if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+                  // this means we should clean up the OFFLINE locs
+                  do_clean = true;
+                }
               } catch (MetaException e) {
                 LOG.error(e, e);
                 continue;
@@ -1156,20 +1162,37 @@ public class DiskManager {
                   break;
                 }
               }
-            } else {
-              // check file create time? there is no creation_time in sfile, thus do not mark it as void
-              isVoid = false;
             }
 
             if (isVoid) {
               // ok, mark the file as deleted
               synchronized (trs) {
-                LOG.info("Mark file (fid " + f.getFid() + ") as void file to physically delete.");
-                f.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);
+                // double get the file now
+                SFile nf;
                 try {
-                  trs.updateSFile(f);
-                } catch (MetaException e) {
-                  LOG.error(e, e);
+                  nf = trs.getSFile(f.getFid());
+                  if (nf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+                    continue;
+                  }
+                  if (nf.getLocationsSize() > 0) {
+                    boolean ok = false;
+                    for (SFileLocation fl : nf.getLocations()) {
+                      if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+                        ok = true;
+                        break;
+                      }
+                    }
+                    if (ok) {
+                      continue;
+                    }
+                  }
+
+                  LOG.info("Mark file (fid " + nf.getFid() + ") as void file to physically delete.");
+                  nf.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);
+                  trs.updateSFile(nf);
+
+                } catch (MetaException e1) {
+                  LOG.error(e1, e1);
                 }
               }
             }
@@ -1292,6 +1315,12 @@ public class DiskManager {
 
     public String getDMStatus() throws MetaException {
       String r = "";
+      Long[] devnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
+      long free = 0, used = 0;
+
+      for (int i = 0; i < devnr.length; i++) {
+        devnr[i] = new Long(0);
+      }
 
       r += "MetaStore Server Disk Manager listening @ " + hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
       r += "\nSafeMode: " + safeMode + "\n";
@@ -1305,12 +1334,38 @@ public class DiskManager {
           if (e.getValue().dis != null) {
             for (DeviceInfo di : e.getValue().dis) {
               r += di.prop + ":" + di.dev + ",";
+              switch (di.prop) {
+              case MetaStoreConst.MDeviceProp.ALONE:
+              case MetaStoreConst.MDeviceProp.BACKUP:
+              case MetaStoreConst.MDeviceProp.SHARED:
+              case MetaStoreConst.MDeviceProp.BACKUP_ALONE:
+                devnr[di.prop]++;
+                break;
+              }
+              free += di.free;
+              used += di.used;
             }
           }
           r += "]\n";
         }
       }
       r += "}\n";
+      String ANSI_RESET = "\u001B[0m";
+	    String ANSI_RED = "\u001B[31m";
+      if (free / (used + free) < 0.2) {
+        r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
+            "G, free " + ANSI_RED + (free / 1000000000) + ANSI_RESET + "G \n";
+      } else {
+        r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
+            "G, free " + (free / 1000000000) + "G \n";
+      }
+      synchronized (rs) {
+        r += "Total devices " + rs.countDevice() + ", active {alone " +
+            devnr[MetaStoreConst.MDeviceProp.ALONE] + ", backup " +
+            devnr[MetaStoreConst.MDeviceProp.BACKUP] + ", shared " +
+            devnr[MetaStoreConst.MDeviceProp.SHARED] + ", backup_alone " +
+            devnr[MetaStoreConst.MDeviceProp.BACKUP_ALONE] + "}.\n";
+      }
       r += "Inactive nodes list: {\n";
       synchronized (rs) {
         List<Node> lns = rs.getAllNodes();
@@ -1736,15 +1791,12 @@ public class DiskManager {
     }
 
     static public class FileLocatingPolicy {
-      public static final int EXCLUDE_NODES_DEVS = 0;
-      public static final int EXCLUDE_NODES_DEVS_SHARED = 1;
-      public static final int SPECIFY_NODES_DEVS = 3;
-
       public static final int SPECIFY_NODES = 0;
       public static final int EXCLUDE_NODES = 1;
       public static final int SPECIFY_DEVS = 2;
       public static final int EXCLUDE_DEVS = 3;
       public static final int EXCLUDE_DEVS_SHARED = 4;
+      public static final int RANDOM_NODES = 5;
 
       Set<String> nodes;
       Set<String> devs;
@@ -1761,6 +1813,15 @@ public class DiskManager {
         this.dev_mode = dev_mode;
         this.canIgnore = canIgnore;
         this.origNode = null;
+      }
+
+      @Override
+      public String toString() {
+        return "Node {" + (nodes == null ? "null" : nodes.toString()) + "} -> {" +
+            node_mode + "}, Dev {" +
+            (devs == null ? "null" : devs.toString()) +
+            "}, canIgnore " + canIgnore + ", origNode " +
+            (origNode == null ? "null" : origNode) + ".";
       }
     }
 
@@ -1818,6 +1879,15 @@ public class DiskManager {
         }
         isExclude = false;
         break;
+      case FileLocatingPolicy.RANDOM_NODES:
+        // random select a node in specify nodes
+        if (flp.nodes == null || flp.nodes.size() == 0) {
+          return null;
+        } else {
+          Random r = new Random();
+          String[] a = flp.nodes.toArray(new String[0]);
+          return a[r.nextInt(flp.nodes.size())];
+        }
       }
 
       long largest = 0;
@@ -2151,7 +2221,9 @@ public class DiskManager {
               if (!master_marked && r.file.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
                 master = i;
                 // BUG: if the master replica is a SHARED/BACKUP device, get any node
-                r.file.getLocations().get(i).setNode_name(getAnyNode());
+                if (r.file.getLocations().get(i).getNode_name().equals("")) {
+                  r.file.getLocations().get(i).setNode_name(getAnyNode());
+                }
                 master_marked = true;
               }
               excludes.add(r.file.getLocations().get(i).getNode_name());
@@ -2879,11 +2951,13 @@ public class DiskManager {
                   synchronized (rs) {
                     List<SFileLocation> sfl = rs.getSFileLocations(f.getFid());
                     if (sfl.size() == 0) {
-                      // delete this file
-                      if (f.getStore_status() != MetaStoreConst.MFileStoreStatus.RM_PHYSICAL) {
-                        LOG.warn("FID " + f.getFid() + " will be deleted, however it's status is " + f.getStore_status());
+                      // delete this file: if it's in INCREATE state, ignore it; if it's in !INCREAT && !RM_PHYSICAL state, warning it.
+                      if (f.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
+                        if (f.getStore_status() != MetaStoreConst.MFileStoreStatus.RM_PHYSICAL) {
+                          LOG.warn("FID " + f.getFid() + " will be deleted(reason: no valid locations), however it's status is " + f.getStore_status());
+                        }
+                        rs.delSFile(f.getFid());
                       }
-                      rs.delSFile(f.getFid());
                     }
                   }
                 } catch (MetaException e) {

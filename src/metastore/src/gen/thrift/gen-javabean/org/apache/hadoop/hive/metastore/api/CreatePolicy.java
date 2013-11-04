@@ -447,13 +447,13 @@ public class CreatePolicy implements org.apache.thrift.TBase<CreatePolicy, Creat
           case 2: // ARGUMENTS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list302 = iprot.readListBegin();
-                struct.arguments = new ArrayList<String>(_list302.size);
-                for (int _i303 = 0; _i303 < _list302.size; ++_i303)
+                org.apache.thrift.protocol.TList _list318 = iprot.readListBegin();
+                struct.arguments = new ArrayList<String>(_list318.size);
+                for (int _i319 = 0; _i319 < _list318.size; ++_i319)
                 {
-                  String _elem304; // required
-                  _elem304 = iprot.readString();
-                  struct.arguments.add(_elem304);
+                  String _elem320; // required
+                  _elem320 = iprot.readString();
+                  struct.arguments.add(_elem320);
                 }
                 iprot.readListEnd();
               }
@@ -484,9 +484,9 @@ public class CreatePolicy implements org.apache.thrift.TBase<CreatePolicy, Creat
         oprot.writeFieldBegin(ARGUMENTS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, struct.arguments.size()));
-          for (String _iter305 : struct.arguments)
+          for (String _iter321 : struct.arguments)
           {
-            oprot.writeString(_iter305);
+            oprot.writeString(_iter321);
           }
           oprot.writeListEnd();
         }
@@ -523,9 +523,9 @@ public class CreatePolicy implements org.apache.thrift.TBase<CreatePolicy, Creat
       if (struct.isSetArguments()) {
         {
           oprot.writeI32(struct.arguments.size());
-          for (String _iter306 : struct.arguments)
+          for (String _iter322 : struct.arguments)
           {
-            oprot.writeString(_iter306);
+            oprot.writeString(_iter322);
           }
         }
       }
@@ -541,13 +541,13 @@ public class CreatePolicy implements org.apache.thrift.TBase<CreatePolicy, Creat
       }
       if (incoming.get(1)) {
         {
-          org.apache.thrift.protocol.TList _list307 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, iprot.readI32());
-          struct.arguments = new ArrayList<String>(_list307.size);
-          for (int _i308 = 0; _i308 < _list307.size; ++_i308)
+          org.apache.thrift.protocol.TList _list323 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, iprot.readI32());
+          struct.arguments = new ArrayList<String>(_list323.size);
+          for (int _i324 = 0; _i324 < _list323.size; ++_i324)
           {
-            String _elem309; // required
-            _elem309 = iprot.readString();
-            struct.arguments.add(_elem309);
+            String _elem325; // required
+            _elem325 = iprot.readString();
+            struct.arguments.add(_elem325);
           }
         }
         struct.setArgumentsIsSet(true);
