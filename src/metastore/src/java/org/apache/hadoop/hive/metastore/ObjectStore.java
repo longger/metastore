@@ -159,6 +159,7 @@ import org.apache.hadoop.hive.metastore.parser.ExpressionTree.ANTLRNoCaseStringS
 import org.apache.hadoop.hive.metastore.parser.FilterLexer;
 import org.apache.hadoop.hive.metastore.parser.FilterParser;
 import org.apache.hadoop.hive.metastore.tools.MetaUtil;
+import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TException;
 import org.datanucleus.FetchPlan;
@@ -4600,12 +4601,23 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
       cur_version++;
-      if (newt.getFileSplitKeys() != null) {
-        for (MFieldSchema mfs : newt.getFileSplitKeys()) {
-          mfs.setVersion(cur_version);
-          newFS.add(mfs);
+      List<PartitionInfo> newPis =  PartitionInfo.getPartitionInfo(convertToFieldSchemas(newt.getFileSplitKeys()));
+      if (newPis != null) {
+        int i=0;
+        for (PartitionInfo pif : newPis) {
+          pif.setP_version((int)cur_version);
+          newt.getFileSplitKeys().get(i).setVersion(cur_version);
+          newt.getFileSplitKeys().get(i).setComment(pif.toJson());
+          newFS.add(newt.getFileSplitKeys().get(i));
+          i++;
         }
       }
+//      if (newt.getFileSplitKeys() != null) {
+//        for (MFieldSchema mfs : newt.getFileSplitKeys()) {
+//          mfs.setVersion(cur_version);
+//          newFS.add(mfs);
+//        }
+//      }
       oldt.setFileSplitKeys(newFS);
 
       oldt.setTableType(newt.getTableType());

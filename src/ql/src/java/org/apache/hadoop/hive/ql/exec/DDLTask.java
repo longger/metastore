@@ -84,7 +84,6 @@ import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.SkewedInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory;
-import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.hive.ql.Context;
 import org.apache.hadoop.hive.ql.DriverContext;
 import org.apache.hadoop.hive.ql.QueryPlan;
@@ -3906,40 +3905,41 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       LOG.info("=======================2 RENAME");
       tbl.setTableName(alterTbl.getNewName());
     } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ALTERFILESPLIT) {
-      List<FieldSchema> newCols = alterTbl.getFileSplitCols();
-      List<FieldSchema> oldCols = oldTbl.getFileSplitKeys();
+
+
       //List<PartitionInfo> newpis = PartitionInfo.getPartitionInfo(newCols);
-      int cur_version = 0;
+    //  int cur_version = 0;
 //      List<PartitionInfo> new_save_pis = new ArrayList<PartitionInfo>();
-      List<FieldSchema> allSplitFields = alterTbl.getFileSplitCols();
+//      List<FieldSchema> allSplitFields = alterTbl.getFileSplitCols();
+      List<FieldSchema> newCols = alterTbl.getFileSplitCols();
+//      List<FieldSchema> oldCols = oldTbl.getFileSplitKeys();
+//      List<PartitionInfo> old_pis = PartitionInfo.getPartitionInfo(oldCols);
+//
+//      if (old_pis != null) {
+//        int i=0;
+//        for(PartitionInfo pif : old_pis){//get max
+//          if(pif.getP_version()>cur_version){
+//            cur_version = pif.getP_version();
+//            allSplitFields.add(oldCols.get(i++));
+//
+//          }
+//        }
+//      }
+//      cur_version++;
 
-      List<PartitionInfo> old_pis = PartitionInfo.getPartitionInfo(oldCols);
-
-      if (old_pis != null) {
-        int i=0;
-        for(PartitionInfo pif : old_pis){//get max
-          if(pif.getP_version()>cur_version){
-            cur_version = pif.getP_version();
-            allSplitFields.add(oldCols.get(i++));
-
-          }
-        }
-      }
-      cur_version++;
-
-      List<PartitionInfo> newPis =  PartitionInfo.getPartitionInfo(alterTbl.getFileSplitCols());
-      if (newPis != null) {
-        int i=0;
-        for (PartitionInfo pif : newPis) {
-          pif.setP_version(cur_version);
-          newCols.get(i).setVersion(cur_version);
-          newCols.get(i).setComment(pif.toJson());
-          allSplitFields.add(newCols.get(i));
-          i++;
-        }
-      }
-      tbl.setFileSplitKeys(allSplitFields);
-
+//      List<PartitionInfo> newPis =  PartitionInfo.getPartitionInfo(alterTbl.getFileSplitCols());
+//      if (newPis != null) {
+//        int i=0;
+//        for (PartitionInfo pif : newPis) {
+//          pif.setP_version(cur_version);
+//          newCols.get(i).setVersion(cur_version);
+//          newCols.get(i).setComment(pif.toJson());
+//          allSplitFields.add(newCols.get(i));
+//          i++;
+//        }
+//      }
+//      tbl.setFileSplitKeys(allSplitFields);
+      tbl.setFileSplitKeys(newCols);
 
     }else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ADDCOLS) {
       LOG.info("=======================23 ADDCOLS");
