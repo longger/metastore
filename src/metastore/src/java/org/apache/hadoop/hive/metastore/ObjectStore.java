@@ -4571,7 +4571,7 @@ public class ObjectStore implements RawStore, Configurable {
       oldt.setRetention(newt.getRetention());
       // !NOTE: append new partition keys to old partition key list with new version
       List<MFieldSchema> newFS = new ArrayList<MFieldSchema>();
-      long cur_version = 0;
+      long cur_version = -1;
 
       if (oldt.getPartitionKeys() != null) {
         for (MFieldSchema mfs : oldt.getPartitionKeys()) {
@@ -4591,7 +4591,7 @@ public class ObjectStore implements RawStore, Configurable {
       oldt.setPartitionKeys(newFS);
       // !NOTE: append new file split keys to old file split key list with new version
       newFS.clear();
-      cur_version = 0;
+      cur_version = -1;
       if (oldt.getFileSplitKeys() != null) {
         for (MFieldSchema mfs : oldt.getFileSplitKeys()) {
           if (mfs.getVersion() > cur_version) {
