@@ -410,6 +410,9 @@ public abstract class BaseSemanticAnalyzer {
           .getText());
       String value = unescapeSQLString(prop.getChild(propChild).getChild(1)
           .getText());
+      if (value == null){
+        value = "";
+      }
       mapProp.put(key, value);
     }
   }

@@ -78,9 +78,9 @@ public class MetaMsgServer {
       while(true ){
         try{
           if(queue.isEmpty()){
-            LOG.info("---in sendThread before ac");
+            LOG.debug("---in sendThread before ac");
             sem.acquire();
-            LOG.info("---in sendThread after ac");
+            LOG.debug("---in sendThread after ac");
             if(queue.isEmpty()){
               continue;
             }
@@ -318,7 +318,7 @@ public class MetaMsgServer {
     }
 
     boolean sendMsg(String msg) throws MetaClientException, InterruptedException{
-        LOG.info("in send msg:"+msg);
+        LOG.debug("in send msg:"+msg);
 
         if(producer == null){
           connect();
@@ -331,10 +331,10 @@ public class MetaMsgServer {
 
         boolean success = sendResult.isSuccess();
         if (!success) {
-            LOG.info("Send message failed,error message:" + sendResult.getErrorMessage());
+            LOG.error("Send message failed,error message:" + sendResult.getErrorMessage());
         }
         else {
-            LOG.info("Send message successfully,sent to " + sendResult.getPartition());
+            LOG.debug("Send message successfully,sent to " + sendResult.getPartition());
         }
         return success;
     }

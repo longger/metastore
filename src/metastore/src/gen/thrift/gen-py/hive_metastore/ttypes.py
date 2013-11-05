@@ -80,6 +80,7 @@ class FOFailReason:
   NOTEXIST = 11
   SAFEMODE = 12
   INVALID_STATE = 13
+  TRY_AGAIN = 14
 
   _VALUES_TO_NAMES = {
     1: "INVALID_NODE",
@@ -92,6 +93,7 @@ class FOFailReason:
     11: "NOTEXIST",
     12: "SAFEMODE",
     13: "INVALID_STATE",
+    14: "TRY_AGAIN",
   }
 
   _NAMES_TO_VALUES = {
@@ -105,6 +107,7 @@ class FOFailReason:
     "NOTEXIST": 11,
     "SAFEMODE": 12,
     "INVALID_STATE": 13,
+    "TRY_AGAIN": 14,
   }
 
 class FindNodePolicy:
@@ -3626,6 +3629,7 @@ class SFile:
    - length
    - ref_files
    - values
+   - load_status
   """
 
   thrift_spec = (
@@ -3642,9 +3646,10 @@ class SFile:
     (10, TType.I64, 'length', None, None, ), # 10
     (11, TType.LIST, 'ref_files', (TType.I64,None), None, ), # 11
     (12, TType.LIST, 'values', (TType.STRUCT,(SplitValue, SplitValue.thrift_spec)), None, ), # 12
+    (13, TType.I32, 'load_status', None, None, ), # 13
   )
 
-  def __init__(self, fid=None, dbName=None, tableName=None, store_status=None, rep_nr=None, digest=None, record_nr=None, all_record_nr=None, locations=None, length=None, ref_files=None, values=None,):
+  def __init__(self, fid=None, dbName=None, tableName=None, store_status=None, rep_nr=None, digest=None, record_nr=None, all_record_nr=None, locations=None, length=None, ref_files=None, values=None, load_status=None,):
     self.fid = fid
     self.dbName = dbName
     self.tableName = tableName
@@ -3657,6 +3662,7 @@ class SFile:
     self.length = length
     self.ref_files = ref_files
     self.values = values
+    self.load_status = load_status
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -3744,6 +3750,11 @@ class SFile:
           iprot.readListEnd()
         else:
           iprot.skip(ftype)
+      elif fid == 13:
+        if ftype == TType.I32:
+          self.load_status = iprot.readI32();
+        else:
+          iprot.skip(ftype)
       else:
         iprot.skip(ftype)
       iprot.readFieldEnd()
@@ -3810,6 +3821,10 @@ class SFile:
       for iter294 in self.values:
         iter294.write(oprot)
       oprot.writeListEnd()
+      oprot.writeFieldEnd()
+    if self.load_status is not None:
+      oprot.writeFieldBegin('load_status', TType.I32, 13)
+      oprot.writeI32(self.load_status)
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()

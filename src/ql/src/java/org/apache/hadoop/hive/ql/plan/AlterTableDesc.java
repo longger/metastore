@@ -47,14 +47,14 @@ public class AlterTableDesc extends DDLDesc implements Serializable {
     RENAME, ADDCOLS, REPLACECOLS, ADDPROPS, ADDSERDE, ADDSERDEPROPS,
     ADDFILEFORMAT, ADDCLUSTERSORTCOLUMN, RENAMECOLUMN, ADDPARTITION,
     TOUCH, ARCHIVE, UNARCHIVE, ALTERPROTECTMODE, ALTERPARTITIONPROTECTMODE,
-    ALTERLOCATION, DROPPARTITION, RENAMEPARTITION, ADDSKEWEDBY, ALTERSKEWEDLOCATION
+    ALTERLOCATION, DROPPARTITION, RENAMEPARTITION, ADDSKEWEDBY, ALTERSKEWEDLOCATION,ALTERFILESPLIT
   };
 
   public static enum ProtectModeType {
     NO_DROP, OFFLINE, READ_ONLY, NO_DROP_CASCADE
   };
 
-
+  List<FieldSchema> fileSplitCols;
   AlterTableTypes op;
   String oldName;
   String newName;
@@ -136,6 +136,13 @@ public class AlterTableDesc extends DDLDesc implements Serializable {
     op = alterType;
     oldName = name;
     this.newCols = new ArrayList<FieldSchema>(newCols);
+  }
+
+  public AlterTableDesc(List<FieldSchema> fileSplitCols,String name,
+      AlterTableTypes alterType) {
+    op = alterType;
+    oldName = name;
+    this.fileSplitCols = new ArrayList<FieldSchema>(fileSplitCols);
   }
 
   /**
@@ -661,6 +668,14 @@ public class AlterTableDesc extends DDLDesc implements Serializable {
    */
   public void setStoredAsSubDirectories(boolean isStoredAsSubDirectories) {
     this.isStoredAsSubDirectories = isStoredAsSubDirectories;
+  }
+
+  public List<FieldSchema> getFileSplitCols() {
+    return fileSplitCols;
+  }
+
+  public void setFileSplitCols(List<FieldSchema> fileSplitCols) {
+    this.fileSplitCols = fileSplitCols;
   }
 
 }

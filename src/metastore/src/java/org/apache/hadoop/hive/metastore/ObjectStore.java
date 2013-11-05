@@ -158,8 +158,10 @@ import org.apache.hadoop.hive.metastore.parser.ExpressionTree.ANTLRNoCaseStringS
 import org.apache.hadoop.hive.metastore.parser.FilterLexer;
 import org.apache.hadoop.hive.metastore.parser.FilterParser;
 import org.apache.hadoop.hive.metastore.tools.MetaUtil;
+import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TException;
+import org.datanucleus.FetchPlan;
 
 import com.taobao.metamorphosis.exception.MetaClientException;
 /**
@@ -192,7 +194,7 @@ public class ObjectStore implements RawStore, Configurable {
       List results = (List) query.execute();
       BigDecimal maxfid = (BigDecimal) results.iterator().next();
       if (maxfid != null) {
-        g_fid = maxfid.longValue() + 1;
+        g_fid = maxfid.longValue() + 10;
       }
       commited = commitTransaction();
       LOG.info("restore FID to " + g_fid);
@@ -213,6 +215,11 @@ public class ObjectStore implements RawStore, Configurable {
     }
   }
 
+  @Override
+  public long getCurrentFID() {
+    return g_fid;
+  }
+
   private static final Map<String, Class> PINCLASSMAP;
   static {
     Map<String, Class> map = new HashMap();
@@ -227,6 +234,7 @@ public class ObjectStore implements RawStore, Configurable {
     map.put("order", MOrder.class);
     map.put("files", MFile.class);
     map.put("nodes", MNode.class);
+    map.put("device", MDevice.class);
     map.put("direct_ddl", MDirectDDL.class);
     map.put("busi_column", MBusiTypeColumn.class);
     map.put("index", MIndex.class);
@@ -517,13 +525,16 @@ public class ObjectStore implements RawStore, Configurable {
     boolean commited = false;
     try {
       openTransaction();
-      name = name.toLowerCase().trim();
+      String dbname = name.toLowerCase().trim();
+      LOG.info("*****************zqh*****************getMDatabase" + dbname);
       Query query = pm.newQuery(MDatabase.class, "name == dbname");
+      LOG.info("*****************zqh*****************query successfully");
       query.declareParameters("java.lang.String dbname");
       query.setUnique(true);
-      mdb = (MDatabase) query.execute(name);
+      mdb = (MDatabase) query.execute(dbname);
       pm.retrieve(mdb);
       commited = commitTransaction();
+      LOG.info("*****************zqh*****************commited successfully");
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -597,11 +608,10 @@ public class ObjectStore implements RawStore, Configurable {
     MDatabase mdb = null;
     boolean committed = false;
     try {
+      openTransaction();
       mdb = getMDatabase(dbName);
       // currently only allow changing database parameters
       mdb.setParameters(db.getParameters());
-      openTransaction();
-      pm.retrieve(mdb);
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mdb).toString()));
       pm.makePersistent(mdb);
       committed = commitTransaction();
@@ -959,7 +969,7 @@ public class ObjectStore implements RawStore, Configurable {
 
     //FIXME: try to use non-transaction
     try {
-      //openTransaction();
+      openTransaction();
       SFileLocation fl;
 
       // iterate all partitions to find valid files.
@@ -1010,15 +1020,16 @@ public class ObjectStore implements RawStore, Configurable {
           }
         }
       }
-      //commited = commitTransaction();
+      commited = commitTransaction();
     } finally {
       if (!commited) {
-        //rollbackTransaction();
+        rollbackTransaction();
       }
     }
   }
 
-  public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering) throws MetaException {
+  public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering,
+      long from, long to) throws MetaException {
     long node_nr = countNode();
     boolean commited = false;
 
@@ -1030,6 +1041,7 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query q = pm.newQuery(MFile.class, "this.store_status != increate");
       q.declareParameters("int increate");
+      q.setRange(from, to);
       Collection allFiles = (Collection)q.execute(MetaStoreConst.MFileStoreStatus.INCREATE);
       Iterator iter = allFiles.iterator();
       while (iter.hasNext()) {
@@ -1050,9 +1062,14 @@ public class ObjectStore implements RawStore, Configurable {
             }
           }
           if (m.getRep_nr() > nr) {
-            SFile s = convertToSFile(m);
-            s.setLocations(l);
-            underReplicated.add(s);
+            try {
+              SFile s = convertToSFile(m);
+              s.setLocations(l);
+              underReplicated.add(s);
+            } catch (javax.jdo.JDOObjectNotFoundException e) {
+              // it means the file slips ...
+              LOG.error(e, e);
+            }
           }
         }
         // find over  replicated files
@@ -1065,9 +1082,14 @@ public class ObjectStore implements RawStore, Configurable {
             }
           }
           if (m.getRep_nr() < nr) {
-            SFile s = convertToSFile(m);
-            s.setLocations(l);
-            overReplicated.add(s);
+            try {
+              SFile s = convertToSFile(m);
+              s.setLocations(l);
+              overReplicated.add(s);
+            } catch (javax.jdo.JDOObjectNotFoundException e) {
+              // it means the file slips ...
+              LOG.error(e, e);
+            }
           }
         }
         // find lingering files
@@ -1088,9 +1110,14 @@ public class ObjectStore implements RawStore, Configurable {
           }
           if ((m.getRep_nr() <= onnr && offnr > 0) ||
               (onnr + offnr >= node_nr && offnr > 0)) {
-            SFile s = convertToSFile(m);
-            s.setLocations(l);
-            lingering.add(s);
+            try {
+              SFile s = convertToSFile(m);
+              s.setLocations(l);
+              lingering.add(s);
+            } catch (javax.jdo.JDOObjectNotFoundException e) {
+              // it means the file slips ...
+              LOG.error(e, e);
+            }
           }
         }
       }
@@ -1412,8 +1439,10 @@ public class ObjectStore implements RawStore, Configurable {
     }
   }
 
-  public void createFile(SFile file) throws InvalidObjectException, MetaException {
+  public SFile createFile(SFile file) throws InvalidObjectException, MetaException {
+    SFile newf = null;
     boolean commited = false;
+
     do {
       file.setFid(getNextFID());
       // query on this fid to check if it is a valid fid
@@ -1425,9 +1454,6 @@ public class ObjectStore implements RawStore, Configurable {
     } while (true);
 
     try {
-      String dbName = null;
-      String tableName = null;
-
       openTransaction();
       MFile mfile = convertToMFile(file);
       pm.makePersistent(mfile);
@@ -1439,24 +1465,29 @@ public class ObjectStore implements RawStore, Configurable {
 //      if(mfile.getTable() != null && mfile.getTable().getDatabase() != null) {
 //        dbName = mfile.getTable().getDatabase().getName();
 //      }
-      dbName = file.getDbName();
-      tableName = file.getTableName();
 
+      newf = convertToSFile(mfile);
       commited = commitTransaction();
+
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", mfile.getFid());
-      old_params.put("db_name", dbName);
-      old_params.put("table_name", tableName);
+      old_params.put("db_name", file.getDbName());
+      old_params.put("table_name", file.getTableName());
 //      long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mfile.getTable().getDatabase()).toString()));
 
       if(commited) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_FILE, -1l, -1l, pm, mfile, old_params));
       }
-
     } finally {
       if (!commited) {
         rollbackTransaction();
       }
+    }
+
+    if (commited) {
+      return newf;
+    } else {
+      return null;
     }
   }
 
@@ -1465,8 +1496,7 @@ public class ObjectStore implements RawStore, Configurable {
     boolean commited = false;
     SFileLocation old = getSFileLocation(location.getDevid(), location.getLocation());
     if (old != null) {
-      r = false;
-      return r;
+      return false;
     }
     MFileLocation mfloc;
 
@@ -1501,7 +1531,41 @@ public class ObjectStore implements RawStore, Configurable {
       old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfloc.getFile(), old_params));
     }
-    return r;
+    return r && commited;
+  }
+
+  public List<Device> convertToDevices(List<MDevice> mds) {
+    List<Device> ds = new ArrayList<Device>();
+
+    if (mds != null) {
+      ds = new ArrayList<Device>();
+      for (MDevice md : mds) {
+        Device d = new Device(md.getDev_name(), md.getProp(), md.getNode().getNode_name(), md.getStatus());
+        ds.add(d);
+      }
+    }
+
+    return ds;
+  }
+
+  @Override
+  public List<Device> listDevice() throws MetaException {
+    List<Device> ds = new ArrayList<Device>();
+    boolean success = false;
+    try {
+      openTransaction();
+      Query query = pm.newQuery(MDevice.class);
+      List<MDevice> mds = (List<MDevice>) query.execute();
+      pm.retrieveAll(mds);
+
+      success = commitTransaction();
+      ds = this.convertToDevices(mds);
+    } finally {
+      if (!success) {
+        rollbackTransaction();
+      }
+    }
+    return ds;
   }
 
   public Device modifyDevice(Device dev, Node node) throws MetaException, NoSuchObjectException, InvalidObjectException {
@@ -1592,7 +1656,7 @@ public class ObjectStore implements RawStore, Configurable {
     //createFile(new SFile(10, 10, 3, 4, "abc", 1, 2, null));
     //createFile(new SFile(20, 10, 5, 6, "xyz", 1, 2, null));
     Node n = new Node("macan", ips, MetaStoreConst.MNodeStatus.SUSPECT);
-    SFile sf = new SFile(0, "db", "table", 5, 6, "xyzadfads", 1, 2, null, 100, null, null);
+    SFile sf = new SFile(0, "db", "table", 5, 6, "xyzadfads", 1, 2, null, 100, null, null, 0);
     createNode(n);
     MDevice md1 = new MDevice(getMNode("macan"), "dev-hello", 0, 0);
     MDevice md2 = new MDevice(getMNode("macan"), "xyz1", 0, 0);
@@ -1619,10 +1683,11 @@ public class ObjectStore implements RawStore, Configurable {
 
   public void createTable(Table tbl) throws InvalidObjectException, MetaException {
     boolean commited = false;
-
+    LOG.info("*****************zqh*****************createTable");
     try {
       openTransaction();
       MTable mtbl = convertToMTable(tbl);
+      LOG.info("*****************zqh*****************createTable--convertToMTable");
       boolean make_table = false;
       if(mtbl.getSd().getCD().getCols() != null){//增加业务类型查询支持
         List<MBusiTypeColumn> bcs = new ArrayList<MBusiTypeColumn>();
@@ -2123,6 +2188,70 @@ public class ObjectStore implements RawStore, Configurable {
     return sfl;
   }
 
+  @Override
+  public boolean reopenSFile(SFile file) throws MetaException {
+    boolean commited = false;
+    MFile mf = null;
+    SFile f = null;
+    boolean changed = false;
+
+    try {
+      List<MFileLocation> toOffline = new ArrayList<MFileLocation>();
+
+      openTransaction();
+      mf = getMFile(file.getFid());
+      if (mf.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+        mf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
+        pm.makePersistent(mf);
+
+        List<MFileLocation> mfl = getMFileLocations(file.getFid());
+        boolean selected = false;
+        if (mfl.size() > 0) {
+          for (MFileLocation x : mfl) {
+            if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+              if (selected) {
+                // mark it as OFFLINE
+                x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+                pm.makePersistent(x);
+                toOffline.add(x);
+              } else {
+                // select it as the only valid location
+                selected = true;
+              }
+            } else {
+              // mark it as OFFLINE
+              x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+              pm.makePersistent(x);
+              toOffline.add(x);
+            }
+          }
+        }
+        changed = true;
+      }
+      commited = commitTransaction();
+      if (commited && changed) {
+        // ok, send msgs
+        HashMap<String, Object> old_params = new HashMap<String, Object>();
+        old_params.put("f_id", file.getFid());
+        old_params.put("new_status", MetaStoreConst.MFileStoreStatus.INCREATE);
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, pm, mf, old_params));
+        if (toOffline.size() > 0) {
+          for (MFileLocation y : toOffline) {
+            HashMap<String, Object> params = new HashMap<String, Object>();
+            old_params.put("f_id", file.getFid());
+            old_params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, pm, y, params));
+          }
+        }
+      }
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    return changed && commited;
+  }
+
   public SFile updateSFile(SFile newfile) throws MetaException {
     boolean commited = false;
     boolean repnr_changed = false;
@@ -2145,6 +2274,7 @@ public class ObjectStore implements RawStore, Configurable {
       mf.setRecord_nr(newfile.getRecord_nr());
       mf.setAll_record_nr(newfile.getAll_record_nr());
       mf.setStore_status(newfile.getStore_status());
+      mf.setLoad_status(newfile.getLoad_status());
       mf.setLength(newfile.getLength());
 
       tableName = newfile.getTableName();
@@ -2209,6 +2339,7 @@ public class ObjectStore implements RawStore, Configurable {
         changed = true;
         mfl.setVisit_status(newsfl.getVisit_status());
       }
+      mfl.setRep_id(newsfl.getRep_id());
       mfl.setDigest(newsfl.getDigest());
 
       pm.makePersistent(mfl);
@@ -2219,10 +2350,11 @@ public class ObjectStore implements RawStore, Configurable {
     } finally {
       if (!commited) {
         rollbackTransaction();
+        sfl = null;
       }
     }
     if (sfl == null || mfl == null) {
-      throw new MetaException("Invalid SFileLocation provided!");
+      throw new MetaException("Invalid SFileLocation provided or JDO Commit failed!");
     }
 
     if (changed) {
@@ -2474,7 +2606,7 @@ public class ObjectStore implements RawStore, Configurable {
       Query query = pm.newQuery(MFile.class, "this.fid == fid");
       query.declareParameters("long fid");
       query.setUnique(true);
-      mf = (MFile)query.execute(new Long(fid));
+      mf = (MFile)query.execute(fid);
       pm.retrieve(mf);
       commited = commitTransaction();
     } finally {
@@ -2513,6 +2645,8 @@ public class ObjectStore implements RawStore, Configurable {
           "this.dev.dev_name == devid && this.location == location");
       query.declareParameters("java.lang.String devid, java.lang.String location");
       query.setUnique(true);
+      query.getFetchPlan().setMaxFetchDepth(2);
+      query.getFetchPlan().setFetchSize(FetchPlan.FETCH_SIZE_GREEDY);
       mfl = (MFileLocation)query.execute(devid, location);
       if (mfl != null) {
         pm.retrieve(mfl);
@@ -2534,6 +2668,8 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery(MFileLocation.class, "this.file.fid == fid");
       query.declareParameters("long fid");
+      query.getFetchPlan().setMaxFetchDepth(2);
+      query.getFetchPlan().setFetchSize(FetchPlan.FETCH_SIZE_GREEDY);
       List l = (List)query.execute(fid);
       Iterator iter = l.iterator();
       while (iter.hasNext()) {
@@ -2557,6 +2693,7 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery(MFileLocation.class, "this.visit_status == status");
       query.declareParameters("int status");
+      query.getFetchPlan().setMaxFetchDepth(2);
       List l = (List)query.execute(status);
       Iterator iter = l.iterator();
       while (iter.hasNext()) {
@@ -2580,6 +2717,7 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery(MFileLocation.class, "this.dev.dev_name == devid && this.update_time + timeout < curts");
       query.declareParameters("java.lang.String devid, long timeout, long curts");
+      query.getFetchPlan().setMaxFetchDepth(2);
       List l = (List)query.execute(devid, timeout, curts);
       Iterator iter = l.iterator();
       while (iter.hasNext()) {
@@ -2720,7 +2858,7 @@ public class ObjectStore implements RawStore, Configurable {
       }
     }
     return new SFile(mf.getFid(), dbName, tableName, mf.getStore_status(), mf.getRep_nr(),
-        mf.getDigest(), mf.getRecord_nr(), mf.getAll_record_nr(), null, mf.getLength(), mf.getRef_files(), values);
+        mf.getDigest(), mf.getRecord_nr(), mf.getAll_record_nr(), null, mf.getLength(), mf.getRef_files(), values, mf.getLoad_status());
   }
 
   private List<SFileLocation> convertToSFileLocation(List<MFileLocation> mfl) throws MetaException {
@@ -2820,7 +2958,7 @@ public class ObjectStore implements RawStore, Configurable {
         throw new InvalidObjectException("This file does not belong to any TABLE or table contains NONE file split keys, you should not set SplitValues!");
       }
       for (SplitValue sv : file.getValues()) {
-        values.add(new MSplitValue(sv.getSplitKeyName(), sv.getLevel(), sv.getValue(), sv.getVerison()));
+        values.add(new MSplitValue(sv.getSplitKeyName().toLowerCase(), sv.getLevel(), sv.getValue(), sv.getVerison()));
         if (version == -1) {
           version = sv.getVerison();
         }
@@ -2849,11 +2987,6 @@ public class ObjectStore implements RawStore, Configurable {
       return null;
     }
 
-    // get mnode
-    MNode mn = getMNode(location.getNode_name());
-    if (mn == null) {
-      return null;
-    }
     // get mfile
     MFile mf = getMFile(location.getFid());
     if (mf == null) {
@@ -2871,14 +3004,20 @@ public class ObjectStore implements RawStore, Configurable {
 
   private MTable convertToMTable(Table tbl) throws InvalidObjectException,
       MetaException {
+    LOG.info("*****************zqh*****************convertToMTable");
     if (tbl == null) {
       return null;
     }
+    LOG.info("*****************zqh*****************convertToMTable!=null");
     MDatabase mdb = null;
     MSchema mSchema = null;
     try {
+      LOG.info("*****************zqh*****************" + tbl.getDbName());
+      LOG.info("*****************zqh*****************" + tbl.getSchemaName());
       mdb = getMDatabase(tbl.getDbName());
+      LOG.info("*****************zqh*****************" + mdb.getName());
       mSchema = getMSchema(tbl.getSchemaName());
+      LOG.info("*****************zqh*****************" + mSchema.getSchemaName());
     } catch (NoSuchObjectException e) {
       LOG.error(StringUtils.stringifyException(e));
       throw new InvalidObjectException("Database " + tbl.getDbName()
@@ -2888,7 +3027,9 @@ public class ObjectStore implements RawStore, Configurable {
     // If the table has property EXTERNAL set, update table type
     // accordingly
     String tableType = tbl.getTableType();
+    LOG.info("*****************zqh*****************" + tableType);
     boolean isExternal = "TRUE".equals(tbl.getParameters().get("EXTERNAL"));
+    LOG.info("*****************zqh*****************" + isExternal);
     if (TableType.MANAGED_TABLE.toString().equals(tableType)) {
       if (isExternal) {
         tableType = TableType.EXTERNAL_TABLE.toString();
@@ -3056,7 +3197,7 @@ public class ObjectStore implements RawStore, Configurable {
     }
     List<MFieldSchema> mFieldSchemas = msd.getCD() == null ? null : msd.getCD().getCols();
 
-    LOG.info("mFieldSchemas.size():"+mFieldSchemas.size());
+    LOG.debug("mFieldSchemas.size():"+mFieldSchemas.size());
     StorageDescriptor sd = new StorageDescriptor(noFS ? null : convertToFieldSchemas(mFieldSchemas),
         msd.getLocation(), msd.getInputFormat(), msd.getOutputFormat(), msd
         .isCompressed(), msd.getNumBuckets(), converToSerDeInfo(msd
@@ -4476,6 +4617,7 @@ public class ObjectStore implements RawStore, Configurable {
       {
         altSplitKeyParams.put("table_name", oldt.getTableName());
         altSplitKeyParams.put("db_name", oldt.getDatabase().getName());
+//        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,params));
       }
       //MSG_ALT_TALBE_DISTRIBUTE        似乎没有修改过..
 
@@ -4525,16 +4667,28 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
       cur_version++;
-      if (newt.getFileSplitKeys() != null) {
-        for (MFieldSchema mfs : newt.getFileSplitKeys()) {
-          mfs.setVersion(cur_version);
-          newFS.add(mfs);
+      List<PartitionInfo> newPis =  PartitionInfo.getPartitionInfo(convertToFieldSchemas(newt.getFileSplitKeys()));
+      if (newPis != null) {
+        int i=0;
+        for (PartitionInfo pif : newPis) {
+          pif.setP_version((int)cur_version);
+          newt.getFileSplitKeys().get(i).setVersion(cur_version);
+          newt.getFileSplitKeys().get(i).setComment(pif.toJson());
+          newFS.add(newt.getFileSplitKeys().get(i));
+          i++;
         }
       }
+//      if (newt.getFileSplitKeys() != null) {
+//        for (MFieldSchema mfs : newt.getFileSplitKeys()) {
+//          mfs.setVersion(cur_version);
+//          newFS.add(mfs);
+//        }
+//      }
       oldt.setFileSplitKeys(newFS);
 
       altSplitKeyParams.put("version", cur_version);
       msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_SPLITKEYS,db_id,-1, pm, oldt,altSplitKeyParams));
+
       oldt.setTableType(newt.getTableType());
       oldt.setLastAccessTime(newt.getLastAccessTime());
       oldt.setViewOriginalText(newt.getViewOriginalText());
@@ -6055,6 +6209,31 @@ public MUser getMUser(String userName) {
                 persistentObjs.add(mTab);
               }
             }
+          }  else if (hiveObject.getObjectType() == HiveObjectType.SCHEMA) {
+            MSchema schemaObj = getMSchema(hiveObject.getObjectName());
+            if (schemaObj != null) {
+              List<MSchemaPrivilege> schemaPrivs = this
+                  .listAllSchemaGrants(userName, principalType, hiveObject.getObjectName());
+              if (schemaPrivs != null) {
+                for (MSchemaPrivilege priv : schemaPrivs) {
+                  if (priv.getGrantor() != null
+                      && priv.getGrantor().equalsIgnoreCase(grantor)) {
+                    privSet.add(priv.getPrivilege());
+                  }
+                }
+              }
+              for (String privilege : privs) {
+                if (privSet.contains(privilege)) {
+                  throw new InvalidObjectException(privilege
+                      + " is already granted on schema ["
+                      + hiveObject.getObjectName() + "] by " + grantor);
+                }
+                MSchemaPrivilege mSch = new MSchemaPrivilege(
+                    userName, principalType.toString(), schemaObj,
+                    privilege, now, grantor, grantorType, grantOption);
+                persistentObjs.add(mSch);
+              }
+            }
           } else if (hiveObject.getObjectType() == HiveObjectType.PARTITION) {
             // TODO: fix it
             MPartition partObj = this.getMPartition(hiveObject.getDbName(),
@@ -6699,6 +6878,37 @@ public MUser getMUser(String userName) {
     }
     return mSecurityTabPartList;
   }
+
+  @SuppressWarnings("unchecked")
+  public List<MSchemaPrivilege> listAllSchemaGrants(
+      String principalName, PrincipalType principalType, String schemaName) {
+    schemaName = schemaName.toLowerCase().trim();
+
+    boolean success = false;
+    List<MSchemaPrivilege> mSecuritySchPartList = null;
+    try {
+      openTransaction();
+      LOG.debug("Executing listAllSchemaGrants");
+      Query query = pm.newQuery(
+          MSchemaPrivilege.class,
+              "principalName == t1 && principalType == t2 && schema.schemaName == t3");
+      query.declareParameters(
+          "java.lang.String t1, java.lang.String t2, java.lang.String t3");
+      mSecuritySchPartList = (List<MSchemaPrivilege>) query
+          .executeWithArray(principalName, principalType.toString(), schemaName);
+      LOG.debug("Done executing query for listAllSchemaGrants");
+      pm.retrieveAll(mSecuritySchPartList);
+      success = commitTransaction();
+      LOG
+          .debug("Done retrieving all objects for listAllSchemaGrants");
+    } finally {
+      if (!success) {
+        rollbackTransaction();
+      }
+    }
+    return mSecuritySchPartList;
+  }
+
 
   @SuppressWarnings("unchecked")
   @Override
@@ -8942,7 +9152,7 @@ public MUser getMUser(String userName) {
   }
 
   @Override
-  public GlobalSchema getSchema(String schema_name) throws NoSuchObjectException,MetaException {
+  public GlobalSchema getSchema(String schema_name) throws NoSuchObjectException, MetaException {
 
     MSchema mSchema = null;
     GlobalSchema schema = null;
@@ -9396,7 +9606,7 @@ public MUser getMUser(String userName) {
             mschema.getCreateTime(), mschema.getLastAccessTime(), mschema.getRetention(),
             convertToStorageDescriptor(mschema.getSd()), mschema.getParameters(),
             mschema.getViewOriginalText(), mschema.getViewExpandedText(), mschema.getSchemaType());
-        LOG.info("---zjw--getColsSize():"+schema.getSd().getColsSize());
+        LOG.debug("---zjw--getColsSize():"+schema.getSd().getColsSize());
     }
     return schema;
   }

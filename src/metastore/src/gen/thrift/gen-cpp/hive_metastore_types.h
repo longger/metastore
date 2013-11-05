@@ -58,7 +58,8 @@ struct FOFailReason {
     NOSPACE = 10,
     NOTEXIST = 11,
     SAFEMODE = 12,
-    INVALID_STATE = 13
+    INVALID_STATE = 13,
+    TRY_AGAIN = 14
   };
 };
 
@@ -2264,7 +2265,7 @@ class SFileLocation {
 void swap(SFileLocation &a, SFileLocation &b);
 
 typedef struct _SFile__isset {
-  _SFile__isset() : fid(false), dbName(false), tableName(false), store_status(false), rep_nr(false), digest(false), record_nr(false), all_record_nr(false), locations(false), length(false), ref_files(false), values(false) {}
+  _SFile__isset() : fid(false), dbName(false), tableName(false), store_status(false), rep_nr(false), digest(false), record_nr(false), all_record_nr(false), locations(false), length(false), ref_files(false), values(false), load_status(false) {}
   bool fid;
   bool dbName;
   bool tableName;
@@ -2277,15 +2278,16 @@ typedef struct _SFile__isset {
   bool length;
   bool ref_files;
   bool values;
+  bool load_status;
 } _SFile__isset;
 
 class SFile {
  public:
 
-  static const char* ascii_fingerprint; // = "859DCB9E8E785327C9B2DE0B1EC70FA0";
-  static const uint8_t binary_fingerprint[16]; // = {0x85,0x9D,0xCB,0x9E,0x8E,0x78,0x53,0x27,0xC9,0xB2,0xDE,0x0B,0x1E,0xC7,0x0F,0xA0};
+  static const char* ascii_fingerprint; // = "7BBF5A1200925F95C3F9B33C3E523584";
+  static const uint8_t binary_fingerprint[16]; // = {0x7B,0xBF,0x5A,0x12,0x00,0x92,0x5F,0x95,0xC3,0xF9,0xB3,0x3C,0x3E,0x52,0x35,0x84};
 
-  SFile() : fid(0), dbName(), tableName(), store_status(0), rep_nr(0), digest(), record_nr(0), all_record_nr(0), length(0) {
+  SFile() : fid(0), dbName(), tableName(), store_status(0), rep_nr(0), digest(), record_nr(0), all_record_nr(0), length(0), load_status(0) {
   }
 
   virtual ~SFile() throw() {}
@@ -2302,6 +2304,7 @@ class SFile {
   int64_t length;
   std::vector<int64_t>  ref_files;
   std::vector<SplitValue>  values;
+  int32_t load_status;
 
   _SFile__isset __isset;
 
@@ -2353,6 +2356,10 @@ class SFile {
     values = val;
   }
 
+  void __set_load_status(const int32_t val) {
+    load_status = val;
+  }
+
   bool operator == (const SFile & rhs) const
   {
     if (!(fid == rhs.fid))
@@ -2379,6 +2386,8 @@ class SFile {
       return false;
     if (!(values == rhs.values))
       return false;
+    if (!(load_status == rhs.load_status))
+      return false;
     return true;
   }
   bool operator != (const SFile &rhs) const {
@@ -2403,8 +2412,8 @@ typedef struct _SFileRef__isset {
 class SFileRef {
  public:
 
-  static const char* ascii_fingerprint; // = "8DA41438AC1F918C00C3E0A6C2952DEE";
-  static const uint8_t binary_fingerprint[16]; // = {0x8D,0xA4,0x14,0x38,0xAC,0x1F,0x91,0x8C,0x00,0xC3,0xE0,0xA6,0xC2,0x95,0x2D,0xEE};
+  static const char* ascii_fingerprint; // = "2B316059F23EFEAE1F7AF0A680BA8319";
+  static const uint8_t binary_fingerprint[16]; // = {0x2B,0x31,0x60,0x59,0xF2,0x3E,0xFE,0xAE,0x1F,0x7A,0xF0,0xA6,0x80,0xBA,0x83,0x19};
 
   SFileRef() : origin_fid(0) {
   }

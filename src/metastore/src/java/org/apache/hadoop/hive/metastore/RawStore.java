@@ -137,7 +137,7 @@ public interface RawStore extends Configurable {
 
   public long countNode() throws MetaException;
 
-  public void createFile(SFile file) throws InvalidObjectException, MetaException;
+  public SFile createFile(SFile file) throws InvalidObjectException, MetaException;
 
   public SFile getSFile(long fid) throws MetaException;
 
@@ -521,7 +521,7 @@ public interface RawStore extends Configurable {
 
   public List<SFile> findLingeringFiles(long node_nr) throws MetaException;
 
-  public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering) throws MetaException;
+  public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering, long from, long to) throws MetaException;
 
   public void findVoidFiles(List<SFile> voidFiles) throws MetaException;
 
@@ -671,5 +671,11 @@ public interface RawStore extends Configurable {
   public abstract boolean deleteNodeGroupAssignment(NodeGroup ng, String dbName) throws MetaException, NoSuchObjectException;
 
   public abstract void truncTableFiles(String dbName, String tableName) throws MetaException, NoSuchObjectException;
+
+  public abstract boolean reopenSFile(SFile file) throws MetaException;
+
+  public abstract long getCurrentFID();
+
+  public abstract List<Device> listDevice() throws MetaException;
 
 }

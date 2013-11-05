@@ -2473,8 +2473,12 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       }
       //added by zjw
       if(inputRR.getOriginTabNameMap() != null && inputRR.getOriginTabNameMap().size() == 1){//若映射表列表为1，说明是原始表
-        if(expr.getType() != HiveParser.TOK_ALLCOLREF) {
-          out_rwsch.putOriginColName(tabAlias, colAlias, expr.getChild(0).getText());
+        if(expr.getType() != HiveParser.TOK_ALLCOLREF ) {
+          if(expr.getType() == HiveParser.TOK_TABLE_OR_COL){
+            out_rwsch.putOriginColName(tabAlias, colAlias, expr.getChild(0).getText());
+          }else{
+            out_rwsch.putOriginColName(tabAlias, colAlias, expr.getText());
+          }
         }
         //FIX
         out_rwsch.putOriginTabName(tabAlias, inputRR.getTableNames().iterator().next());
@@ -8596,6 +8600,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       SchemaUtil su = new SchemaUtil();
       su.setOriginNameMap(resRR.getOriginNameMap());
       for(FieldSchema col : resultSchema){
+        LOG.info("--zjw------FieldSchema.col:"+col.getName());
         LinkedHashMap<String,String> tab_cols = resRR.getOriginNameMap().get(col.getName());
         StringBuilder col_cmt = new StringBuilder();
         col_cmt.append("{");

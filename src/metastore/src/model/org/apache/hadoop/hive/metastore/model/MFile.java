@@ -15,6 +15,7 @@ public class MFile {
   private long create_time;
   private List<Long> ref_files;
   private List<MSplitValue> values;
+  private int load_status;
 
   public MFile(long fid, MTable table, int store_status, int rep_nr, String digest,
       long record_nr, long all_record_nr, long length, List<Long> ref_files, List<MSplitValue> values) {
@@ -29,6 +30,7 @@ public class MFile {
     this.create_time = System.currentTimeMillis();
     this.ref_files = ref_files;
     this.values = values;
+    this.setLoad_status(MetaStoreConst.MFileLoadStatus.OK);
   }
 
   public int getStore_status() {
@@ -107,5 +109,13 @@ public class MFile {
 
   public void setRef_files(List<Long> ref_files) {
     this.ref_files = ref_files;
+  }
+
+  public int getLoad_status() {
+    return load_status;
+  }
+
+  public void setLoad_status(int load_status) {
+    this.load_status = load_status;
   }
 }

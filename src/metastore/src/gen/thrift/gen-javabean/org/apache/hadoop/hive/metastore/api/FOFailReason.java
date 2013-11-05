@@ -21,7 +21,8 @@ public enum FOFailReason implements org.apache.thrift.TEnum {
   NOSPACE(10),
   NOTEXIST(11),
   SAFEMODE(12),
-  INVALID_STATE(13);
+  INVALID_STATE(13),
+  TRY_AGAIN(14);
 
   private final int value;
 
@@ -62,6 +63,8 @@ public enum FOFailReason implements org.apache.thrift.TEnum {
         return SAFEMODE;
       case 13:
         return INVALID_STATE;
+      case 14:
+        return TRY_AGAIN;
       default:
         return null;
     }

@@ -143,6 +143,7 @@ import org.apache.hadoop.hive.metastore.model.MRole;
 import org.apache.hadoop.hive.metastore.model.MRoleMap;
 import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
 import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
+import org.apache.hadoop.hive.metastore.model.MUser;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
@@ -210,6 +211,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
   public static Random rand = new Random();
 
   public static Long file_creation_lock = 0L;
+  public static Long file_reopen_lock = 0L;
 
   public static class HMSHandler extends FacebookBase implements
       IHMSHandler {
@@ -554,6 +556,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       HMSHandler.createDefaultDB = true;
     }
 
+    private void createRootUser() throws MetaException, InvalidObjectException {
+      // only called from createDefaultDb()
+      getMS().openTransaction();
+      MUser mu = getMS().getMUser("root");
+      if (mu == null) {
+        // ok, create it
+        getMS().addUser("root", "'111111'", "root");
+        LOG.info("Create ROOT User: root.");
+      }
+      getMS().commitTransaction();
+    }
+
     /**
      * create default database if it doesn't exist
      *
@@ -566,6 +580,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
 
         try {
+          createRootUser();
           createDefaultDB_core(getMS());
         } catch (InvalidObjectException e) {
           throw new MetaException(e.getMessage());
@@ -768,7 +783,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     public void alter_database(final String dbName, final Database db)
         throws NoSuchObjectException, TException, MetaException {
-      startFunction("alter_database" + dbName);
+      startFunction("alter_database:" + dbName);
       boolean success = false;
       Exception ex = null;
       try {
@@ -1197,16 +1212,23 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
         LOG.info("--zjw--before crt");
         try{
-        ms.createTable(tbl);
+        LOG.info("*****************zqh*****************" + tbl);
+        LOG.info("*****************zqh*****************" + tbl.getTableType());
+        LOG.info("*****************zqh*****************" + tbl.getDbName()+tbl.getSchemaName());
+        LOG.info("*****************zqh*****************" + TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()));
 
         /**********added by zjw for schema and table when creating view********/
         /**********with what need to notice is that table cache syn    ********/
         /********** *  should compermise with schema                   ********/
         /********** *  视图的table对象仅在全局点存储，视图的schema对象全局保存 ********/
+        LOG.info("*****************zqh*****************" + TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()));
         if (TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType())) {
+          LOG.info("--zjw--TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()");
           createSchema(copySchemaFromtable(tbl));
         }
         /**********end ofadded by zjw for creating view********/
+        ms.createTable(tbl);
+        LOG.info("*****************zqh*****************ms.createTable(tbl)successfully");
 
         }catch(Exception e){
           LOG.error(e, e);
@@ -1252,7 +1274,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
                 BusiTypeDatacenter busiTypeDatacenter = new BusiTypeDatacenter(type,ms.getDatabase(tbl.getDbName()));
                 if(!isTopAttribution()){
                   if(topdcli != null){
-                    topdcli.append_busi_type_datacenter(busiTypeDatacenter);
+                    synchronized (topdcli) {
+                      topdcli.append_busi_type_datacenter(busiTypeDatacenter);
+                    }
                   }else{
                     throw new MetaException("Top datacenter is not reachable!");
                   }
@@ -2638,7 +2662,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throws InvalidOperationException, MetaException {
       startFunction("alter_table", ": db=" + dbname + " tbl=" + name
           + " newtbl=" + newTable.getTableName());
-
+      LOG.info("*****************zqh**************** alter_table: db=" + dbname + " tbl=" + name
+          + " newtbl=" + newTable.getTableName());
       // Update the time if it hasn't been specified.
       if (newTable.getParameters() == null ||
           newTable.getParameters().get(hive_metastoreConstants.DDL_TIME) == null) {
@@ -2649,6 +2674,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       Exception ex = null;
       try {
         Table oldt = get_table(dbname, name);
+        LOG.info("*****************zqh****************oldt.getTableName()" +oldt.getTableName());
         firePreEvent(new PreAlterTableEvent(oldt, newTable, this));
         alterHandler.alterTable(getMS(), wh, dbname, name, newTable);
         success = true;
@@ -4410,8 +4436,39 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       if (repnr <= 1) {
         repnr++;
       }
+
+      Set<String> excl_node = new TreeSet<String>();
+      Set<String> excl_dev = new TreeSet<String>();
+      Set<String> spec_node = new TreeSet<String>();
+
+      dm.findBackupDevice(excl_dev, excl_node);
+
+      // check if we should create in table's node group
+      if (node_name == null && db_name != null && table_name != null) {
+        try {
+          Table tbl = getMS().getTable(db_name, table_name);
+          if (tbl.getNodeGroupsSize() > 0) {
+            for (NodeGroup ng : tbl.getNodeGroups()) {
+              if (ng.getNodesSize() > 0) {
+                for (Node n : ng.getNodes()) {
+                  spec_node.add(n.getNode_name());
+                }
+              }
+            }
+          }
+        } catch (MetaException me) {
+          throw new FileOperationException("getTable:" + db_name + "." + table_name + " + " + me.getMessage(), FOFailReason.INVALID_TABLE);
+        }
+      }
       // do not select the backup/shared device for the first entry
-      FileLocatingPolicy flp = new FileLocatingPolicy(null, dm.backupDevs, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+      FileLocatingPolicy flp;
+
+      if (spec_node.size() > 0) {
+        flp = new FileLocatingPolicy(spec_node, excl_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+      } else {
+        flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+      }
+
       return create_file(flp, node_name, repnr, db_name, table_name, values);
     }
 
@@ -4422,9 +4479,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throw new FileOperationException("Invalid File Split Values: inconsistent version among values?", FOFailReason.INVALID_FILE);
       }
       SFile cfile = new SFile(0, dbName, tableName, MetaStoreConst.MFileStoreStatus.INCREATE, repnr,
-          "SFILE_DEFAULT_X", 0, 0, null, 0, null, values);
-      getMS().createFile(cfile);
-      cfile = getMS().getSFile(cfile.getFid());
+          "SFILE_DEFAULT_X", 0, 0, null, 0, null, values, MetaStoreConst.MFileLoadStatus.OK);
+      cfile = getMS().createFile(cfile);
+      //cfile = getMS().getSFile(cfile.getFid());
       if (cfile == null) {
           throw new FileOperationException("Creating file with internal error, metadata inconsistent?", FOFailReason.INVALID_FILE);
       }
@@ -4480,9 +4537,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
         // how to convert table_name to tbl_id?
         cfile = new SFile(0, db_name, table_name, MetaStoreConst.MFileStoreStatus.INCREATE, repnr,
-            "SFILE_DEFALUT", 0, 0, null, 0, null, values);
-        getMS().createFile(cfile);
-        cfile = getMS().getSFile(cfile.getFid());
+            "SFILE_DEFALUT", 0, 0, null, 0, null, values, MetaStoreConst.MFileLoadStatus.OK);
+        cfile = getMS().createFile(cfile);
+        //cfile = getMS().getSFile(cfile.getFid());
         if (cfile == null) {
           throw new FileOperationException("Creating file with internal error, metadata inconsistent?", FOFailReason.INVALID_FILE);
         }
@@ -4526,16 +4583,36 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             FOFailReason.INVALID_STATE);
       }
 
+      // find the valid filelocation, mark it and trigger relication
+      if (file.getLocationsSize() > 0) {
+        int valid_nr = 0;
+
+        for (SFileLocation sfl : file.getLocations()) {
+          if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            valid_nr++;
+            sfl.setRep_id(0);
+            sfl.setDigest(file.getDigest());
+            getMS().updateSFileLocation(sfl);
+          } else {
+            dm.asyncDelSFL(sfl);
+          }
+        }
+        if (valid_nr > 1) {
+          throw new FileOperationException("Too many file locations provided, expect 1 provided " + valid_nr,
+              FOFailReason.INVALID_FILE);
+        } else if (valid_nr < 1) {
+          throw new FileOperationException("Too little file locations provided, expect 1 provided " + valid_nr,
+              FOFailReason.INVALID_FILE);
+        }
+      } else {
+        throw new FileOperationException("Too little file locations provided, expect 1 provided " + file.getLocationsSize(),
+              FOFailReason.INVALID_FILE);
+      }
+
       file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
       // keep repnr unchanged
       file.setRep_nr(saved.getRep_nr());
       getMS().updateSFile(file);
-
-      SFileLocation sfl = file.getLocations().get(0);
-      assert sfl != null;
-      sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
-      sfl.setDigest(file.getDigest());
-      getMS().updateSFileLocation(sfl);
 
       synchronized (dm.repQ) {
         dm.repQ.add(new DMRequest(file, DMRequest.DMROperation.REPLICATE, 1));
@@ -4544,15 +4621,24 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       return 0;
     }
 
-    public void identifySharedDevice(List<SFileLocation> lsfl) throws MetaException, NoSuchObjectException {
+    // for each file, lookup cached device firstly
+    private void identifySharedDevice(List<SFileLocation> lsfl) throws MetaException, NoSuchObjectException {
       if (lsfl == null) {
         return;
       }
       for (SFileLocation sfl : lsfl) {
-        Device d = getMS().getDevice(sfl.getDevid());
-        if (d.getProp() == MetaStoreConst.MDeviceProp.SHARED ||
-            d.getProp() == MetaStoreConst.MDeviceProp.BACKUP) {
-          sfl.setNode_name("");
+        DeviceInfo di = dm.getDeviceInfo(sfl.getDevid());
+        if (di == null || di.prop < 0) {
+          Device d = getMS().getDevice(sfl.getDevid());
+          if (d.getProp() == MetaStoreConst.MDeviceProp.SHARED ||
+              d.getProp() == MetaStoreConst.MDeviceProp.BACKUP) {
+            sfl.setNode_name("");
+          }
+        } else {
+          if (di.prop == MetaStoreConst.MDeviceProp.SHARED ||
+              di.prop == MetaStoreConst.MDeviceProp.BACKUP) {
+            sfl.setNode_name("");
+          }
         }
       }
     }
@@ -4612,7 +4698,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         TException {
       SFile saved = getMS().getSFile(file.getFid());
       if (saved == null) {
-        throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
+        throw new FileOperationException("Can not find SFile by FID " + file.getFid(), FOFailReason.INVALID_FILE);
       }
 
       if (!(saved.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE ||
@@ -4717,7 +4803,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         if (HMSHandler.topdcli == null) {
           connect_to_top_attribution(hiveConf);
         }
-        return HMSHandler.topdcli.get_attribution(name);
+        synchronized (HMSHandler.topdcli) {
+          return HMSHandler.topdcli.get_attribution(name);
+        }
       }
     }
 
@@ -4741,7 +4829,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
         try {
           if (HMSHandler.topdcli != null) {
-            return HMSHandler.topdcli.get_all_attributions();
+            synchronized (HMSHandler.topdcli) {
+              return HMSHandler.topdcli.get_all_attributions();
+            }
           } else {
             throw new MetaException("Invalid top ATTRIBUTION client handler.");
           }
@@ -5097,7 +5187,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         return this.getMS().get_all_busi_type_datacenters();
       }else{
         if(topdcli != null){
-          return topdcli.get_all_busi_type_datacenters();
+          synchronized (topdcli) {
+            return topdcli.get_all_busi_type_datacenters();
+          }
         }else{
           throw new MetaException("Top datacenter is not reachable!");
         }
@@ -5113,7 +5205,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         getMS().append_busi_type_datacenter(busiTypeDatacenter);
       }else{
         if(topdcli != null){
-          topdcli.append_busi_type_datacenter(busiTypeDatacenter);
+          synchronized (topdcli) {
+            topdcli.append_busi_type_datacenter(busiTypeDatacenter);
+          }
         }else{
           throw new MetaException("Top datacenter is not reachable!");
         }
@@ -5876,7 +5970,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
 
     @Override
-    public GlobalSchema getSchemaByName(String schemaName) throws MetaException, TException {
+    public GlobalSchema getSchemaByName(String schemaName) throws NoSuchObjectException, MetaException, TException {
       return getMS().getSchema(schemaName);
     }
 
@@ -6122,7 +6216,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
               throw new MetaException("Top-level attribution metastore is null, please check!");
             }
           }
-          db = HMSHandler.topdcli.get_attribution(tbl.getDbName());
+          synchronized (HMSHandler.topdcli) {
+            db = HMSHandler.topdcli.get_attribution(tbl.getDbName());
+          }
         }
 
         if (db != null) {
@@ -6130,6 +6226,28 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
         LOG.info("Create database " + tbl.getDbName() + " done locally.");
       }
+
+      // try to get the schema from top attribution
+      GlobalSchema schema = null;
+      try {
+        synchronized (HMSHandler.topdcli) {
+          schema = HMSHandler.topdcli.getSchemaByName(tbl.getSchemaName());
+        }
+        if (!createSchema(schema)) {
+          LOG.error("Create schema " + tbl.getSchemaName() + " failed.");
+          throw new MetaException("Create Schema " + tbl.getSchemaName() + " failed.");
+        }
+      } catch (NoSuchObjectException e) {
+        LOG.error(e, e);
+        throw new MetaException("Get schema failed: " + e.getMessage());
+      } catch (AlreadyExistsException e) {
+        // update it
+        if (!modifySchema(tbl.getSchemaName(), schema)) {
+          LOG.error("Modify schema " + tbl.getSchemaName() + " failed.");
+          throw new MetaException("Modify Schema " + tbl.getSchemaName() + " failed.");
+        }
+      }
+
       // try to create the table, if it doesn't exist
       try {
         create_table(tbl);
@@ -6260,7 +6378,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     // from_db is set to table's dbName
     // to_db only used to routing
     public boolean migrate_stage2(String dbName, String tableName, List<Long> files,
-        String from_db, String to_db, String to_devid) throws MetaException, TException {
+        String from_db, String to_db, String to_devid, String user, String password) throws MetaException, TException {
       // prepare attribution connection
       if (HMSHandler.topdcli == null) {
         connect_to_top_attribution(hiveConf);
@@ -6271,7 +6389,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       if (hiveConf.getVar(ConfVars.LOCAL_ATTRIBUTION) == null) {
         throw new MetaException("Please set 'hive.attribution.local' as local datacenter NAME.");
       }
-      Database rdb = HMSHandler.topdcli.get_attribution(to_db);
+      Database rdb;
+      synchronized (HMSHandler.topdcli) {
+        rdb = HMSHandler.topdcli.get_attribution(to_db);
+      }
       Database ldb;
       if (from_db == null) {
         ldb = get_attribution(dbName);
@@ -6283,6 +6404,13 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             HiveConf.getIntVar(hiveConf, HiveConf.ConfVars.METASTORETHRIFTCONNECTIONRETRIES),
             hiveConf.getIntVar(ConfVars.METASTORE_CLIENT_CONNECT_RETRY_DELAY),
             null);
+      // do authentication here
+      if (rcli.authentication(user, password)) {
+        LOG.info("Do remote authentication for user " + user + " succeed.");
+      } else {
+        LOG.info("Do remote authentication for user " + user + " failed.");
+        throw new MetaException("Invalid user name or password for Attribution " + to_db);
+      }
 
       // prepare tbl
       Table tbl = get_table(dbName, tableName);
@@ -6330,7 +6458,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
         tbl.setParameters(kvs);
       } else {
-        // there is always a kv, thus next line would never be reached.
+        // there is always a kv, thus next line would never be reached except ON ERROR
+        kvs.put("store.remote", "both");
+        kvs.put("store.identify", "slave");
+        isMaster = true;
+        kvs.put("store.remote.dbs", to_db + "," + ldb.getName());
         tbl.setParameters(kvs);
       }
 
@@ -6339,7 +6471,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       List<Index> idxs = get_indexes(dbName, tableName, maxIndexNum);
       if (idxs != null && idxs.size() > 0) {
         for (Index i : idxs) {
-          i.setDbName(to_db);
           LOG.info("IDX -> " + i.getIndexName() + ", " + i.getParameters().toString());
         }
       }
@@ -6419,6 +6550,16 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       rcli.close();
 
       // TODO: finally, remove local files
+      if (files != null && files.size() > 0) {
+        for (Long fid : files) {
+          try {
+          SFile f = get_file_by_id(fid);
+          rm_file_physical(f);
+          } catch (Exception e) {
+            LOG.error("Get file fid " + fid + " failed w/ " + e.getMessage());
+          }
+        }
+      }
 
       LOG.info("Finally, our migration succeed, files in this Attribution is deleted.");
 
@@ -6520,11 +6661,19 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             throw new FileOperationException("Split type " + pi.getP_type() + " shouldn't be set values.", FOFailReason.INVALID_SPLIT_VALUES);
           case interval:
             if (low == -1) {
-              low = Long.parseLong(sv.getValue());
+              try {
+                low = Long.parseLong(sv.getValue());
+              } catch (NumberFormatException e) {
+                throw new FileOperationException("Split value expect Long for interval: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+              }
               break;
             }
             if (high == -1) {
-              high = Long.parseLong(sv.getValue());
+              try {
+                high = Long.parseLong(sv.getValue());
+              } catch (NumberFormatException e) {
+                throw new FileOperationException("Split value expect Long for interval: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+              }
               // check range
               String interval_unit = pi.getArgs().get(0);
               Double d = Double.parseDouble(pi.getArgs().get(1));
@@ -6555,7 +6704,23 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             break;
           case hash:
             low = high = -1;
-            long v = Long.parseLong(sv.getValue());
+            long v;
+            try {
+              // Format: "num-value"
+              String[] hv = sv.getValue().split("-");
+              if (hv == null || hv.length != 2) {
+                throw new FileOperationException("Split value for hash except format: 'bucket_size-value' : " + sv.getValue(),
+                    FOFailReason.INVALID_SPLIT_VALUES);
+              }
+              v = Long.parseLong(hv[0]);
+              if (v != pi.getP_num()) {
+                throw new FileOperationException("Split value of hash bucket_size mismatch: expect " + pi.getP_num() + " but provided " + v,
+                    FOFailReason.INVALID_SPLIT_VALUES);
+              }
+              v = Long.parseLong(hv[1]);
+            } catch (NumberFormatException e) {
+              throw new FileOperationException("Split value expect Long for hash: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+            }
             if (v < 0 && v >= pi.getP_num()) {
               throw new FileOperationException("Hash value exceeds valid range: [0, " + pi.getP_num() + ").", FOFailReason.INVALID_SPLIT_VALUES);
             }
@@ -6563,7 +6728,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           }
           // check version, column name here
           if (sv.getVerison() != pi.getP_version() ||
-              pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
+              !pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
             throw new FileOperationException("Version or SplitKeyName mismatch, please check your metadata.", FOFailReason.INVALID_SPLIT_VALUES);
           }
 
@@ -6639,6 +6804,40 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
       }
       return r;
+    }
+
+    @Override
+    public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException {
+      startFunction("reopen_file", "fid: " + fid);
+
+      SFile saved = getMS().getSFile(fid);
+      boolean success = false;
+
+      if (saved == null) {
+        throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
+      }
+      // check if this file is in REPLICATED state, otherwise, complain about that.
+      switch (saved.getStore_status()) {
+      case MetaStoreConst.MFileStoreStatus.INCREATE:
+        throw new FileOperationException("SFile " + fid + " has already been in INCREATE state.", FOFailReason.INVALID_STATE);
+      case MetaStoreConst.MFileStoreStatus.CLOSED:
+        throw new FileOperationException("SFile " + fid + " is in CLOSE state, please wait.", FOFailReason.INVALID_STATE);
+      case MetaStoreConst.MFileStoreStatus.REPLICATED:
+        // FIXME: seq reopenSFiles
+        synchronized (file_reopen_lock) {
+          success = getMS().reopenSFile(saved);
+        }
+        break;
+      case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
+      case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+        throw new FileOperationException("SFile " + fid + " is in RM-* state, reject all reopens.", FOFailReason.INVALID_STATE);
+      }
+      return success;
+    }
+
+    @Override
+    public List<Device> list_device() throws MetaException, TException {
+      return getMS().listDevice();
     }
 
   }
@@ -6781,7 +6980,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
       });
 
-      dm = new DiskManager(new HiveConf(DiskManager.class), HMSHandler.LOG);
+      if (!conf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION)) {
+        dm = new DiskManager(new HiveConf(DiskManager.class), HMSHandler.LOG);
+      }
       startMetaStore(cli.port, ShimLoader.getHadoopThriftAuthBridge(), conf);
     } catch (Throwable t) {
       // Catch the exception, log it and rethrow it.
@@ -6793,7 +6994,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     HMSHandler.LOG.error("HERE ->>>>>>>>>>>>>>>>>");
   }
 
-  static void connect_to_top_attribution(HiveConf conf) throws MetaException {
+  static synchronized void connect_to_top_attribution(HiveConf conf) throws MetaException {
     boolean is_top_attribution = conf.getBoolVar(ConfVars.IS_TOP_ATTRIBUTION);
     if (!is_top_attribution) {
       LOG.info("Begin connecting to Top-level Attribution Metastore ...");
@@ -6816,7 +7017,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         LOG.info("User authentication failed: NoSuchUser?");
         throw new MetaException(e.getMessage());
       } catch (TException e) {
-        LOG.info("User authentication failed with unknown TException!");
+        LOG.info("User authentication failed with unknown TException!\n" + e.getMessage());
         throw new MetaException(e.getMessage());
       }
     }

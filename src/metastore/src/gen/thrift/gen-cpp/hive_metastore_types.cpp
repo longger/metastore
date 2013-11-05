@@ -56,7 +56,8 @@ int _kFOFailReasonValues[] = {
   FOFailReason::NOSPACE,
   FOFailReason::NOTEXIST,
   FOFailReason::SAFEMODE,
-  FOFailReason::INVALID_STATE
+  FOFailReason::INVALID_STATE,
+  FOFailReason::TRY_AGAIN
 };
 const char* _kFOFailReasonNames[] = {
   "INVALID_NODE",
@@ -68,9 +69,10 @@ const char* _kFOFailReasonNames[] = {
   "NOSPACE",
   "NOTEXIST",
   "SAFEMODE",
-  "INVALID_STATE"
+  "INVALID_STATE",
+  "TRY_AGAIN"
 };
-const std::map<int, const char*> _FOFailReason_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(10, _kFOFailReasonValues, _kFOFailReasonNames), ::apache::thrift::TEnumIterator(-1, NULL, NULL));
+const std::map<int, const char*> _FOFailReason_VALUES_TO_NAMES(::apache::thrift::TEnumIterator(11, _kFOFailReasonValues, _kFOFailReasonNames), ::apache::thrift::TEnumIterator(-1, NULL, NULL));
 
 int _kFindNodePolicyValues[] = {
   FindNodePolicy::ALL_NGS,
@@ -4139,8 +4141,8 @@ void swap(SFileLocation &a, SFileLocation &b) {
   swap(a.__isset, b.__isset);
 }
 
-const char* SFile::ascii_fingerprint = "859DCB9E8E785327C9B2DE0B1EC70FA0";
-const uint8_t SFile::binary_fingerprint[16] = {0x85,0x9D,0xCB,0x9E,0x8E,0x78,0x53,0x27,0xC9,0xB2,0xDE,0x0B,0x1E,0xC7,0x0F,0xA0};
+const char* SFile::ascii_fingerprint = "7BBF5A1200925F95C3F9B33C3E523584";
+const uint8_t SFile::binary_fingerprint[16] = {0x7B,0xBF,0x5A,0x12,0x00,0x92,0x5F,0x95,0xC3,0xF9,0xB3,0x3C,0x3E,0x52,0x35,0x84};
 
 uint32_t SFile::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -4294,6 +4296,14 @@ uint32_t SFile::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
+      case 13:
+        if (ftype == ::apache::thrift::protocol::T_I32) {
+          xfer += iprot->readI32(this->load_status);
+          this->__isset.load_status = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -4382,6 +4392,10 @@ uint32_t SFile::write(::apache::thrift::protocol::TProtocol* oprot) const {
   }
   xfer += oprot->writeFieldEnd();
 
+  xfer += oprot->writeFieldBegin("load_status", ::apache::thrift::protocol::T_I32, 13);
+  xfer += oprot->writeI32(this->load_status);
+  xfer += oprot->writeFieldEnd();
+
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   return xfer;
@@ -4401,11 +4415,12 @@ void swap(SFile &a, SFile &b) {
   swap(a.length, b.length);
   swap(a.ref_files, b.ref_files);
   swap(a.values, b.values);
+  swap(a.load_status, b.load_status);
   swap(a.__isset, b.__isset);
 }
 
-const char* SFileRef::ascii_fingerprint = "8DA41438AC1F918C00C3E0A6C2952DEE";
-const uint8_t SFileRef::binary_fingerprint[16] = {0x8D,0xA4,0x14,0x38,0xAC,0x1F,0x91,0x8C,0x00,0xC3,0xE0,0xA6,0xC2,0x95,0x2D,0xEE};
+const char* SFileRef::ascii_fingerprint = "2B316059F23EFEAE1F7AF0A680BA8319";
+const uint8_t SFileRef::binary_fingerprint[16] = {0x2B,0x31,0x60,0x59,0xF2,0x3E,0xFE,0xAE,0x1F,0x7A,0xF0,0xA6,0x80,0xBA,0x83,0x19};
 
 uint32_t SFileRef::read(::apache::thrift::protocol::TProtocol* iprot) {
 

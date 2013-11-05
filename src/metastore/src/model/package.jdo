@@ -844,6 +844,46 @@
         <column name="GRANT_OPTION" jdbc-type="SMALLINT"/>
       </field>
     </class>
+    
+     <class name="MSchemaPrivilege" table="SCH_PRIVS" identity-type="datastore" detachable="true">
+    
+      <index name="SchemaPrivilegeIndex" unique="false">
+        <column name="SCH_ID"/>
+        <column name="PRINCIPAL_NAME"/>
+        <column name="PRINCIPAL_TYPE"/>
+        <column name="SCH_PRIV"/>
+        <column name="GRANTOR"/>
+        <column name="GRANTOR_TYPE"/>
+      </index>
+
+      <datastore-identity>
+        <column name="SCH_GRANT_ID"/>
+      </datastore-identity>
+
+      <field name="principalName">
+        <column name="PRINCIPAL_NAME" length="128" jdbc-type="VARCHAR"/>
+      </field>
+      <field name="principalType">
+        <column name="PRINCIPAL_TYPE" length="128" jdbc-type="VARCHAR"/>
+      </field>
+      <field name="schema">
+        <column name="SCH_ID"/>
+      </field>
+      <field name="privilege">
+      </field>
+      <field name="createTime">
+        <column name="CREATE_TIME" jdbc-type="integer"/>
+      </field>
+      <field name="grantor">
+        <column name="GRANTOR" length="128" jdbc-type="VARCHAR"/>
+      </field>
+      <field name="grantorType">
+        <column name="GRANTOR_TYPE" length="128" jdbc-type="VARCHAR"/>
+      </field>
+      <field name="grantOption">
+        <column name="GRANT_OPTION" jdbc-type="SMALLINT"/>
+      </field>
+    </class>
 
     <class name="MPartitionPrivilege" table="PART_PRIVS" identity-type="datastore" detachable="true">
     
@@ -1156,7 +1196,6 @@
     
     <class name="MNode" table="NODES" identity-type="datastore" detachable="true">
       <index name="UniqueNode" unique="true">
-        <column name="NODE_ID"/>
         <column name="NODE_NAME"/>
       </index>
       
@@ -1186,7 +1225,6 @@
     
     <class name="MDevice" table="DEVICES" identity-type="datastore" detachable="true">
       <index name="UniqueDevice" unique="true">
-        <column name="DEV_ID"/>
         <column name="DEV_NAME"/>
       </index>
       
@@ -1210,7 +1248,6 @@
     
     <class name="MFile" table="FILES" identity-type="datastore" detachable="true">
       <index name="UniqueFile" unique="true">
-        <column name="FILE_ID"/>
         <column name="FID"/>
       </index>
       
@@ -1277,12 +1314,29 @@
           </embedded>
         </element>
       </field>
+      
+      <field name="load_status">
+        <column name="LOAD_STATUS"/>
+      </field>
     </class>
     
     <class name="MFileLocation" table="FILE_LOCATION" identity-type="datastore" detachable="true">
       <datastore-identity>
         <column name="LOCATION_ID"/>
       </datastore-identity>
+      
+      <index name="FastFileLocationSearch">
+        <column name="FILE_ID"/>
+      </index>
+      
+      <index name="FastFileLocaitonSearchByStatus">
+        <column name="visit_status"/>
+      </index>
+      
+      <index name="FastFLSByDL">
+        <column name="DEV_ID"/>
+        <column name="LOCATION"/>
+      </index>
       
       <field name="file">
         <column name="FILE_ID"/>

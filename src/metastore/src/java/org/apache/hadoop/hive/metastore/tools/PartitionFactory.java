@@ -203,7 +203,7 @@ public class PartitionFactory {
 
     public String toJson(){
       JSONObject jsonObject = new JSONObject();
-      jsonObject.put("p_col", p_col);
+      jsonObject.put("p_col", p_col.toLowerCase());
       jsonObject.put("p_level", p_level);
       jsonObject.put("p_order", p_order);
       jsonObject.put("p_num", p_num);
@@ -224,7 +224,7 @@ public class PartitionFactory {
     public static PartitionInfo fromJson(String jsonData){
       JSONObject json = (JSONObject)JSONSerializer.toJSON(jsonData);
       PartitionInfo pi = new PartitionInfo();
-      pi.p_col = json.getString("p_col");
+      pi.p_col = json.getString("p_col").toLowerCase();
       pi.p_level = Integer.parseInt(json.getString("p_level"));
       pi.p_order = Integer.parseInt(json.getString("p_order"));
       pi.p_num = Integer.parseInt(json.getString("p_num"));

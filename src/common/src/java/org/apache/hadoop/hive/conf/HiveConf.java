@@ -301,7 +301,7 @@ public class HiveConf extends Configuration {
         "hive.cluster.delegation.token.store.zookeeper.znode", "/hive/cluster/delegation"),
     METASTORE_CLUSTER_DELEGATION_TOKEN_STORE_ZK_ACL(
         "hive.cluster.delegation.token.store.zookeeper.acl", ""),
-    METASTORE_CACHE_PINOBJTYPES("hive.metastore.cache.pinobjtypes", "Direct_ddl,Busi_column,Table,StorageDescriptor,SerDeInfo,Partition,Database,Files,Nodes,Type,FieldSchema,Order"),
+    METASTORE_CACHE_PINOBJTYPES("hive.metastore.cache.pinobjtypes", "Direct_ddl,Busi_column,Table,StorageDescriptor,SerDeInfo,Partition,Database,Files,Nodes,device,Type,FieldSchema,Order"),
     METASTORE_CONNECTION_POOLING_TYPE("datanucleus.connectionPoolingType", "DBCP"),
     METASTORE_VALIDATE_TABLES("datanucleus.validateTables", false),
     METASTORE_VALIDATE_COLUMNS("datanucleus.validateColumns", false),
@@ -701,13 +701,18 @@ public class HiveConf extends Configuration {
     DM_BACKUP_BACKUPNODENAME("hive.diskmanager.backup.backupnodename", "BACKUP-STORE"),
     DM_CHECK_INVALIDATE_TIMEOUT("hive.diskmanager.check.invalidate.timeout", 60 * 1000),
     DM_CHECK_REPDELCHECK_INTERVAL("hive.diskmanager.check.repdelcheck.interval", 60 * 1000),
+    DM_CHECK_VOIDFILECHECK("hive.diskmanager.check.voidfilecheck", 30 * 60 * 1000),
+    DM_CHECK_VOIDFILETIMEOUT("hive.diskmanager.check.voidfiletimeout", 12 * 3600 * 1000),
     DM_CHECK_REP_TIMEOUT("hive.diskmanager.check.rep.timeout", 15 * 60 * 1000),
     DM_CHECK_DEL_TIMEOUT("hive.diskmanager.check.del.timeout", 5 * 60 * 1000),
     DM_CHECK_REREP_TIMEOUT("hive.diskmanager.check.rerep.timeout", 30 * 1000),
+    DM_CHECK_OFFLINE_DEL_TIMEOUT("hive.diskmanager.check.offline.del.timeout", 3600 * 1000),
     DM_SAFEMODE_ENTER("hive.diskmanager.safemode.enter", (float)0.5),
     DM_SAFEMODE_LEAVE("hive.diskmanager.safemode.leave", (float)0.99),
     DM_APPEND_CMD_MAX("hive.diskmanager.nr.max", 4),
-    DM_USE_VOID_CHECK("hive.diskmanager.use.voidcheck", false)
+    DM_USE_VOID_CHECK("hive.diskmanager.use.voidcheck", false),
+    DM_CLOSE_REP_LIMIT("hive.diskmanager.closerep.limit", 100L),
+    DM_FIX_REP_LIMIT("hive.diskmanager.fixrep.limit", 100L)
     ;
 
     public final String varname;

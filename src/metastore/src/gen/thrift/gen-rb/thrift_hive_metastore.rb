@@ -2279,6 +2279,23 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'create_file_by_policy failed: unknown result')
     end
 
+    def reopen_file(fid)
+      send_reopen_file(fid)
+      return recv_reopen_file()
+    end
+
+    def send_reopen_file(fid)
+      send_message('reopen_file', Reopen_file_args, :fid => fid)
+    end
+
+    def recv_reopen_file()
+      result = receive_message(Reopen_file_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise result.o2 unless result.o2.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'reopen_file failed: unknown result')
+    end
+
     def close_file(file)
       send_close_file(file)
       return recv_close_file()
@@ -2526,6 +2543,22 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'modify_device failed: unknown result')
     end
 
+    def list_device()
+      send_list_device()
+      return recv_list_device()
+    end
+
+    def send_list_device()
+      send_message('list_device', List_device_args)
+    end
+
+    def recv_list_device()
+      result = receive_message(List_device_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'list_device failed: unknown result')
+    end
+
     def alter_node(node_name, ipl, status)
       send_alter_node(node_name, ipl, status)
       return recv_alter_node()
@@ -2654,13 +2687,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'migrate_stage1 failed: unknown result')
     end
 
-    def migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid)
-      send_migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid)
+    def migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid, user, password)
+      send_migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid, user, password)
       return recv_migrate_stage2()
     end
 
-    def send_migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid)
-      send_message('migrate_stage2', Migrate_stage2_args, :dbName => dbName, :tableName => tableName, :files => files, :from_db => from_db, :to_db => to_db, :to_devid => to_devid)
+    def send_migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid, user, password)
+      send_message('migrate_stage2', Migrate_stage2_args, :dbName => dbName, :tableName => tableName, :files => files, :from_db => from_db, :to_db => to_db, :to_devid => to_devid, :user => user, :password => password)
     end
 
     def recv_migrate_stage2()
@@ -4802,6 +4835,19 @@ module ThriftHiveMetastore
       write_result(result, oprot, 'create_file_by_policy', seqid)
     end
 
+    def process_reopen_file(seqid, iprot, oprot)
+      args = read_args(iprot, Reopen_file_args)
+      result = Reopen_file_result.new()
+      begin
+        result.success = @handler.reopen_file(args.fid)
+      rescue ::FileOperationException => o1
+        result.o1 = o1
+      rescue ::MetaException => o2
+        result.o2 = o2
+      end
+      write_result(result, oprot, 'reopen_file', seqid)
+    end
+
     def process_close_file(seqid, iprot, oprot)
       args = read_args(iprot, Close_file_args)
       result = Close_file_result.new()
@@ -4981,6 +5027,17 @@ module ThriftHiveMetastore
       write_result(result, oprot, 'modify_device', seqid)
     end
 
+    def process_list_device(seqid, iprot, oprot)
+      args = read_args(iprot, List_device_args)
+      result = List_device_result.new()
+      begin
+        result.success = @handler.list_device()
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'list_device', seqid)
+    end
+
     def process_alter_node(seqid, iprot, oprot)
       args = read_args(iprot, Alter_node_args)
       result = Alter_node_result.new()
@@ -5073,7 +5130,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Migrate_stage2_args)
       result = Migrate_stage2_result.new()
       begin
-        result.success = @handler.migrate_stage2(args.dbName, args.tableName, args.files, args.from_db, args.to_db, args.to_devid)
+        result.success = @handler.migrate_stage2(args.dbName, args.tableName, args.files, args.from_db, args.to_db, args.to_devid, args.user, args.password)
       rescue ::MetaException => o1
         result.o1 = o1
       end
@@ -10526,6 +10583,42 @@ module ThriftHiveMetastore
     ::Thrift::Struct.generate_accessors self
   end
 
+  class Reopen_file_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    FID = 1
+
+    FIELDS = {
+      FID => {:type => ::Thrift::Types::I64, :name => 'fid'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Reopen_file_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+    O2 = 2
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::FileOperationException},
+      O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
   class Close_file_args
     include ::Thrift::Struct, ::Thrift::Struct_Union
     FILE = 1
@@ -11061,6 +11154,39 @@ module ThriftHiveMetastore
     ::Thrift::Struct.generate_accessors self
   end
 
+  class List_device_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+
+    FIELDS = {
+
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class List_device_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::LIST, :name => 'success', :element => {:type => ::Thrift::Types::STRUCT, :class => ::Device}},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
   class Alter_node_args
     include ::Thrift::Struct, ::Thrift::Struct_Union
     NODE_NAME = 1
@@ -11367,6 +11493,8 @@ module ThriftHiveMetastore
     FROM_DB = 4
     TO_DB = 5
     TO_DEVID = 6
+    USER = 7
+    PASSWORD = 8
 
     FIELDS = {
       DBNAME => {:type => ::Thrift::Types::STRING, :name => 'dbName'},
@@ -11374,7 +11502,9 @@ module ThriftHiveMetastore
       FILES => {:type => ::Thrift::Types::LIST, :name => 'files', :element => {:type => ::Thrift::Types::I64}},
       FROM_DB => {:type => ::Thrift::Types::STRING, :name => 'from_db'},
       TO_DB => {:type => ::Thrift::Types::STRING, :name => 'to_db'},
-      TO_DEVID => {:type => ::Thrift::Types::STRING, :name => 'to_devid'}
+      TO_DEVID => {:type => ::Thrift::Types::STRING, :name => 'to_devid'},
+      USER => {:type => ::Thrift::Types::STRING, :name => 'user'},
+      PASSWORD => {:type => ::Thrift::Types::STRING, :name => 'password'}
     }
 
     def struct_fields; FIELDS; end

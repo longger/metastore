@@ -85,6 +85,8 @@ enum FOFailReason {
   
   SAFEMODE = 12,
   INVALID_STATE = 13,
+  
+  TRY_AGAIN = 14,
 }
 
 struct HiveObjectRef{
@@ -378,6 +380,7 @@ struct SFile {
   10: i64    length,
   11: list<i64> ref_files,
   12: list<SplitValue> values,
+  13: i32 	load_status,
 }
 
 struct SFileRef {
@@ -940,6 +943,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   SFile create_file_by_policy(1:CreatePolicy policy, 2:i32 repnr, 3:string db_name, 4:string table_name, 5:list<SplitValue> values) throws (1:FileOperationException o1)
   
+  bool reopen_file(1:i64 fid) throws (1:FileOperationException o1, 2:MetaException o2)
+  
   i32 close_file(1:SFile file) throws (1:FileOperationException o1, 2:MetaException o2)
   
   bool online_filelocation(1:SFile file) throws (1:MetaException o1)
@@ -971,6 +976,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   Device modify_device(1:Device dev, 2:Node node) throws (1:MetaException o1)
   
+  list<Device> list_device() throws (1:MetaException o1)
+  
   Node alter_node(1:string node_name, 2:list<string> ipl, 3:i32 status) throws (1:MetaException o1)
   
   list<Node> find_best_nodes(1:i32 nr) throws (1:MetaException o1)
@@ -987,7 +994,7 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   list<SFileLocation> migrate_stage1(1:string dbName, 2:string tableName, 3:list<i64> files, 4:string to_db) throws (1:MetaException o1)
   
-  bool migrate_stage2(1:string dbName, 2:string tableName, 3:list<i64> files, 4:string from_db, 5:string to_db, 6:string to_devid) throws (1:MetaException o1)
+  bool migrate_stage2(1:string dbName, 2:string tableName, 3:list<i64> files, 4:string from_db, 5:string to_db, 6:string to_devid, 7:string user, 8:string password) throws (1:MetaException o1)
   
   bool migrate2_in(1:Table tbl, 2:list<Partition> parts, 3:list<Index> idxs, 4:string from_db, 5:string to_nas_devid, 6:map<i64, SFileLocation> fileMap) throws (1:MetaException o1)
   

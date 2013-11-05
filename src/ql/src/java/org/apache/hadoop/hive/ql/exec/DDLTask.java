@@ -1506,9 +1506,10 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
 
     String dbName = null;
     String tableName = null;
+    String schemaName = null;
     Table tableObj = null;
     Database dbObj = null;
-
+    org.apache.hadoop.hive.metastore.api.GlobalSchema schemaObj = null;
     try {
 
       if (privSubjectDesc != null) {
@@ -1529,6 +1530,11 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
           dbObj = db.getDatabase(dbName);
           tableObj = db.getTable(dbName, tableName);
           notFound = (dbObj == null || tableObj == null);
+        } else if(privSubjectDesc.getSchema()){
+          schemaName = privSubjectDesc.getObject();
+          schemaObj = db.getSchemaByName(schemaName);
+          notFound = (schemaObj == null);
+
         } else {
           dbName = privSubjectDesc.getObject();
           dbObj = db.getDatabase(dbName);
@@ -1603,6 +1609,10 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
                         new HiveObjectRef(HiveObjectType.TABLE, dbName,
                             tableName, null, null), null, null, new PrivilegeGrantInfo(priv.toString(), 0, grantor, grantorType, grantOption)));
               }
+            } else if(privSubjectDesc.getSchema()){
+              privBag.addToPrivileges(new HiveObjectPrivilege(
+                  new HiveObjectRef(HiveObjectType.SCHEMA, null, null,
+                      null, null), null, null, new PrivilegeGrantInfo(priv.toString(), 0, grantor, grantorType, grantOption)));
             } else {
               privBag.addToPrivileges(new HiveObjectPrivilege(
                   new HiveObjectRef(HiveObjectType.DATABASE, dbName, null,
@@ -3871,7 +3881,6 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     try{
       LOG.info("=======================1");
     Table tbl = db.getTable(alterTbl.getOldName());
-
     Partition part = null;
     List<Partition> allPartitions = null;
     if (alterTbl.getPartSpec() != null) {
@@ -3895,7 +3904,44 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.RENAME) {
       LOG.info("=======================2 RENAME");
       tbl.setTableName(alterTbl.getNewName());
-    } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ADDCOLS) {
+    } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ALTERFILESPLIT) {
+
+
+      //List<PartitionInfo> newpis = PartitionInfo.getPartitionInfo(newCols);
+    //  int cur_version = 0;
+//      List<PartitionInfo> new_save_pis = new ArrayList<PartitionInfo>();
+//      List<FieldSchema> allSplitFields = alterTbl.getFileSplitCols();
+      List<FieldSchema> newCols = alterTbl.getFileSplitCols();
+//      List<FieldSchema> oldCols = oldTbl.getFileSplitKeys();
+//      List<PartitionInfo> old_pis = PartitionInfo.getPartitionInfo(oldCols);
+//
+//      if (old_pis != null) {
+//        int i=0;
+//        for(PartitionInfo pif : old_pis){//get max
+//          if(pif.getP_version()>cur_version){
+//            cur_version = pif.getP_version();
+//            allSplitFields.add(oldCols.get(i++));
+//
+//          }
+//        }
+//      }
+//      cur_version++;
+
+//      List<PartitionInfo> newPis =  PartitionInfo.getPartitionInfo(alterTbl.getFileSplitCols());
+//      if (newPis != null) {
+//        int i=0;
+//        for (PartitionInfo pif : newPis) {
+//          pif.setP_version(cur_version);
+//          newCols.get(i).setVersion(cur_version);
+//          newCols.get(i).setComment(pif.toJson());
+//          allSplitFields.add(newCols.get(i));
+//          i++;
+//        }
+//      }
+//      tbl.setFileSplitKeys(allSplitFields);
+      tbl.setFileSplitKeys(newCols);
+
+    }else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ADDCOLS) {
       LOG.info("=======================23 ADDCOLS");
       List<FieldSchema> newCols = alterTbl.getNewCols();
       List<FieldSchema> oldCols = tbl.getCols();
@@ -4786,6 +4832,7 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
    *           Throws this exception if an unexpected error occurs.
    */
   private int createView(Hive db, CreateViewDesc crtView) throws HiveException {
+    LOG.info("*****************zqh*****************createView" + crtView.getViewName());
     Table oldview = db.getTable(crtView.getViewName(), false);
     if (crtView.getOrReplace() && oldview != null) {
       // replace existing view
@@ -4828,9 +4875,11 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       tbl.setTableType(TableType.VIRTUAL_VIEW);
       tbl.setSerializationLib(null);
       tbl.clearSerDeInfo();
+      tbl.setSchemaName(crtView.getViewName());
       tbl.setViewOriginalText(crtView.getViewOriginalText());
       tbl.setViewExpandedText(crtView.getViewExpandedText());
       LOG.debug("---zjw-- in create view:"+tbl.getViewExpandedText()+"---"+tbl.getViewOriginalText());
+      LOG.debug("---zjw-- in create view:"+crtView.getSchema());
       tbl.setFields(crtView.getSchema());
       if (crtView.getComment() != null) {
         tbl.setProperty("comment", crtView.getComment());
@@ -4851,7 +4900,7 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       if(crtView.isHeter()){
         tbl.setHeterView(true);
       }
-
+      LOG.debug("---zjw-- in createTable:"+tbl.getSchemaName());
       db.createTable(tbl, crtView.getIfNotExists());
       work.getOutputs().add(new WriteEntity(tbl));
     }
