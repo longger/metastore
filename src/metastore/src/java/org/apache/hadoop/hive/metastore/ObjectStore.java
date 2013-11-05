@@ -8511,6 +8511,16 @@ public MUser getMUser(String userName) {
       MDirectDDL mdd = new MDirectDDL(dwNum,sql,now,now);
       pm.makePersistent(mdd);
       success = commitTransaction();
+      if(success){
+        long event_id = 0;
+        if(mdd.getDwNum() == 1) {
+          event_id = MSGType.MSG_DDL_DIRECT_DW1;
+        }
+        if(mdd.getDwNum() == 2) {
+          event_id = MSGType.MSG_DDL_DIRECT_DW2;
+        }
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(event_id, -1l, -1l, pm, mdd, null));
+      }
     } finally {
       if (!success) {
         rollbackTransaction();

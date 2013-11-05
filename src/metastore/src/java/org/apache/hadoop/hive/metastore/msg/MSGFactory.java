@@ -378,8 +378,16 @@ public class MSGFactory {
           MTable alt_partitioning_tbl = (MTable)msg.getEventObject();
           params.put("db_name",alt_partitioning_tbl.getDatabase().getName());
           params.put("table_name",alt_partitioning_tbl.getTableName());
-          if(msg.getOld_object_params().containsKey("p_version")){
-            params.put("p_version",msg.getOld_object_params().get("p_version"));
+          if(msg.getOld_object_params().containsKey("version")){
+            params.put("version",msg.getOld_object_params().get("version"));
+          }
+          break;
+      case MSGType.MSG_ALT_TABLE_SPLITKEYS :
+          //修改文件划分规则
+          params.put("db_name",msg.getOld_object_params().get("db_name"));
+          params.put("table_name",msg.getOld_object_params().get("table_name"));
+          if(msg.getOld_object_params().containsKey("version")){
+            params.put("version",msg.getOld_object_params().get("version"));
           }
           break;
       case MSGType.MSG_ALT_TALBE_DEL_COL :
