@@ -3466,6 +3466,14 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     } catch (HiveException e) {
       throw new SemanticException(ErrorMsg.INVALID_TABLE.getMsg(tblName), e);
     }
+    List<FieldSchema> fieldSchemas = tab.getFileSplitKeys();
+    for(FieldSchema fs : fieldSchemas){
+      LOG.info("*****************zqh****************begin to get tab.getFileSplitKeys()" + fs.getName() + oldColName);
+      if (fs.getName().equals(oldColName)){
+        LOG.info("*****************zqh****************fs.getName() == oldColName" + fs.getName() == oldColName);
+        throw new SemanticException("AlterColumn error! you can't rename the column which is the table splited by.");
+      }
+    }
     SkewedInfo skewInfo = tab.getTTable().getSd().getSkewedInfo();
     if ((null != skewInfo)
         && (null != skewInfo.getSkewedColNames())
