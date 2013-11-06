@@ -110,8 +110,9 @@ module CreateOperation
   CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST = 2
   CREATE_NEW_IN_NODEGROUPS = 3
   CREATE_AUX_IDX_FILE = 4
-  VALUE_MAP = {1 => "CREATE_NEW", 2 => "CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST", 3 => "CREATE_NEW_IN_NODEGROUPS", 4 => "CREATE_AUX_IDX_FILE"}
-  VALID_VALUES = Set.new([CREATE_NEW, CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST, CREATE_NEW_IN_NODEGROUPS, CREATE_AUX_IDX_FILE]).freeze
+  CREATE_NEW_RANDOM = 5
+  VALUE_MAP = {1 => "CREATE_NEW", 2 => "CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST", 3 => "CREATE_NEW_IN_NODEGROUPS", 4 => "CREATE_AUX_IDX_FILE", 5 => "CREATE_NEW_RANDOM"}
+  VALID_VALUES = Set.new([CREATE_NEW, CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST, CREATE_NEW_IN_NODEGROUPS, CREATE_AUX_IDX_FILE, CREATE_NEW_RANDOM]).freeze
 end
 
 class Version
@@ -281,6 +282,52 @@ class PrincipalPrivilegeSet
     USERPRIVILEGES => {:type => ::Thrift::Types::MAP, :name => 'userPrivileges', :key => {:type => ::Thrift::Types::STRING}, :value => {:type => ::Thrift::Types::LIST, :element => {:type => ::Thrift::Types::STRUCT, :class => ::PrivilegeGrantInfo}}},
     GROUPPRIVILEGES => {:type => ::Thrift::Types::MAP, :name => 'groupPrivileges', :key => {:type => ::Thrift::Types::STRING}, :value => {:type => ::Thrift::Types::LIST, :element => {:type => ::Thrift::Types::STRUCT, :class => ::PrivilegeGrantInfo}}},
     ROLEPRIVILEGES => {:type => ::Thrift::Types::MAP, :name => 'rolePrivileges', :key => {:type => ::Thrift::Types::STRING}, :value => {:type => ::Thrift::Types::LIST, :element => {:type => ::Thrift::Types::STRUCT, :class => ::PrivilegeGrantInfo}}}
+  }
+
+  def struct_fields; FIELDS; end
+
+  def validate
+  end
+
+  ::Thrift::Struct.generate_accessors self
+end
+
+class Statfs
+  include ::Thrift::Struct, ::Thrift::Struct_Union
+  FROM = 1
+  TO = 2
+  INCREATE = 3
+  CLOSE = 4
+  REPLICATED = 5
+  RM_LOGICAL = 6
+  RM_PHYSICAL = 7
+  UNDERREP = 8
+  OVERREP = 9
+  LINGER = 10
+  SUSPECT = 11
+  INC_ONS = 12
+  INC_ONS2 = 13
+  CLS_OFFS = 14
+  INCS = 15
+  CLOS = 16
+
+  FIELDS = {
+    FROM => {:type => ::Thrift::Types::I64, :name => 'from'},
+    TO => {:type => ::Thrift::Types::I64, :name => 'to'},
+    INCREATE => {:type => ::Thrift::Types::I64, :name => 'increate'},
+    CLOSE => {:type => ::Thrift::Types::I64, :name => 'close'},
+    REPLICATED => {:type => ::Thrift::Types::I64, :name => 'replicated'},
+    RM_LOGICAL => {:type => ::Thrift::Types::I64, :name => 'rm_logical'},
+    RM_PHYSICAL => {:type => ::Thrift::Types::I64, :name => 'rm_physical'},
+    UNDERREP => {:type => ::Thrift::Types::I64, :name => 'underrep'},
+    OVERREP => {:type => ::Thrift::Types::I64, :name => 'overrep'},
+    LINGER => {:type => ::Thrift::Types::I64, :name => 'linger'},
+    SUSPECT => {:type => ::Thrift::Types::I64, :name => 'suspect'},
+    INC_ONS => {:type => ::Thrift::Types::I64, :name => 'inc_ons'},
+    INC_ONS2 => {:type => ::Thrift::Types::I64, :name => 'inc_ons2'},
+    CLS_OFFS => {:type => ::Thrift::Types::I64, :name => 'cls_offs'},
+    INCS => {:type => ::Thrift::Types::LIST, :name => 'incs', :element => {:type => ::Thrift::Types::I64}},
+    CLOS => {:type => ::Thrift::Types::LIST, :name => 'clos', :element => {:type => ::Thrift::Types::I64}}
   }
 
   def struct_fields; FIELDS; end
@@ -639,7 +686,7 @@ class Table
     VIEWORIGINALTEXT => {:type => ::Thrift::Types::STRING, :name => 'viewOriginalText'},
     VIEWEXPANDEDTEXT => {:type => ::Thrift::Types::STRING, :name => 'viewExpandedText'},
     TABLETYPE => {:type => ::Thrift::Types::STRING, :name => 'tableType'},
-    NODEGROUPS => {:type => ::Thrift::Types::LIST, :name => 'nodeGroups', :element => {:type => ::Thrift::Types::STRUCT, :class => ::NodeGroup}, :optional => true},
+    NODEGROUPS => {:type => ::Thrift::Types::LIST, :name => 'nodeGroups', :element => {:type => ::Thrift::Types::STRUCT, :class => ::NodeGroup}},
     PRIVILEGES => {:type => ::Thrift::Types::STRUCT, :name => 'privileges', :class => ::PrincipalPrivilegeSet, :optional => true},
     PARTITIONS => {:type => ::Thrift::Types::LIST, :name => 'partitions', :element => {:type => ::Thrift::Types::STRUCT, :class => ::Partition}, :optional => true},
     FILESPLITKEYS => {:type => ::Thrift::Types::LIST, :name => 'fileSplitKeys', :element => {:type => ::Thrift::Types::STRUCT, :class => ::FieldSchema}}

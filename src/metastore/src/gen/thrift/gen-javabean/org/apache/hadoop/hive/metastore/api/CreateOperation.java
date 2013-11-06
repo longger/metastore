@@ -15,7 +15,8 @@ public enum CreateOperation implements org.apache.thrift.TEnum {
   CREATE_NEW(1),
   CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST(2),
   CREATE_NEW_IN_NODEGROUPS(3),
-  CREATE_AUX_IDX_FILE(4);
+  CREATE_AUX_IDX_FILE(4),
+  CREATE_NEW_RANDOM(5);
 
   private final int value;
 
@@ -44,6 +45,8 @@ public enum CreateOperation implements org.apache.thrift.TEnum {
         return CREATE_NEW_IN_NODEGROUPS;
       case 4:
         return CREATE_AUX_IDX_FILE;
+      case 5:
+        return CREATE_NEW_RANDOM;
       default:
         return null;
     }

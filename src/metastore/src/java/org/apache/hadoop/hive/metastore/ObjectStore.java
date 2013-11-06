@@ -111,6 +111,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
 import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
+import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MBusiTypeColumn;
 import org.apache.hadoop.hive.metastore.model.MBusiTypeDatacenter;
 import org.apache.hadoop.hive.metastore.model.MBusitype;
@@ -884,8 +885,11 @@ public class ObjectStore implements RawStore, Configurable {
       if (end < 0) {
         end = 0;
       }
+      if (end < begin) {
+        end = begin;
+      }
       // FIXME: do NOT ordering on large data set!
-      if (fnr < 1000) {
+      if (fnr <= 1000) {
         q.setOrdering("fid ascending");
       }
       q.setRange(begin, end);
@@ -961,8 +965,51 @@ public class ObjectStore implements RawStore, Configurable {
     }
     return r;
   }
-
   public void findVoidFiles(List<SFile> voidFiles) throws MetaException {
+    boolean commited = false;
+
+    try {
+      openTransaction();
+      Query q = pm.newQuery(MFile.class, "this.store_status == status && this.create_time <= t1");
+      q.declareParameters("int status, long t1");
+      Collection files = (Collection)q.execute(MetaStoreConst.MFileStoreStatus.INCREATE, System.currentTimeMillis() - (600 * 1000));
+      Iterator iter = files.iterator();
+      while (iter.hasNext()) {
+        MFile m = (MFile)iter.next();
+        if (m == null) {
+          continue;
+        }
+        List<SFileLocation> l = getSFileLocations(m.getFid());
+
+        // check if it contains valid locations
+        boolean ok = false;
+        for (SFileLocation fl : l) {
+          if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            ok = true;
+            break;
+          }
+        }
+        if (!ok) {
+          try {
+            SFile s = convertToSFile(m);
+            s.setLocations(l);
+            voidFiles.add(s);
+          } catch (javax.jdo.JDOObjectNotFoundException e) {
+              // it means the file slips ...
+              LOG.error(e, e);
+          }
+        }
+      }
+
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+  }
+
+  public void findVoidFilesByPartition(List<SFile> voidFiles) throws MetaException {
     boolean commited = false;
     long beginTs = System.currentTimeMillis();
 
@@ -1251,6 +1298,99 @@ public class ObjectStore implements RawStore, Configurable {
     }
 
     return r;
+  }
+
+  /**
+   *
+   * @param from: begin time (sec)
+   * @param to: end time (sec)
+   * @return
+   * @throws MetaException
+   */
+  @Override
+  public statfs statFileSystem(long from, long to) throws MetaException {
+    statfs s = new statfs();
+    boolean commited = false;
+
+    // select the files in the time range
+    try {
+      openTransaction();
+      Query q = pm.newQuery(MFile.class, "this.create_time >= begin && this.create_time < end");
+      q.declareParameters("long begin, long end");
+      Collection files = (Collection)q.execute(from * 1000, to * 1000);
+      LOG.info("Total Hit " + files.size() + " files in time range [" + from + "," + to + ").");
+      Iterator iter = files.iterator();
+      while (iter.hasNext()) {
+        MFile m = (MFile)iter.next();
+        if (m == null) {
+          continue;
+        }
+        switch (m.getStore_status()) {
+        case MetaStoreConst.MFileStoreStatus.INCREATE:
+          s.setIncreate(s.getIncreate() + 1);
+          break;
+        case MetaStoreConst.MFileStoreStatus.CLOSED:
+          s.setClose(s.getClose() + 1);
+          s.addToClos(m.getFid());
+          break;
+        case MetaStoreConst.MFileStoreStatus.REPLICATED:
+          s.setReplicated(s.getReplicated() + 1);
+          break;
+        case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
+          s.setRm_logical(s.getRm_logical() + 1);
+          break;
+        case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+          s.setRm_physical(s.getRm_physical() + 1);
+          break;
+        }
+        // get under/over/linger files
+        List<SFileLocation> l = getSFileLocations(m.getFid());
+        int on = 0, off = 0, susp = 0;
+
+        for (SFileLocation fl : l) {
+          switch (fl.getVisit_status()) {
+          case MetaStoreConst.MFileLocationVisitStatus.ONLINE:
+            on++;
+            break;
+          case MetaStoreConst.MFileLocationVisitStatus.OFFLINE:
+            off++;
+            break;
+          case MetaStoreConst.MFileLocationVisitStatus.SUSPECT:
+            susp++;
+            break;
+          }
+        }
+        if (on > m.getRep_nr()) {
+          s.setOverrep(s.getOverrep() + 1);
+        }
+        if (on < m.getRep_nr()) {
+          s.setUnderrep(s.getUnderrep() + 1);
+        }
+        if (on >= m.getRep_nr() && off > 0) {
+          s.setLinger(s.getLinger() + 1);
+        }
+        if (susp > 0) {
+          s.setSuspect(s.getSuspect() + 1);
+        }
+        if (on == 1 && m.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+          s.setInc_ons(s.getInc_ons() + 1);
+        }
+        if (on > 1 && m.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+          s.setInc_ons2(s.getInc_ons2() + 1);
+          s.addToIncs(m.getFid());
+        }
+        if (on == 0 && m.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
+          s.setCls_offs(s.getCls_offs() + 1);
+        }
+      }
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+
+    return s;
   }
 
   public void createDevice(MDevice md) throws InvalidObjectException, MetaException {
@@ -1940,6 +2080,7 @@ public class ObjectStore implements RawStore, Configurable {
     return r;
   }
 
+  @Override
   public long countDevice() throws MetaException {
     boolean commited = false;
     long r = 0;
@@ -2292,6 +2433,9 @@ public class ObjectStore implements RawStore, Configurable {
     try {
       openTransaction();
       mfl = getMFileLocation(newsfl.getDevid(), newsfl.getLocation());
+      if (mfl == null) {
+        throw new MetaException("Invalid SFileLocation provided or JDO Commit failed!");
+      }
       mfl.setUpdate_time(System.currentTimeMillis());
       if (mfl.getVisit_status() != newsfl.getVisit_status()) {
         changed = true;
@@ -2872,7 +3016,7 @@ public class ObjectStore implements RawStore, Configurable {
         .getRetention(), convertToStorageDescriptor(mtbl.getSd()),
         convertToFieldSchemas(mtbl.getPartitionKeys()), mtbl.getParameters(),
         mtbl.getViewOriginalText(), mtbl.getViewExpandedText(),
-        tableType, convertToFieldSchemas(mtbl.getFileSplitKeys()));
+        tableType, convertToNodeGroups(mtbl.getGroupDistribute()), convertToFieldSchemas(mtbl.getFileSplitKeys()));
   }
 
   private MNode convertToMNode(Node node) {
@@ -9817,11 +9961,6 @@ public MUser getMUser(String userName) {
     if(mngs != null) {
       ngs = new ArrayList<NodeGroup>();
       for(MNodeGroup mng : mngs){
-        if(mng.getNodes() != null) {
-          LOG.info("---zjw nodes :"+mng.getNodes().size());
-        } else {
-          LOG.info("---zjw nodes is null");
-        }
         NodeGroup ng = new NodeGroup(mng.getNode_group_name(),
             mng.getComment(),mng.getStatus(),convertToNodeSet(mng.getNodes()));
         ngs.add(ng);
