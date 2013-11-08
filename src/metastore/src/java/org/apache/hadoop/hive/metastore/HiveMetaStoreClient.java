@@ -91,6 +91,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
@@ -290,6 +291,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
    */
   public void alter_table(String dbname, String tbl_name, Table new_tbl)
       throws InvalidOperationException, MetaException, TException {
+    LOG.info("*****************zqh**************** before alter_table");
     client.alter_table(dbname, tbl_name, new_tbl);
   }
 

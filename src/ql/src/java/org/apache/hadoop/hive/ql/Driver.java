@@ -335,6 +335,13 @@ public class Driver implements CommandProcessor {
    *          The SQL query to compile.
    */
   public int compile(String command) {
+    //add by zjw for test,to lower case all sqls
+    //delete this if this dose not work.
+
+    if(command != null){
+      command = command.toLowerCase();
+    }
+
     return compile(command, true);
   }
 

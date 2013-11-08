@@ -410,6 +410,9 @@ public abstract class BaseSemanticAnalyzer {
           .getText());
       String value = unescapeSQLString(prop.getChild(propChild).getChild(1)
           .getText());
+      if (value == null){
+        value = "";
+      }
       mapProp.put(key, value);
     }
   }
@@ -712,7 +715,9 @@ TOK_PARTITION_EXPER--text:TOK_PARTITION_EXPER--tokenType:255
 
     for (int i = 1; i < paraNum; i++) {//anyalyze partition function params
       ASTNode func_para = (ASTNode) func_child.getChild(i);
-
+      if(i==1 && func_para.getToken().getType() != HiveParser.TOK_TABLE_OR_COL){
+        throw new SemanticException("Partition/Filesplit first parameter must be a columne name,please check if column name quotaed by ' or \".");
+      }
       if(func_para.getToken().getType() ==  HiveParser.TOK_TABLE_OR_COL){
         FieldSchema col = new FieldSchema();
         col.setName(func_para.getChild(0).getText());//@todo  add validate partcol in columns

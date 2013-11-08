@@ -140,6 +140,7 @@ import org.apache.hadoop.hive.metastore.model.MPartitionPrivilege;
 import org.apache.hadoop.hive.metastore.model.MRole;
 import org.apache.hadoop.hive.metastore.model.MRoleMap;
 import org.apache.hadoop.hive.metastore.model.MSchema;
+import org.apache.hadoop.hive.metastore.model.MSchemaPrivilege;
 import org.apache.hadoop.hive.metastore.model.MSerDeInfo;
 import org.apache.hadoop.hive.metastore.model.MSplitValue;
 import org.apache.hadoop.hive.metastore.model.MStorageDescriptor;
@@ -159,6 +160,7 @@ import org.apache.hadoop.hive.metastore.parser.ExpressionTree.ANTLRNoCaseStringS
 import org.apache.hadoop.hive.metastore.parser.FilterLexer;
 import org.apache.hadoop.hive.metastore.parser.FilterParser;
 import org.apache.hadoop.hive.metastore.tools.MetaUtil;
+import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TException;
 import org.datanucleus.FetchPlan;
@@ -525,13 +527,16 @@ public class ObjectStore implements RawStore, Configurable {
     boolean commited = false;
     try {
       openTransaction();
-      name = name.toLowerCase().trim();
+      String dbname = name.toLowerCase().trim();
+      LOG.info("*****************zqh*****************getMDatabase" + dbname);
       Query query = pm.newQuery(MDatabase.class, "name == dbname");
+      LOG.info("*****************zqh*****************query successfully");
       query.declareParameters("java.lang.String dbname");
       query.setUnique(true);
-      mdb = (MDatabase) query.execute(name);
+      mdb = (MDatabase) query.execute(dbname);
       pm.retrieve(mdb);
       commited = commitTransaction();
+      LOG.info("*****************zqh*****************commited successfully");
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -1803,10 +1808,11 @@ public class ObjectStore implements RawStore, Configurable {
 
   public void createTable(Table tbl) throws InvalidObjectException, MetaException {
     boolean commited = false;
-
+    LOG.info("*****************zqh*****************createTable");
     try {
       openTransaction();
       MTable mtbl = convertToMTable(tbl);
+      LOG.info("*****************zqh*****************createTable--convertToMTable");
       boolean make_table = false;
       if(mtbl.getSd().getCD().getCols() != null){//增加业务类型查询支持
         List<MBusiTypeColumn> bcs = new ArrayList<MBusiTypeColumn>();
@@ -3108,14 +3114,20 @@ public class ObjectStore implements RawStore, Configurable {
 
   private MTable convertToMTable(Table tbl) throws InvalidObjectException,
       MetaException {
+    LOG.info("*****************zqh*****************convertToMTable");
     if (tbl == null) {
       return null;
     }
+    LOG.info("*****************zqh*****************convertToMTable!=null");
     MDatabase mdb = null;
     MSchema mSchema = null;
     try {
+      LOG.info("*****************zqh*****************" + tbl.getDbName());
+      LOG.info("*****************zqh*****************" + tbl.getSchemaName());
       mdb = getMDatabase(tbl.getDbName());
+      LOG.info("*****************zqh*****************" + mdb.getName());
       mSchema = getMSchema(tbl.getSchemaName());
+      LOG.info("*****************zqh*****************" + mSchema.getSchemaName());
     } catch (NoSuchObjectException e) {
       LOG.error(StringUtils.stringifyException(e));
       throw new InvalidObjectException("Database " + tbl.getDbName()
@@ -3125,7 +3137,9 @@ public class ObjectStore implements RawStore, Configurable {
     // If the table has property EXTERNAL set, update table type
     // accordingly
     String tableType = tbl.getTableType();
+    LOG.info("*****************zqh*****************" + tableType);
     boolean isExternal = "TRUE".equals(tbl.getParameters().get("EXTERNAL"));
+    LOG.info("*****************zqh*****************" + isExternal);
     if (TableType.MANAGED_TABLE.toString().equals(tableType)) {
       if (isExternal) {
         tableType = TableType.EXTERNAL_TABLE.toString();
@@ -4713,7 +4727,7 @@ public class ObjectStore implements RawStore, Configurable {
       oldt.setRetention(newt.getRetention());
       // !NOTE: append new partition keys to old partition key list with new version
       List<MFieldSchema> newFS = new ArrayList<MFieldSchema>();
-      long cur_version = 0;
+      long cur_version = -1;
 
       if (oldt.getPartitionKeys() != null) {
         for (MFieldSchema mfs : oldt.getPartitionKeys()) {
@@ -4733,7 +4747,7 @@ public class ObjectStore implements RawStore, Configurable {
       oldt.setPartitionKeys(newFS);
       // !NOTE: append new file split keys to old file split key list with new version
       newFS.clear();
-      cur_version = 0;
+      cur_version = -1;
       if (oldt.getFileSplitKeys() != null) {
         for (MFieldSchema mfs : oldt.getFileSplitKeys()) {
           if (mfs.getVersion() > cur_version) {
@@ -4743,12 +4757,23 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
       cur_version++;
-      if (newt.getFileSplitKeys() != null) {
-        for (MFieldSchema mfs : newt.getFileSplitKeys()) {
-          mfs.setVersion(cur_version);
-          newFS.add(mfs);
+      List<PartitionInfo> newPis =  PartitionInfo.getPartitionInfo(convertToFieldSchemas(newt.getFileSplitKeys()));
+      if (newPis != null) {
+        int i=0;
+        for (PartitionInfo pif : newPis) {
+          pif.setP_version((int)cur_version);
+          newt.getFileSplitKeys().get(i).setVersion(cur_version);
+          newt.getFileSplitKeys().get(i).setComment(pif.toJson());
+          newFS.add(newt.getFileSplitKeys().get(i));
+          i++;
         }
       }
+//      if (newt.getFileSplitKeys() != null) {
+//        for (MFieldSchema mfs : newt.getFileSplitKeys()) {
+//          mfs.setVersion(cur_version);
+//          newFS.add(mfs);
+//        }
+//      }
       oldt.setFileSplitKeys(newFS);
 
       oldt.setTableType(newt.getTableType());
@@ -6269,6 +6294,31 @@ public MUser getMUser(String userName) {
                 persistentObjs.add(mTab);
               }
             }
+          }  else if (hiveObject.getObjectType() == HiveObjectType.SCHEMA) {
+            MSchema schemaObj = getMSchema(hiveObject.getObjectName());
+            if (schemaObj != null) {
+              List<MSchemaPrivilege> schemaPrivs = this
+                  .listAllSchemaGrants(userName, principalType, hiveObject.getObjectName());
+              if (schemaPrivs != null) {
+                for (MSchemaPrivilege priv : schemaPrivs) {
+                  if (priv.getGrantor() != null
+                      && priv.getGrantor().equalsIgnoreCase(grantor)) {
+                    privSet.add(priv.getPrivilege());
+                  }
+                }
+              }
+              for (String privilege : privs) {
+                if (privSet.contains(privilege)) {
+                  throw new InvalidObjectException(privilege
+                      + " is already granted on schema ["
+                      + hiveObject.getObjectName() + "] by " + grantor);
+                }
+                MSchemaPrivilege mSch = new MSchemaPrivilege(
+                    userName, principalType.toString(), schemaObj,
+                    privilege, now, grantor, grantorType, grantOption);
+                persistentObjs.add(mSch);
+              }
+            }
           } else if (hiveObject.getObjectType() == HiveObjectType.PARTITION) {
             // TODO: fix it
             MPartition partObj = this.getMPartition(hiveObject.getDbName(),
@@ -6913,6 +6963,37 @@ public MUser getMUser(String userName) {
     }
     return mSecurityTabPartList;
   }
+
+  @SuppressWarnings("unchecked")
+  public List<MSchemaPrivilege> listAllSchemaGrants(
+      String principalName, PrincipalType principalType, String schemaName) {
+    schemaName = schemaName.toLowerCase().trim();
+
+    boolean success = false;
+    List<MSchemaPrivilege> mSecuritySchPartList = null;
+    try {
+      openTransaction();
+      LOG.debug("Executing listAllSchemaGrants");
+      Query query = pm.newQuery(
+          MSchemaPrivilege.class,
+              "principalName == t1 && principalType == t2 && schema.schemaName == t3");
+      query.declareParameters(
+          "java.lang.String t1, java.lang.String t2, java.lang.String t3");
+      mSecuritySchPartList = (List<MSchemaPrivilege>) query
+          .executeWithArray(principalName, principalType.toString(), schemaName);
+      LOG.debug("Done executing query for listAllSchemaGrants");
+      pm.retrieveAll(mSecuritySchPartList);
+      success = commitTransaction();
+      LOG
+          .debug("Done retrieving all objects for listAllSchemaGrants");
+    } finally {
+      if (!success) {
+        rollbackTransaction();
+      }
+    }
+    return mSecuritySchPartList;
+  }
+
 
   @SuppressWarnings("unchecked")
   @Override
