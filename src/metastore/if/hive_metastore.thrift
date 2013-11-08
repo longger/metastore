@@ -56,6 +56,7 @@ enum HiveObjectType {
   TABLE = 3,
   PARTITION = 4,
   COLUMN = 5,
+  SCHEMA = 6,
 }
 
 enum PrincipalType {

@@ -14,8 +14,9 @@ module HiveObjectType
   TABLE = 3
   PARTITION = 4
   COLUMN = 5
-  VALUE_MAP = {1 => "GLOBAL", 2 => "DATABASE", 3 => "TABLE", 4 => "PARTITION", 5 => "COLUMN"}
-  VALID_VALUES = Set.new([GLOBAL, DATABASE, TABLE, PARTITION, COLUMN]).freeze
+  SCHEMA = 6
+  VALUE_MAP = {1 => "GLOBAL", 2 => "DATABASE", 3 => "TABLE", 4 => "PARTITION", 5 => "COLUMN", 6 => "SCHEMA"}
+  VALID_VALUES = Set.new([GLOBAL, DATABASE, TABLE, PARTITION, COLUMN, SCHEMA]).freeze
 end
 
 module PrincipalType

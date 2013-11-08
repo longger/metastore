@@ -24,6 +24,7 @@ class HiveObjectType:
   TABLE = 3
   PARTITION = 4
   COLUMN = 5
+  SCHEMA = 6
 
   _VALUES_TO_NAMES = {
     1: "GLOBAL",
@@ -31,6 +32,7 @@ class HiveObjectType:
     3: "TABLE",
     4: "PARTITION",
     5: "COLUMN",
+    6: "SCHEMA",
   }
 
   _NAMES_TO_VALUES = {
@@ -39,6 +41,7 @@ class HiveObjectType:
     "TABLE": 3,
     "PARTITION": 4,
     "COLUMN": 5,
+    "SCHEMA": 6,
   }
 
 class PrincipalType:

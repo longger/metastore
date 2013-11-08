@@ -22,12 +22,14 @@ final class HiveObjectType {
   const TABLE = 3;
   const PARTITION = 4;
   const COLUMN = 5;
+  const SCHEMA = 6;
   static public $__names = array(
     1 => 'GLOBAL',
     2 => 'DATABASE',
     3 => 'TABLE',
     4 => 'PARTITION',
     5 => 'COLUMN',
+    6 => 'SCHEMA',
   );
 }
 

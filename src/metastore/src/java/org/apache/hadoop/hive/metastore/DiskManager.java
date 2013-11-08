@@ -2700,7 +2700,9 @@ public class DiskManager {
             }
             if (release_fix_limit) {
               synchronized (fixRepLimit) {
-                fixRepLimit++;
+                if (fixRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)) {
+                  fixRepLimit++;
+                }
               }
             }
             //TODO: delete the SFL now
