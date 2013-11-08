@@ -655,7 +655,7 @@ class PrincipalPrivilegeSet {
 void swap(PrincipalPrivilegeSet &a, PrincipalPrivilegeSet &b);
 
 typedef struct _statfs__isset {
-  _statfs__isset() : from(false), to(false), increate(false), close(false), replicated(false), rm_logical(false), rm_physical(false), underrep(false), overrep(false), linger(false), suspect(false), inc_ons(false), inc_ons2(false), cls_offs(false), incs(false), clos(false) {}
+  _statfs__isset() : from(false), to(false), increate(false), close(false), replicated(false), rm_logical(false), rm_physical(false), underrep(false), overrep(false), linger(false), suspect(false), inc_ons(false), inc_ons2(false), cls_offs(false), incs(false), clos(false), fnrs(false) {}
   bool from;
   bool to;
   bool increate;
@@ -672,13 +672,14 @@ typedef struct _statfs__isset {
   bool cls_offs;
   bool incs;
   bool clos;
+  bool fnrs;
 } _statfs__isset;
 
 class statfs {
  public:
 
-  static const char* ascii_fingerprint; // = "A6BFB333AF777EF18EE691D7401272E2";
-  static const uint8_t binary_fingerprint[16]; // = {0xA6,0xBF,0xB3,0x33,0xAF,0x77,0x7E,0xF1,0x8E,0xE6,0x91,0xD7,0x40,0x12,0x72,0xE2};
+  static const char* ascii_fingerprint; // = "ACE5978558E7240F7562E6754DEA31A6";
+  static const uint8_t binary_fingerprint[16]; // = {0xAC,0xE5,0x97,0x85,0x58,0xE7,0x24,0x0F,0x75,0x62,0xE6,0x75,0x4D,0xEA,0x31,0xA6};
 
   statfs() : from(0), to(0), increate(0), close(0), replicated(0), rm_logical(0), rm_physical(0), underrep(0), overrep(0), linger(0), suspect(0), inc_ons(0), inc_ons2(0), cls_offs(0) {
   }
@@ -701,6 +702,7 @@ class statfs {
   int64_t cls_offs;
   std::vector<int64_t>  incs;
   std::vector<int64_t>  clos;
+  std::map<std::string, int64_t>  fnrs;
 
   _statfs__isset __isset;
 
@@ -768,6 +770,10 @@ class statfs {
     clos = val;
   }
 
+  void __set_fnrs(const std::map<std::string, int64_t> & val) {
+    fnrs = val;
+  }
+
   bool operator == (const statfs & rhs) const
   {
     if (!(from == rhs.from))
@@ -801,6 +807,8 @@ class statfs {
     if (!(incs == rhs.incs))
       return false;
     if (!(clos == rhs.clos))
+      return false;
+    if (!(fnrs == rhs.fnrs))
       return false;
     return true;
   }

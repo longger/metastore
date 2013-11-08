@@ -1369,13 +1369,15 @@ public class DiskManager {
       r += "}\n";
       String ANSI_RESET = "\u001B[0m";
 	    String ANSI_RED = "\u001B[31m";
+	    String ANSI_GREEN = "\u001B[32m";
+
 	    if (used + free > 0) {
-        if ((free / (used + free)) < 0.2) {
+        if (((double)free / (used + free)) < 0.2) {
           r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
-              "G, free " + ANSI_RED + (free / 1000000000) + ANSI_RESET + "G, ratio " + (free / (used + free)) + " \n";
+              "G, free " + ANSI_RED + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + " \n";
         } else {
           r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
-              "G, free " + (free / 1000000000) + "G, ratio " + (free / (used + free)) + "\n";
+              "G, free " + ANSI_GREEN + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + "\n";
         }
 	    }
       synchronized (rs) {

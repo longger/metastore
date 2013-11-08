@@ -203,6 +203,7 @@ struct statfs {
   
   15: list<i64> incs,
   16: list<i64> clos,
+  17: map<string, i64> fnrs;
 }
 
 struct Role {
