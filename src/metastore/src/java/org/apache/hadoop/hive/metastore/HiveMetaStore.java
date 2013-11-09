@@ -2647,6 +2647,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         final Table newTable)
         throws InvalidOperationException, MetaException {
       // Do not set an environment context.
+      LOG.info("*****************zqh**************** alter_table HMS");
       alter_table(dbname, name, newTable, null);
     }
 
@@ -5758,7 +5759,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       SFile stored_file = get_file_by_id(file.getFid());
 
       if (stored_file.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-        throw new MetaException("online filelocation can only do on INCREATE file " + file.getFid() + 
+        throw new MetaException("online filelocation can only do on INCREATE file " + file.getFid() +
             " STATE: " + stored_file.getStore_status());
       }
       if (stored_file.getLocationsSize() != 1) {

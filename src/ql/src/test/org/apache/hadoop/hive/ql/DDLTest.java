@@ -41,8 +41,8 @@ public class DDLTest {
     //String sql = "alter schema tb change column tb tc int";
     //String sql = "alter schema tb set schemeproperties('ff'='FF')";
 
-    String sql = "drop schema z_q_h";
-
+    //String sql = "drop schema z_q_h"
+    String sql = "grant all on database dbzqh to user root";
     Driver dr = new Driver(new HiveConf());
     try {
       dr.run(sql);

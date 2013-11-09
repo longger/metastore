@@ -392,7 +392,7 @@ public abstract class BaseSemanticAnalyzer {
     if (val.charAt(0) == '`' && val.charAt(val.length() - 1) == '`') {
       val = val.substring(1, val.length() - 1);
     }
-    return val;
+    return val.toLowerCase();
   }
 
   /**
@@ -559,10 +559,11 @@ public abstract class BaseSemanticAnalyzer {
       }
       // child 0 is the name of the column
       col.setName(unescapeIdentifier(name));
+//      LOG.info("****************zqh****************col.setName:"+unescapeIdentifier(name));
       // child 1 is the type of the column
       ASTNode typeChild = (ASTNode) (child.getChild(1));
       col.setType(getTypeStringFromAST(typeChild));
-
+//      LOG.info("****************zqh****************col.setType:"+getTypeStringFromAST(typeChild));
       // child 2 is the optional comment of the column
       if (child.getChildCount() == 3) {
         col.setComment(unescapeSQLString(child.getChild(2).getText()));
