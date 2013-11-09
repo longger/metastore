@@ -1300,14 +1300,14 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
           case 1: // COLS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list172 = iprot.readListBegin();
-                struct.cols = new ArrayList<FieldSchema>(_list172.size);
-                for (int _i173 = 0; _i173 < _list172.size; ++_i173)
+                org.apache.thrift.protocol.TList _list182 = iprot.readListBegin();
+                struct.cols = new ArrayList<FieldSchema>(_list182.size);
+                for (int _i183 = 0; _i183 < _list182.size; ++_i183)
                 {
-                  FieldSchema _elem174; // required
-                  _elem174 = new FieldSchema();
-                  _elem174.read(iprot);
-                  struct.cols.add(_elem174);
+                  FieldSchema _elem184; // required
+                  _elem184 = new FieldSchema();
+                  _elem184.read(iprot);
+                  struct.cols.add(_elem184);
                 }
                 iprot.readListEnd();
               }
@@ -1368,13 +1368,13 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
           case 8: // BUCKET_COLS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list175 = iprot.readListBegin();
-                struct.bucketCols = new ArrayList<String>(_list175.size);
-                for (int _i176 = 0; _i176 < _list175.size; ++_i176)
+                org.apache.thrift.protocol.TList _list185 = iprot.readListBegin();
+                struct.bucketCols = new ArrayList<String>(_list185.size);
+                for (int _i186 = 0; _i186 < _list185.size; ++_i186)
                 {
-                  String _elem177; // required
-                  _elem177 = iprot.readString();
-                  struct.bucketCols.add(_elem177);
+                  String _elem187; // required
+                  _elem187 = iprot.readString();
+                  struct.bucketCols.add(_elem187);
                 }
                 iprot.readListEnd();
               }
@@ -1386,14 +1386,14 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
           case 9: // SORT_COLS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list178 = iprot.readListBegin();
-                struct.sortCols = new ArrayList<Order>(_list178.size);
-                for (int _i179 = 0; _i179 < _list178.size; ++_i179)
+                org.apache.thrift.protocol.TList _list188 = iprot.readListBegin();
+                struct.sortCols = new ArrayList<Order>(_list188.size);
+                for (int _i189 = 0; _i189 < _list188.size; ++_i189)
                 {
-                  Order _elem180; // required
-                  _elem180 = new Order();
-                  _elem180.read(iprot);
-                  struct.sortCols.add(_elem180);
+                  Order _elem190; // required
+                  _elem190 = new Order();
+                  _elem190.read(iprot);
+                  struct.sortCols.add(_elem190);
                 }
                 iprot.readListEnd();
               }
@@ -1405,15 +1405,15 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
           case 10: // PARAMETERS
             if (schemeField.type == org.apache.thrift.protocol.TType.MAP) {
               {
-                org.apache.thrift.protocol.TMap _map181 = iprot.readMapBegin();
-                struct.parameters = new HashMap<String,String>(2*_map181.size);
-                for (int _i182 = 0; _i182 < _map181.size; ++_i182)
+                org.apache.thrift.protocol.TMap _map191 = iprot.readMapBegin();
+                struct.parameters = new HashMap<String,String>(2*_map191.size);
+                for (int _i192 = 0; _i192 < _map191.size; ++_i192)
                 {
-                  String _key183; // required
-                  String _val184; // required
-                  _key183 = iprot.readString();
-                  _val184 = iprot.readString();
-                  struct.parameters.put(_key183, _val184);
+                  String _key193; // required
+                  String _val194; // required
+                  _key193 = iprot.readString();
+                  _val194 = iprot.readString();
+                  struct.parameters.put(_key193, _val194);
                 }
                 iprot.readMapEnd();
               }
@@ -1456,9 +1456,9 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
         oprot.writeFieldBegin(COLS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.cols.size()));
-          for (FieldSchema _iter185 : struct.cols)
+          for (FieldSchema _iter195 : struct.cols)
           {
-            _iter185.write(oprot);
+            _iter195.write(oprot);
           }
           oprot.writeListEnd();
         }
@@ -1494,9 +1494,9 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
         oprot.writeFieldBegin(BUCKET_COLS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, struct.bucketCols.size()));
-          for (String _iter186 : struct.bucketCols)
+          for (String _iter196 : struct.bucketCols)
           {
-            oprot.writeString(_iter186);
+            oprot.writeString(_iter196);
           }
           oprot.writeListEnd();
         }
@@ -1506,9 +1506,9 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
         oprot.writeFieldBegin(SORT_COLS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.sortCols.size()));
-          for (Order _iter187 : struct.sortCols)
+          for (Order _iter197 : struct.sortCols)
           {
-            _iter187.write(oprot);
+            _iter197.write(oprot);
           }
           oprot.writeListEnd();
         }
@@ -1518,10 +1518,10 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
         oprot.writeFieldBegin(PARAMETERS_FIELD_DESC);
         {
           oprot.writeMapBegin(new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.STRING, struct.parameters.size()));
-          for (Map.Entry<String, String> _iter188 : struct.parameters.entrySet())
+          for (Map.Entry<String, String> _iter198 : struct.parameters.entrySet())
           {
-            oprot.writeString(_iter188.getKey());
-            oprot.writeString(_iter188.getValue());
+            oprot.writeString(_iter198.getKey());
+            oprot.writeString(_iter198.getValue());
           }
           oprot.writeMapEnd();
         }
@@ -1597,9 +1597,9 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
       if (struct.isSetCols()) {
         {
           oprot.writeI32(struct.cols.size());
-          for (FieldSchema _iter189 : struct.cols)
+          for (FieldSchema _iter199 : struct.cols)
           {
-            _iter189.write(oprot);
+            _iter199.write(oprot);
           }
         }
       }
@@ -1624,28 +1624,28 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
       if (struct.isSetBucketCols()) {
         {
           oprot.writeI32(struct.bucketCols.size());
-          for (String _iter190 : struct.bucketCols)
+          for (String _iter200 : struct.bucketCols)
           {
-            oprot.writeString(_iter190);
+            oprot.writeString(_iter200);
           }
         }
       }
       if (struct.isSetSortCols()) {
         {
           oprot.writeI32(struct.sortCols.size());
-          for (Order _iter191 : struct.sortCols)
+          for (Order _iter201 : struct.sortCols)
           {
-            _iter191.write(oprot);
+            _iter201.write(oprot);
           }
         }
       }
       if (struct.isSetParameters()) {
         {
           oprot.writeI32(struct.parameters.size());
-          for (Map.Entry<String, String> _iter192 : struct.parameters.entrySet())
+          for (Map.Entry<String, String> _iter202 : struct.parameters.entrySet())
           {
-            oprot.writeString(_iter192.getKey());
-            oprot.writeString(_iter192.getValue());
+            oprot.writeString(_iter202.getKey());
+            oprot.writeString(_iter202.getValue());
           }
         }
       }
@@ -1663,14 +1663,14 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
       BitSet incoming = iprot.readBitSet(12);
       if (incoming.get(0)) {
         {
-          org.apache.thrift.protocol.TList _list193 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.cols = new ArrayList<FieldSchema>(_list193.size);
-          for (int _i194 = 0; _i194 < _list193.size; ++_i194)
+          org.apache.thrift.protocol.TList _list203 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.cols = new ArrayList<FieldSchema>(_list203.size);
+          for (int _i204 = 0; _i204 < _list203.size; ++_i204)
           {
-            FieldSchema _elem195; // required
-            _elem195 = new FieldSchema();
-            _elem195.read(iprot);
-            struct.cols.add(_elem195);
+            FieldSchema _elem205; // required
+            _elem205 = new FieldSchema();
+            _elem205.read(iprot);
+            struct.cols.add(_elem205);
           }
         }
         struct.setColsIsSet(true);
@@ -1702,42 +1702,42 @@ public class StorageDescriptor implements org.apache.thrift.TBase<StorageDescrip
       }
       if (incoming.get(7)) {
         {
-          org.apache.thrift.protocol.TList _list196 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, iprot.readI32());
-          struct.bucketCols = new ArrayList<String>(_list196.size);
-          for (int _i197 = 0; _i197 < _list196.size; ++_i197)
+          org.apache.thrift.protocol.TList _list206 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, iprot.readI32());
+          struct.bucketCols = new ArrayList<String>(_list206.size);
+          for (int _i207 = 0; _i207 < _list206.size; ++_i207)
           {
-            String _elem198; // required
-            _elem198 = iprot.readString();
-            struct.bucketCols.add(_elem198);
+            String _elem208; // required
+            _elem208 = iprot.readString();
+            struct.bucketCols.add(_elem208);
           }
         }
         struct.setBucketColsIsSet(true);
       }
       if (incoming.get(8)) {
         {
-          org.apache.thrift.protocol.TList _list199 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.sortCols = new ArrayList<Order>(_list199.size);
-          for (int _i200 = 0; _i200 < _list199.size; ++_i200)
+          org.apache.thrift.protocol.TList _list209 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.sortCols = new ArrayList<Order>(_list209.size);
+          for (int _i210 = 0; _i210 < _list209.size; ++_i210)
           {
-            Order _elem201; // required
-            _elem201 = new Order();
-            _elem201.read(iprot);
-            struct.sortCols.add(_elem201);
+            Order _elem211; // required
+            _elem211 = new Order();
+            _elem211.read(iprot);
+            struct.sortCols.add(_elem211);
           }
         }
         struct.setSortColsIsSet(true);
       }
       if (incoming.get(9)) {
         {
-          org.apache.thrift.protocol.TMap _map202 = new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.STRING, iprot.readI32());
-          struct.parameters = new HashMap<String,String>(2*_map202.size);
-          for (int _i203 = 0; _i203 < _map202.size; ++_i203)
+          org.apache.thrift.protocol.TMap _map212 = new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.STRING, iprot.readI32());
+          struct.parameters = new HashMap<String,String>(2*_map212.size);
+          for (int _i213 = 0; _i213 < _map212.size; ++_i213)
           {
-            String _key204; // required
-            String _val205; // required
-            _key204 = iprot.readString();
-            _val205 = iprot.readString();
-            struct.parameters.put(_key204, _val205);
+            String _key214; // required
+            String _val215; // required
+            _key214 = iprot.readString();
+            _val215 = iprot.readString();
+            struct.parameters.put(_key214, _val215);
           }
         }
         struct.setParametersIsSet(true);

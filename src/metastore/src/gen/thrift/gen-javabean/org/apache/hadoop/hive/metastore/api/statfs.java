@@ -50,6 +50,7 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
   private static final org.apache.thrift.protocol.TField CLS_OFFS_FIELD_DESC = new org.apache.thrift.protocol.TField("cls_offs", org.apache.thrift.protocol.TType.I64, (short)14);
   private static final org.apache.thrift.protocol.TField INCS_FIELD_DESC = new org.apache.thrift.protocol.TField("incs", org.apache.thrift.protocol.TType.LIST, (short)15);
   private static final org.apache.thrift.protocol.TField CLOS_FIELD_DESC = new org.apache.thrift.protocol.TField("clos", org.apache.thrift.protocol.TType.LIST, (short)16);
+  private static final org.apache.thrift.protocol.TField FNRS_FIELD_DESC = new org.apache.thrift.protocol.TField("fnrs", org.apache.thrift.protocol.TType.MAP, (short)17);
 
   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
   static {
@@ -73,6 +74,7 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
   private long cls_offs; // required
   private List<Long> incs; // required
   private List<Long> clos; // required
+  private Map<String,Long> fnrs; // required
 
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
@@ -91,7 +93,8 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     INC_ONS2((short)13, "inc_ons2"),
     CLS_OFFS((short)14, "cls_offs"),
     INCS((short)15, "incs"),
-    CLOS((short)16, "clos");
+    CLOS((short)16, "clos"),
+    FNRS((short)17, "fnrs");
 
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -138,6 +141,8 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
           return INCS;
         case 16: // CLOS
           return CLOS;
+        case 17: // FNRS
+          return FNRS;
         default:
           return null;
       }
@@ -230,6 +235,10 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     tmpMap.put(_Fields.CLOS, new org.apache.thrift.meta_data.FieldMetaData("clos", org.apache.thrift.TFieldRequirementType.DEFAULT, 
         new org.apache.thrift.meta_data.ListMetaData(org.apache.thrift.protocol.TType.LIST, 
             new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I64))));
+    tmpMap.put(_Fields.FNRS, new org.apache.thrift.meta_data.FieldMetaData("fnrs", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+        new org.apache.thrift.meta_data.MapMetaData(org.apache.thrift.protocol.TType.MAP, 
+            new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING), 
+            new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I64))));
     metaDataMap = Collections.unmodifiableMap(tmpMap);
     org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(statfs.class, metaDataMap);
   }
@@ -253,7 +262,8 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     long inc_ons2,
     long cls_offs,
     List<Long> incs,
-    List<Long> clos)
+    List<Long> clos,
+    Map<String,Long> fnrs)
   {
     this();
     this.from = from;
@@ -286,6 +296,7 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     setCls_offsIsSet(true);
     this.incs = incs;
     this.clos = clos;
+    this.fnrs = fnrs;
   }
 
   /**
@@ -320,6 +331,21 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
         __this__clos.add(other_element);
       }
       this.clos = __this__clos;
+    }
+    if (other.isSetFnrs()) {
+      Map<String,Long> __this__fnrs = new HashMap<String,Long>();
+      for (Map.Entry<String, Long> other_element : other.fnrs.entrySet()) {
+
+        String other_element_key = other_element.getKey();
+        Long other_element_value = other_element.getValue();
+
+        String __this__fnrs_copy_key = other_element_key;
+
+        Long __this__fnrs_copy_value = other_element_value;
+
+        __this__fnrs.put(__this__fnrs_copy_key, __this__fnrs_copy_value);
+      }
+      this.fnrs = __this__fnrs;
     }
   }
 
@@ -359,6 +385,7 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     this.cls_offs = 0;
     this.incs = null;
     this.clos = null;
+    this.fnrs = null;
   }
 
   public long getFrom() {
@@ -745,6 +772,40 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     }
   }
 
+  public int getFnrsSize() {
+    return (this.fnrs == null) ? 0 : this.fnrs.size();
+  }
+
+  public void putToFnrs(String key, long val) {
+    if (this.fnrs == null) {
+      this.fnrs = new HashMap<String,Long>();
+    }
+    this.fnrs.put(key, val);
+  }
+
+  public Map<String,Long> getFnrs() {
+    return this.fnrs;
+  }
+
+  public void setFnrs(Map<String,Long> fnrs) {
+    this.fnrs = fnrs;
+  }
+
+  public void unsetFnrs() {
+    this.fnrs = null;
+  }
+
+  /** Returns true if field fnrs is set (has been assigned a value) and false otherwise */
+  public boolean isSetFnrs() {
+    return this.fnrs != null;
+  }
+
+  public void setFnrsIsSet(boolean value) {
+    if (!value) {
+      this.fnrs = null;
+    }
+  }
+
   public void setFieldValue(_Fields field, Object value) {
     switch (field) {
     case FROM:
@@ -875,6 +936,14 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       }
       break;
 
+    case FNRS:
+      if (value == null) {
+        unsetFnrs();
+      } else {
+        setFnrs((Map<String,Long>)value);
+      }
+      break;
+
     }
   }
 
@@ -928,6 +997,9 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     case CLOS:
       return getClos();
 
+    case FNRS:
+      return getFnrs();
+
     }
     throw new IllegalStateException();
   }
@@ -971,6 +1043,8 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       return isSetIncs();
     case CLOS:
       return isSetClos();
+    case FNRS:
+      return isSetFnrs();
     }
     throw new IllegalStateException();
   }
@@ -1132,6 +1206,15 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
         return false;
     }
 
+    boolean this_present_fnrs = true && this.isSetFnrs();
+    boolean that_present_fnrs = true && that.isSetFnrs();
+    if (this_present_fnrs || that_present_fnrs) {
+      if (!(this_present_fnrs && that_present_fnrs))
+        return false;
+      if (!this.fnrs.equals(that.fnrs))
+        return false;
+    }
+
     return true;
   }
 
@@ -1218,6 +1301,11 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     builder.append(present_clos);
     if (present_clos)
       builder.append(clos);
+
+    boolean present_fnrs = true && (isSetFnrs());
+    builder.append(present_fnrs);
+    if (present_fnrs)
+      builder.append(fnrs);
 
     return builder.toHashCode();
   }
@@ -1390,6 +1478,16 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
         return lastComparison;
       }
     }
+    lastComparison = Boolean.valueOf(isSetFnrs()).compareTo(typedOther.isSetFnrs());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (isSetFnrs()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.fnrs, typedOther.fnrs);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
     return 0;
   }
 
@@ -1479,6 +1577,14 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       sb.append("null");
     } else {
       sb.append(this.clos);
+    }
+    first = false;
+    if (!first) sb.append(", ");
+    sb.append("fnrs:");
+    if (this.fnrs == null) {
+      sb.append("null");
+    } else {
+      sb.append(this.fnrs);
     }
     first = false;
     sb.append(")");
@@ -1674,6 +1780,26 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
+          case 17: // FNRS
+            if (schemeField.type == org.apache.thrift.protocol.TType.MAP) {
+              {
+                org.apache.thrift.protocol.TMap _map84 = iprot.readMapBegin();
+                struct.fnrs = new HashMap<String,Long>(2*_map84.size);
+                for (int _i85 = 0; _i85 < _map84.size; ++_i85)
+                {
+                  String _key86; // required
+                  long _val87; // required
+                  _key86 = iprot.readString();
+                  _val87 = iprot.readI64();
+                  struct.fnrs.put(_key86, _val87);
+                }
+                iprot.readMapEnd();
+              }
+              struct.setFnrsIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
           default:
             org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
         }
@@ -1733,9 +1859,9 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
         oprot.writeFieldBegin(INCS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I64, struct.incs.size()));
-          for (long _iter84 : struct.incs)
+          for (long _iter88 : struct.incs)
           {
-            oprot.writeI64(_iter84);
+            oprot.writeI64(_iter88);
           }
           oprot.writeListEnd();
         }
@@ -1745,11 +1871,24 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
         oprot.writeFieldBegin(CLOS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I64, struct.clos.size()));
-          for (long _iter85 : struct.clos)
+          for (long _iter89 : struct.clos)
           {
-            oprot.writeI64(_iter85);
+            oprot.writeI64(_iter89);
           }
           oprot.writeListEnd();
+        }
+        oprot.writeFieldEnd();
+      }
+      if (struct.fnrs != null) {
+        oprot.writeFieldBegin(FNRS_FIELD_DESC);
+        {
+          oprot.writeMapBegin(new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.I64, struct.fnrs.size()));
+          for (Map.Entry<String, Long> _iter90 : struct.fnrs.entrySet())
+          {
+            oprot.writeString(_iter90.getKey());
+            oprot.writeI64(_iter90.getValue());
+          }
+          oprot.writeMapEnd();
         }
         oprot.writeFieldEnd();
       }
@@ -1819,7 +1958,10 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       if (struct.isSetClos()) {
         optionals.set(15);
       }
-      oprot.writeBitSet(optionals, 16);
+      if (struct.isSetFnrs()) {
+        optionals.set(16);
+      }
+      oprot.writeBitSet(optionals, 17);
       if (struct.isSetFrom()) {
         oprot.writeI64(struct.from);
       }
@@ -1865,18 +2007,28 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       if (struct.isSetIncs()) {
         {
           oprot.writeI32(struct.incs.size());
-          for (long _iter86 : struct.incs)
+          for (long _iter91 : struct.incs)
           {
-            oprot.writeI64(_iter86);
+            oprot.writeI64(_iter91);
           }
         }
       }
       if (struct.isSetClos()) {
         {
           oprot.writeI32(struct.clos.size());
-          for (long _iter87 : struct.clos)
+          for (long _iter92 : struct.clos)
           {
-            oprot.writeI64(_iter87);
+            oprot.writeI64(_iter92);
+          }
+        }
+      }
+      if (struct.isSetFnrs()) {
+        {
+          oprot.writeI32(struct.fnrs.size());
+          for (Map.Entry<String, Long> _iter93 : struct.fnrs.entrySet())
+          {
+            oprot.writeString(_iter93.getKey());
+            oprot.writeI64(_iter93.getValue());
           }
         }
       }
@@ -1885,7 +2037,7 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     @Override
     public void read(org.apache.thrift.protocol.TProtocol prot, statfs struct) throws org.apache.thrift.TException {
       TTupleProtocol iprot = (TTupleProtocol) prot;
-      BitSet incoming = iprot.readBitSet(16);
+      BitSet incoming = iprot.readBitSet(17);
       if (incoming.get(0)) {
         struct.from = iprot.readI64();
         struct.setFromIsSet(true);
@@ -1944,29 +2096,44 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       }
       if (incoming.get(14)) {
         {
-          org.apache.thrift.protocol.TList _list88 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I64, iprot.readI32());
-          struct.incs = new ArrayList<Long>(_list88.size);
-          for (int _i89 = 0; _i89 < _list88.size; ++_i89)
+          org.apache.thrift.protocol.TList _list94 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I64, iprot.readI32());
+          struct.incs = new ArrayList<Long>(_list94.size);
+          for (int _i95 = 0; _i95 < _list94.size; ++_i95)
           {
-            long _elem90; // required
-            _elem90 = iprot.readI64();
-            struct.incs.add(_elem90);
+            long _elem96; // required
+            _elem96 = iprot.readI64();
+            struct.incs.add(_elem96);
           }
         }
         struct.setIncsIsSet(true);
       }
       if (incoming.get(15)) {
         {
-          org.apache.thrift.protocol.TList _list91 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I64, iprot.readI32());
-          struct.clos = new ArrayList<Long>(_list91.size);
-          for (int _i92 = 0; _i92 < _list91.size; ++_i92)
+          org.apache.thrift.protocol.TList _list97 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.I64, iprot.readI32());
+          struct.clos = new ArrayList<Long>(_list97.size);
+          for (int _i98 = 0; _i98 < _list97.size; ++_i98)
           {
-            long _elem93; // required
-            _elem93 = iprot.readI64();
-            struct.clos.add(_elem93);
+            long _elem99; // required
+            _elem99 = iprot.readI64();
+            struct.clos.add(_elem99);
           }
         }
         struct.setClosIsSet(true);
+      }
+      if (incoming.get(16)) {
+        {
+          org.apache.thrift.protocol.TMap _map100 = new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.I64, iprot.readI32());
+          struct.fnrs = new HashMap<String,Long>(2*_map100.size);
+          for (int _i101 = 0; _i101 < _map100.size; ++_i101)
+          {
+            String _key102; // required
+            long _val103; // required
+            _key102 = iprot.readString();
+            _val103 = iprot.readI64();
+            struct.fnrs.put(_key102, _val103);
+          }
+        }
+        struct.setFnrsIsSet(true);
       }
     }
   }

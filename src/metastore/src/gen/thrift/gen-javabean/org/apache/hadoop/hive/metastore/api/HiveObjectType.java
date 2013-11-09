@@ -7,6 +7,10 @@
 package org.apache.hadoop.hive.metastore.api;
 
 
+import java.util.Map;
+import java.util.HashMap;
+import org.apache.thrift.TEnum;
+
 public enum HiveObjectType implements org.apache.thrift.TEnum {
   GLOBAL(1),
   DATABASE(2),
@@ -14,6 +18,7 @@ public enum HiveObjectType implements org.apache.thrift.TEnum {
   PARTITION(4),
   COLUMN(5),
   SCHEMA(6);
+
   private final int value;
 
   private HiveObjectType(int value) {
@@ -31,7 +36,7 @@ public enum HiveObjectType implements org.apache.thrift.TEnum {
    * Find a the enum type by its integer value, as defined in the Thrift IDL.
    * @return null if the value is not found.
    */
-  public static HiveObjectType findByValue(int value) {
+  public static HiveObjectType findByValue(int value) { 
     switch (value) {
       case 1:
         return GLOBAL;

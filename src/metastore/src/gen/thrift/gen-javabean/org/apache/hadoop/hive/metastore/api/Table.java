@@ -1791,14 +1791,14 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
           case 9: // PARTITION_KEYS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list276 = iprot.readListBegin();
-                struct.partitionKeys = new ArrayList<FieldSchema>(_list276.size);
-                for (int _i277 = 0; _i277 < _list276.size; ++_i277)
+                org.apache.thrift.protocol.TList _list286 = iprot.readListBegin();
+                struct.partitionKeys = new ArrayList<FieldSchema>(_list286.size);
+                for (int _i287 = 0; _i287 < _list286.size; ++_i287)
                 {
-                  FieldSchema _elem278; // required
-                  _elem278 = new FieldSchema();
-                  _elem278.read(iprot);
-                  struct.partitionKeys.add(_elem278);
+                  FieldSchema _elem288; // required
+                  _elem288 = new FieldSchema();
+                  _elem288.read(iprot);
+                  struct.partitionKeys.add(_elem288);
                 }
                 iprot.readListEnd();
               }
@@ -1810,15 +1810,15 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
           case 10: // PARAMETERS
             if (schemeField.type == org.apache.thrift.protocol.TType.MAP) {
               {
-                org.apache.thrift.protocol.TMap _map279 = iprot.readMapBegin();
-                struct.parameters = new HashMap<String,String>(2*_map279.size);
-                for (int _i280 = 0; _i280 < _map279.size; ++_i280)
+                org.apache.thrift.protocol.TMap _map289 = iprot.readMapBegin();
+                struct.parameters = new HashMap<String,String>(2*_map289.size);
+                for (int _i290 = 0; _i290 < _map289.size; ++_i290)
                 {
-                  String _key281; // required
-                  String _val282; // required
-                  _key281 = iprot.readString();
-                  _val282 = iprot.readString();
-                  struct.parameters.put(_key281, _val282);
+                  String _key291; // required
+                  String _val292; // required
+                  _key291 = iprot.readString();
+                  _val292 = iprot.readString();
+                  struct.parameters.put(_key291, _val292);
                 }
                 iprot.readMapEnd();
               }
@@ -1854,14 +1854,14 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
           case 14: // NODE_GROUPS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list283 = iprot.readListBegin();
-                struct.nodeGroups = new ArrayList<NodeGroup>(_list283.size);
-                for (int _i284 = 0; _i284 < _list283.size; ++_i284)
+                org.apache.thrift.protocol.TList _list293 = iprot.readListBegin();
+                struct.nodeGroups = new ArrayList<NodeGroup>(_list293.size);
+                for (int _i294 = 0; _i294 < _list293.size; ++_i294)
                 {
-                  NodeGroup _elem285; // required
-                  _elem285 = new NodeGroup();
-                  _elem285.read(iprot);
-                  struct.nodeGroups.add(_elem285);
+                  NodeGroup _elem295; // required
+                  _elem295 = new NodeGroup();
+                  _elem295.read(iprot);
+                  struct.nodeGroups.add(_elem295);
                 }
                 iprot.readListEnd();
               }
@@ -1882,14 +1882,14 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
           case 16: // PARTITIONS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list286 = iprot.readListBegin();
-                struct.partitions = new ArrayList<Partition>(_list286.size);
-                for (int _i287 = 0; _i287 < _list286.size; ++_i287)
+                org.apache.thrift.protocol.TList _list296 = iprot.readListBegin();
+                struct.partitions = new ArrayList<Partition>(_list296.size);
+                for (int _i297 = 0; _i297 < _list296.size; ++_i297)
                 {
-                  Partition _elem288; // required
-                  _elem288 = new Partition();
-                  _elem288.read(iprot);
-                  struct.partitions.add(_elem288);
+                  Partition _elem298; // required
+                  _elem298 = new Partition();
+                  _elem298.read(iprot);
+                  struct.partitions.add(_elem298);
                 }
                 iprot.readListEnd();
               }
@@ -1901,14 +1901,14 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
           case 17: // FILE_SPLIT_KEYS
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list289 = iprot.readListBegin();
-                struct.fileSplitKeys = new ArrayList<FieldSchema>(_list289.size);
-                for (int _i290 = 0; _i290 < _list289.size; ++_i290)
+                org.apache.thrift.protocol.TList _list299 = iprot.readListBegin();
+                struct.fileSplitKeys = new ArrayList<FieldSchema>(_list299.size);
+                for (int _i300 = 0; _i300 < _list299.size; ++_i300)
                 {
-                  FieldSchema _elem291; // required
-                  _elem291 = new FieldSchema();
-                  _elem291.read(iprot);
-                  struct.fileSplitKeys.add(_elem291);
+                  FieldSchema _elem301; // required
+                  _elem301 = new FieldSchema();
+                  _elem301.read(iprot);
+                  struct.fileSplitKeys.add(_elem301);
                 }
                 iprot.readListEnd();
               }
@@ -1968,9 +1968,9 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
         oprot.writeFieldBegin(PARTITION_KEYS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.partitionKeys.size()));
-          for (FieldSchema _iter292 : struct.partitionKeys)
+          for (FieldSchema _iter302 : struct.partitionKeys)
           {
-            _iter292.write(oprot);
+            _iter302.write(oprot);
           }
           oprot.writeListEnd();
         }
@@ -1980,10 +1980,10 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
         oprot.writeFieldBegin(PARAMETERS_FIELD_DESC);
         {
           oprot.writeMapBegin(new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.STRING, struct.parameters.size()));
-          for (Map.Entry<String, String> _iter293 : struct.parameters.entrySet())
+          for (Map.Entry<String, String> _iter303 : struct.parameters.entrySet())
           {
-            oprot.writeString(_iter293.getKey());
-            oprot.writeString(_iter293.getValue());
+            oprot.writeString(_iter303.getKey());
+            oprot.writeString(_iter303.getValue());
           }
           oprot.writeMapEnd();
         }
@@ -2008,9 +2008,9 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
         oprot.writeFieldBegin(NODE_GROUPS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.nodeGroups.size()));
-          for (NodeGroup _iter294 : struct.nodeGroups)
+          for (NodeGroup _iter304 : struct.nodeGroups)
           {
-            _iter294.write(oprot);
+            _iter304.write(oprot);
           }
           oprot.writeListEnd();
         }
@@ -2028,9 +2028,9 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
           oprot.writeFieldBegin(PARTITIONS_FIELD_DESC);
           {
             oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.partitions.size()));
-            for (Partition _iter295 : struct.partitions)
+            for (Partition _iter305 : struct.partitions)
             {
-              _iter295.write(oprot);
+              _iter305.write(oprot);
             }
             oprot.writeListEnd();
           }
@@ -2041,9 +2041,9 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
         oprot.writeFieldBegin(FILE_SPLIT_KEYS_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.fileSplitKeys.size()));
-          for (FieldSchema _iter296 : struct.fileSplitKeys)
+          for (FieldSchema _iter306 : struct.fileSplitKeys)
           {
-            _iter296.write(oprot);
+            _iter306.write(oprot);
           }
           oprot.writeListEnd();
         }
@@ -2146,19 +2146,19 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
       if (struct.isSetPartitionKeys()) {
         {
           oprot.writeI32(struct.partitionKeys.size());
-          for (FieldSchema _iter297 : struct.partitionKeys)
+          for (FieldSchema _iter307 : struct.partitionKeys)
           {
-            _iter297.write(oprot);
+            _iter307.write(oprot);
           }
         }
       }
       if (struct.isSetParameters()) {
         {
           oprot.writeI32(struct.parameters.size());
-          for (Map.Entry<String, String> _iter298 : struct.parameters.entrySet())
+          for (Map.Entry<String, String> _iter308 : struct.parameters.entrySet())
           {
-            oprot.writeString(_iter298.getKey());
-            oprot.writeString(_iter298.getValue());
+            oprot.writeString(_iter308.getKey());
+            oprot.writeString(_iter308.getValue());
           }
         }
       }
@@ -2174,9 +2174,9 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
       if (struct.isSetNodeGroups()) {
         {
           oprot.writeI32(struct.nodeGroups.size());
-          for (NodeGroup _iter299 : struct.nodeGroups)
+          for (NodeGroup _iter309 : struct.nodeGroups)
           {
-            _iter299.write(oprot);
+            _iter309.write(oprot);
           }
         }
       }
@@ -2186,18 +2186,18 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
       if (struct.isSetPartitions()) {
         {
           oprot.writeI32(struct.partitions.size());
-          for (Partition _iter300 : struct.partitions)
+          for (Partition _iter310 : struct.partitions)
           {
-            _iter300.write(oprot);
+            _iter310.write(oprot);
           }
         }
       }
       if (struct.isSetFileSplitKeys()) {
         {
           oprot.writeI32(struct.fileSplitKeys.size());
-          for (FieldSchema _iter301 : struct.fileSplitKeys)
+          for (FieldSchema _iter311 : struct.fileSplitKeys)
           {
-            _iter301.write(oprot);
+            _iter311.write(oprot);
           }
         }
       }
@@ -2242,29 +2242,29 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
       }
       if (incoming.get(8)) {
         {
-          org.apache.thrift.protocol.TList _list302 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.partitionKeys = new ArrayList<FieldSchema>(_list302.size);
-          for (int _i303 = 0; _i303 < _list302.size; ++_i303)
+          org.apache.thrift.protocol.TList _list312 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.partitionKeys = new ArrayList<FieldSchema>(_list312.size);
+          for (int _i313 = 0; _i313 < _list312.size; ++_i313)
           {
-            FieldSchema _elem304; // required
-            _elem304 = new FieldSchema();
-            _elem304.read(iprot);
-            struct.partitionKeys.add(_elem304);
+            FieldSchema _elem314; // required
+            _elem314 = new FieldSchema();
+            _elem314.read(iprot);
+            struct.partitionKeys.add(_elem314);
           }
         }
         struct.setPartitionKeysIsSet(true);
       }
       if (incoming.get(9)) {
         {
-          org.apache.thrift.protocol.TMap _map305 = new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.STRING, iprot.readI32());
-          struct.parameters = new HashMap<String,String>(2*_map305.size);
-          for (int _i306 = 0; _i306 < _map305.size; ++_i306)
+          org.apache.thrift.protocol.TMap _map315 = new org.apache.thrift.protocol.TMap(org.apache.thrift.protocol.TType.STRING, org.apache.thrift.protocol.TType.STRING, iprot.readI32());
+          struct.parameters = new HashMap<String,String>(2*_map315.size);
+          for (int _i316 = 0; _i316 < _map315.size; ++_i316)
           {
-            String _key307; // required
-            String _val308; // required
-            _key307 = iprot.readString();
-            _val308 = iprot.readString();
-            struct.parameters.put(_key307, _val308);
+            String _key317; // required
+            String _val318; // required
+            _key317 = iprot.readString();
+            _val318 = iprot.readString();
+            struct.parameters.put(_key317, _val318);
           }
         }
         struct.setParametersIsSet(true);
@@ -2283,14 +2283,14 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
       }
       if (incoming.get(13)) {
         {
-          org.apache.thrift.protocol.TList _list309 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.nodeGroups = new ArrayList<NodeGroup>(_list309.size);
-          for (int _i310 = 0; _i310 < _list309.size; ++_i310)
+          org.apache.thrift.protocol.TList _list319 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.nodeGroups = new ArrayList<NodeGroup>(_list319.size);
+          for (int _i320 = 0; _i320 < _list319.size; ++_i320)
           {
-            NodeGroup _elem311; // required
-            _elem311 = new NodeGroup();
-            _elem311.read(iprot);
-            struct.nodeGroups.add(_elem311);
+            NodeGroup _elem321; // required
+            _elem321 = new NodeGroup();
+            _elem321.read(iprot);
+            struct.nodeGroups.add(_elem321);
           }
         }
         struct.setNodeGroupsIsSet(true);
@@ -2302,28 +2302,28 @@ public class Table implements org.apache.thrift.TBase<Table, Table._Fields>, jav
       }
       if (incoming.get(15)) {
         {
-          org.apache.thrift.protocol.TList _list312 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.partitions = new ArrayList<Partition>(_list312.size);
-          for (int _i313 = 0; _i313 < _list312.size; ++_i313)
+          org.apache.thrift.protocol.TList _list322 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.partitions = new ArrayList<Partition>(_list322.size);
+          for (int _i323 = 0; _i323 < _list322.size; ++_i323)
           {
-            Partition _elem314; // required
-            _elem314 = new Partition();
-            _elem314.read(iprot);
-            struct.partitions.add(_elem314);
+            Partition _elem324; // required
+            _elem324 = new Partition();
+            _elem324.read(iprot);
+            struct.partitions.add(_elem324);
           }
         }
         struct.setPartitionsIsSet(true);
       }
       if (incoming.get(16)) {
         {
-          org.apache.thrift.protocol.TList _list315 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-          struct.fileSplitKeys = new ArrayList<FieldSchema>(_list315.size);
-          for (int _i316 = 0; _i316 < _list315.size; ++_i316)
+          org.apache.thrift.protocol.TList _list325 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+          struct.fileSplitKeys = new ArrayList<FieldSchema>(_list325.size);
+          for (int _i326 = 0; _i326 < _list325.size; ++_i326)
           {
-            FieldSchema _elem317; // required
-            _elem317 = new FieldSchema();
-            _elem317.read(iprot);
-            struct.fileSplitKeys.add(_elem317);
+            FieldSchema _elem327; // required
+            _elem327 = new FieldSchema();
+            _elem327.read(iprot);
+            struct.fileSplitKeys.add(_elem327);
           }
         }
         struct.setFileSplitKeysIsSet(true);
