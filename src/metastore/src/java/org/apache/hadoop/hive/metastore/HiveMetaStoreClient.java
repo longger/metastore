@@ -2325,4 +2325,13 @@ public boolean authentication(String user_name, String passwd)
     return client.statFileSystem(begin_time, end_time);
   }
 
+  @Override
+  public void setTimeout(int timeout) {
+    ((TSocket)transport).setTimeout(timeout * 1000);
+  }
+
+  @Override
+  public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException {
+    client.set_file_repnr(fid, repnr);
+  }
 }

@@ -656,7 +656,7 @@ class PrincipalPrivilegeSet {
 void swap(PrincipalPrivilegeSet &a, PrincipalPrivilegeSet &b);
 
 typedef struct _statfs__isset {
-  _statfs__isset() : from(false), to(false), increate(false), close(false), replicated(false), rm_logical(false), rm_physical(false), underrep(false), overrep(false), linger(false), suspect(false), inc_ons(false), inc_ons2(false), cls_offs(false), incs(false), clos(false), fnrs(false) {}
+  _statfs__isset() : from(false), to(false), increate(false), close(false), replicated(false), rm_logical(false), rm_physical(false), underrep(false), overrep(false), linger(false), suspect(false), inc_ons(false), inc_ons2(false), cls_offs(false), incs(false), clos(false), fnrs(false), recordnr(false), length(false) {}
   bool from;
   bool to;
   bool increate;
@@ -674,15 +674,17 @@ typedef struct _statfs__isset {
   bool incs;
   bool clos;
   bool fnrs;
+  bool recordnr;
+  bool length;
 } _statfs__isset;
 
 class statfs {
  public:
 
-  static const char* ascii_fingerprint; // = "ACE5978558E7240F7562E6754DEA31A6";
-  static const uint8_t binary_fingerprint[16]; // = {0xAC,0xE5,0x97,0x85,0x58,0xE7,0x24,0x0F,0x75,0x62,0xE6,0x75,0x4D,0xEA,0x31,0xA6};
+  static const char* ascii_fingerprint; // = "E1F7C501B5B805C4D8CDA5C49FD0ACFA";
+  static const uint8_t binary_fingerprint[16]; // = {0xE1,0xF7,0xC5,0x01,0xB5,0xB8,0x05,0xC4,0xD8,0xCD,0xA5,0xC4,0x9F,0xD0,0xAC,0xFA};
 
-  statfs() : from(0), to(0), increate(0), close(0), replicated(0), rm_logical(0), rm_physical(0), underrep(0), overrep(0), linger(0), suspect(0), inc_ons(0), inc_ons2(0), cls_offs(0) {
+  statfs() : from(0), to(0), increate(0), close(0), replicated(0), rm_logical(0), rm_physical(0), underrep(0), overrep(0), linger(0), suspect(0), inc_ons(0), inc_ons2(0), cls_offs(0), recordnr(0), length(0) {
   }
 
   virtual ~statfs() throw() {}
@@ -704,6 +706,8 @@ class statfs {
   std::vector<int64_t>  incs;
   std::vector<int64_t>  clos;
   std::map<std::string, int64_t>  fnrs;
+  int64_t recordnr;
+  int64_t length;
 
   _statfs__isset __isset;
 
@@ -775,6 +779,14 @@ class statfs {
     fnrs = val;
   }
 
+  void __set_recordnr(const int64_t val) {
+    recordnr = val;
+  }
+
+  void __set_length(const int64_t val) {
+    length = val;
+  }
+
   bool operator == (const statfs & rhs) const
   {
     if (!(from == rhs.from))
@@ -810,6 +822,10 @@ class statfs {
     if (!(clos == rhs.clos))
       return false;
     if (!(fnrs == rhs.fnrs))
+      return false;
+    if (!(recordnr == rhs.recordnr))
+      return false;
+    if (!(length == rhs.length))
       return false;
     return true;
   }

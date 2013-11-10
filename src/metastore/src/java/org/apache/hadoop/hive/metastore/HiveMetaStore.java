@@ -6904,6 +6904,17 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       return getMS().statFileSystem(begin_time, end_time);
     }
 
+    @Override
+    public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException {
+      startFunction("set_file_repnr", "fid " + fid + " repnr " + repnr);
+      SFile f = get_file_by_id(fid);
+      if (f != null) {
+        f.setRep_nr(repnr);
+        // FIXME: Caution, this might be a conflict code section for concurrent sfile field modification.
+        getMS().updateSFile(f);
+      }
+    }
+
   }
 
   public static IHMSHandler newHMSHandler(String name, HiveConf hiveConf) throws MetaException {

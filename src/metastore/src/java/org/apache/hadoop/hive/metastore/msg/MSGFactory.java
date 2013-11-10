@@ -19,7 +19,6 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.metastore.model.MDatabase;
 import org.apache.hadoop.hive.metastore.model.MDirectDDL;
 import org.apache.hadoop.hive.metastore.model.MFile;
-import org.apache.hadoop.hive.metastore.model.MFileLocation;
 import org.apache.hadoop.hive.metastore.model.MIndex;
 import org.apache.hadoop.hive.metastore.model.MNode;
 import org.apache.hadoop.hive.metastore.model.MNodeGroup;
@@ -636,24 +635,14 @@ public class MSGFactory {
           }
           break;
       case MSGType.MSG_FILE_USER_SET_REP_CHANGE:
-        MFileLocation mfl = (MFileLocation)msg.getEventObject();
+        MFile mf = (MFile)msg.getEventObject();
         if (msg.getOld_object_params().containsKey("f_id")) {
           params.put("f_id", msg.getOld_object_params().get("f_id"));
         } else {
-          params.put("f_id", mfl.getFile().getFid());
+          params.put("f_id", mf.getFid());
         }
         if(msg.getOld_object_params().containsKey("new_repnr")){
           params.put("new_repnr",msg.getOld_object_params().get("new_repnr"));
-        }
-        if (msg.getOld_object_params().containsKey("devid")) {
-          params.put("devid", msg.getOld_object_params().get("devid"));
-        } else {
-          params.put("devid", mfl.getDev().getDev_name());
-        }
-        if (msg.getOld_object_params().containsKey("location")) {
-          params.put("location", msg.getOld_object_params().get("location"));
-        } else {
-          params.put("location", mfl.getLocation());
         }
         break;
       case MSGType.MSG_NEW_INDEX :

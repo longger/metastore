@@ -1462,6 +1462,8 @@ class statfs {
   public $incs = null;
   public $clos = null;
   public $fnrs = null;
+  public $recordnr = null;
+  public $length = null;
 
   public function __construct($vals=null) {
     if (!isset(self::$_TSPEC)) {
@@ -1550,6 +1552,14 @@ class statfs {
             'type' => TType::I64,
             ),
           ),
+        18 => array(
+          'var' => 'recordnr',
+          'type' => TType::I64,
+          ),
+        19 => array(
+          'var' => 'length',
+          'type' => TType::I64,
+          ),
         );
     }
     if (is_array($vals)) {
@@ -1603,6 +1613,12 @@ class statfs {
       }
       if (isset($vals['fnrs'])) {
         $this->fnrs = $vals['fnrs'];
+      }
+      if (isset($vals['recordnr'])) {
+        $this->recordnr = $vals['recordnr'];
+      }
+      if (isset($vals['length'])) {
+        $this->length = $vals['length'];
       }
     }
   }
@@ -1778,6 +1794,20 @@ class statfs {
             $xfer += $input->skip($ftype);
           }
           break;
+        case 18:
+          if ($ftype == TType::I64) {
+            $xfer += $input->readI64($this->recordnr);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        case 19:
+          if ($ftype == TType::I64) {
+            $xfer += $input->readI64($this->length);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
         default:
           $xfer += $input->skip($ftype);
           break;
@@ -1911,6 +1941,16 @@ class statfs {
         }
         $output->writeMapEnd();
       }
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->recordnr !== null) {
+      $xfer += $output->writeFieldBegin('recordnr', TType::I64, 18);
+      $xfer += $output->writeI64($this->recordnr);
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->length !== null) {
+      $xfer += $output->writeFieldBegin('length', TType::I64, 19);
+      $xfer += $output->writeI64($this->length);
       $xfer += $output->writeFieldEnd();
     }
     $xfer += $output->writeFieldStop();

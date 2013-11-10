@@ -100,11 +100,15 @@ public class MSGType {
    * 文件副本上下线变化：例如，文件的副本状态变化，ONLINE or OFFLINE
    */
   public static final int MSG_REP_FILE_ONOFF =  1308;
-
+  /**
+   * 删除分区文件
+   */
   public static final int MSG_DEL_PARTITION_FILE =  1309;
-      //删除分区文件
+  /**
+   * 用户设置的目标副本数目变化
+   */
   public static final int MSG_FILE_USER_SET_REP_CHANGE = 1310;
-      //用户设置的目标副本数目变化
+
   public static final int MSG_NEW_INDEX =  1401;
       //新建列索引
   public static final int MSG_ALT_INDEX =  1402;

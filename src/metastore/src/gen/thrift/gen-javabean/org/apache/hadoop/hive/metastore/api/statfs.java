@@ -51,6 +51,8 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
   private static final org.apache.thrift.protocol.TField INCS_FIELD_DESC = new org.apache.thrift.protocol.TField("incs", org.apache.thrift.protocol.TType.LIST, (short)15);
   private static final org.apache.thrift.protocol.TField CLOS_FIELD_DESC = new org.apache.thrift.protocol.TField("clos", org.apache.thrift.protocol.TType.LIST, (short)16);
   private static final org.apache.thrift.protocol.TField FNRS_FIELD_DESC = new org.apache.thrift.protocol.TField("fnrs", org.apache.thrift.protocol.TType.MAP, (short)17);
+  private static final org.apache.thrift.protocol.TField RECORDNR_FIELD_DESC = new org.apache.thrift.protocol.TField("recordnr", org.apache.thrift.protocol.TType.I64, (short)18);
+  private static final org.apache.thrift.protocol.TField LENGTH_FIELD_DESC = new org.apache.thrift.protocol.TField("length", org.apache.thrift.protocol.TType.I64, (short)19);
 
   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
   static {
@@ -75,6 +77,8 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
   private List<Long> incs; // required
   private List<Long> clos; // required
   private Map<String,Long> fnrs; // required
+  private long recordnr; // required
+  private long length; // required
 
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
@@ -94,7 +98,9 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     CLS_OFFS((short)14, "cls_offs"),
     INCS((short)15, "incs"),
     CLOS((short)16, "clos"),
-    FNRS((short)17, "fnrs");
+    FNRS((short)17, "fnrs"),
+    RECORDNR((short)18, "recordnr"),
+    LENGTH((short)19, "length");
 
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -143,6 +149,10 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
           return CLOS;
         case 17: // FNRS
           return FNRS;
+        case 18: // RECORDNR
+          return RECORDNR;
+        case 19: // LENGTH
+          return LENGTH;
         default:
           return null;
       }
@@ -197,6 +207,8 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
   private static final int __INC_ONS_ISSET_ID = 11;
   private static final int __INC_ONS2_ISSET_ID = 12;
   private static final int __CLS_OFFS_ISSET_ID = 13;
+  private static final int __RECORDNR_ISSET_ID = 14;
+  private static final int __LENGTH_ISSET_ID = 15;
   private short __isset_bitfield = 0;
   public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
   static {
@@ -239,6 +251,10 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
         new org.apache.thrift.meta_data.MapMetaData(org.apache.thrift.protocol.TType.MAP, 
             new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING), 
             new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I64))));
+    tmpMap.put(_Fields.RECORDNR, new org.apache.thrift.meta_data.FieldMetaData("recordnr", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+        new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I64)));
+    tmpMap.put(_Fields.LENGTH, new org.apache.thrift.meta_data.FieldMetaData("length", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+        new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I64)));
     metaDataMap = Collections.unmodifiableMap(tmpMap);
     org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(statfs.class, metaDataMap);
   }
@@ -263,7 +279,9 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     long cls_offs,
     List<Long> incs,
     List<Long> clos,
-    Map<String,Long> fnrs)
+    Map<String,Long> fnrs,
+    long recordnr,
+    long length)
   {
     this();
     this.from = from;
@@ -297,6 +315,10 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     this.incs = incs;
     this.clos = clos;
     this.fnrs = fnrs;
+    this.recordnr = recordnr;
+    setRecordnrIsSet(true);
+    this.length = length;
+    setLengthIsSet(true);
   }
 
   /**
@@ -347,6 +369,8 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       }
       this.fnrs = __this__fnrs;
     }
+    this.recordnr = other.recordnr;
+    this.length = other.length;
   }
 
   public statfs deepCopy() {
@@ -386,6 +410,10 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     this.incs = null;
     this.clos = null;
     this.fnrs = null;
+    setRecordnrIsSet(false);
+    this.recordnr = 0;
+    setLengthIsSet(false);
+    this.length = 0;
   }
 
   public long getFrom() {
@@ -806,6 +834,50 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     }
   }
 
+  public long getRecordnr() {
+    return this.recordnr;
+  }
+
+  public void setRecordnr(long recordnr) {
+    this.recordnr = recordnr;
+    setRecordnrIsSet(true);
+  }
+
+  public void unsetRecordnr() {
+    __isset_bitfield = EncodingUtils.clearBit(__isset_bitfield, __RECORDNR_ISSET_ID);
+  }
+
+  /** Returns true if field recordnr is set (has been assigned a value) and false otherwise */
+  public boolean isSetRecordnr() {
+    return EncodingUtils.testBit(__isset_bitfield, __RECORDNR_ISSET_ID);
+  }
+
+  public void setRecordnrIsSet(boolean value) {
+    __isset_bitfield = EncodingUtils.setBit(__isset_bitfield, __RECORDNR_ISSET_ID, value);
+  }
+
+  public long getLength() {
+    return this.length;
+  }
+
+  public void setLength(long length) {
+    this.length = length;
+    setLengthIsSet(true);
+  }
+
+  public void unsetLength() {
+    __isset_bitfield = EncodingUtils.clearBit(__isset_bitfield, __LENGTH_ISSET_ID);
+  }
+
+  /** Returns true if field length is set (has been assigned a value) and false otherwise */
+  public boolean isSetLength() {
+    return EncodingUtils.testBit(__isset_bitfield, __LENGTH_ISSET_ID);
+  }
+
+  public void setLengthIsSet(boolean value) {
+    __isset_bitfield = EncodingUtils.setBit(__isset_bitfield, __LENGTH_ISSET_ID, value);
+  }
+
   public void setFieldValue(_Fields field, Object value) {
     switch (field) {
     case FROM:
@@ -944,6 +1016,22 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       }
       break;
 
+    case RECORDNR:
+      if (value == null) {
+        unsetRecordnr();
+      } else {
+        setRecordnr((Long)value);
+      }
+      break;
+
+    case LENGTH:
+      if (value == null) {
+        unsetLength();
+      } else {
+        setLength((Long)value);
+      }
+      break;
+
     }
   }
 
@@ -1000,6 +1088,12 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     case FNRS:
       return getFnrs();
 
+    case RECORDNR:
+      return Long.valueOf(getRecordnr());
+
+    case LENGTH:
+      return Long.valueOf(getLength());
+
     }
     throw new IllegalStateException();
   }
@@ -1045,6 +1139,10 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       return isSetClos();
     case FNRS:
       return isSetFnrs();
+    case RECORDNR:
+      return isSetRecordnr();
+    case LENGTH:
+      return isSetLength();
     }
     throw new IllegalStateException();
   }
@@ -1215,6 +1313,24 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
         return false;
     }
 
+    boolean this_present_recordnr = true;
+    boolean that_present_recordnr = true;
+    if (this_present_recordnr || that_present_recordnr) {
+      if (!(this_present_recordnr && that_present_recordnr))
+        return false;
+      if (this.recordnr != that.recordnr)
+        return false;
+    }
+
+    boolean this_present_length = true;
+    boolean that_present_length = true;
+    if (this_present_length || that_present_length) {
+      if (!(this_present_length && that_present_length))
+        return false;
+      if (this.length != that.length)
+        return false;
+    }
+
     return true;
   }
 
@@ -1306,6 +1422,16 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     builder.append(present_fnrs);
     if (present_fnrs)
       builder.append(fnrs);
+
+    boolean present_recordnr = true;
+    builder.append(present_recordnr);
+    if (present_recordnr)
+      builder.append(recordnr);
+
+    boolean present_length = true;
+    builder.append(present_length);
+    if (present_length)
+      builder.append(length);
 
     return builder.toHashCode();
   }
@@ -1488,6 +1614,26 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
         return lastComparison;
       }
     }
+    lastComparison = Boolean.valueOf(isSetRecordnr()).compareTo(typedOther.isSetRecordnr());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (isSetRecordnr()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.recordnr, typedOther.recordnr);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
+    lastComparison = Boolean.valueOf(isSetLength()).compareTo(typedOther.isSetLength());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (isSetLength()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.length, typedOther.length);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
     return 0;
   }
 
@@ -1586,6 +1732,14 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
     } else {
       sb.append(this.fnrs);
     }
+    first = false;
+    if (!first) sb.append(", ");
+    sb.append("recordnr:");
+    sb.append(this.recordnr);
+    first = false;
+    if (!first) sb.append(", ");
+    sb.append("length:");
+    sb.append(this.length);
     first = false;
     sb.append(")");
     return sb.toString();
@@ -1800,6 +1954,22 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
+          case 18: // RECORDNR
+            if (schemeField.type == org.apache.thrift.protocol.TType.I64) {
+              struct.recordnr = iprot.readI64();
+              struct.setRecordnrIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
+          case 19: // LENGTH
+            if (schemeField.type == org.apache.thrift.protocol.TType.I64) {
+              struct.length = iprot.readI64();
+              struct.setLengthIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
           default:
             org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
         }
@@ -1892,6 +2062,12 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
         }
         oprot.writeFieldEnd();
       }
+      oprot.writeFieldBegin(RECORDNR_FIELD_DESC);
+      oprot.writeI64(struct.recordnr);
+      oprot.writeFieldEnd();
+      oprot.writeFieldBegin(LENGTH_FIELD_DESC);
+      oprot.writeI64(struct.length);
+      oprot.writeFieldEnd();
       oprot.writeFieldStop();
       oprot.writeStructEnd();
     }
@@ -1961,7 +2137,13 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
       if (struct.isSetFnrs()) {
         optionals.set(16);
       }
-      oprot.writeBitSet(optionals, 17);
+      if (struct.isSetRecordnr()) {
+        optionals.set(17);
+      }
+      if (struct.isSetLength()) {
+        optionals.set(18);
+      }
+      oprot.writeBitSet(optionals, 19);
       if (struct.isSetFrom()) {
         oprot.writeI64(struct.from);
       }
@@ -2032,12 +2214,18 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
           }
         }
       }
+      if (struct.isSetRecordnr()) {
+        oprot.writeI64(struct.recordnr);
+      }
+      if (struct.isSetLength()) {
+        oprot.writeI64(struct.length);
+      }
     }
 
     @Override
     public void read(org.apache.thrift.protocol.TProtocol prot, statfs struct) throws org.apache.thrift.TException {
       TTupleProtocol iprot = (TTupleProtocol) prot;
-      BitSet incoming = iprot.readBitSet(17);
+      BitSet incoming = iprot.readBitSet(19);
       if (incoming.get(0)) {
         struct.from = iprot.readI64();
         struct.setFromIsSet(true);
@@ -2134,6 +2322,14 @@ public class statfs implements org.apache.thrift.TBase<statfs, statfs._Fields>, 
           }
         }
         struct.setFnrsIsSet(true);
+      }
+      if (incoming.get(17)) {
+        struct.recordnr = iprot.readI64();
+        struct.setRecordnrIsSet(true);
+      }
+      if (incoming.get(18)) {
+        struct.length = iprot.readI64();
+        struct.setLengthIsSet(true);
       }
     }
   }

@@ -1805,6 +1805,9 @@ public class DiskManager {
     }
 
     public String getMP(String node_name, String devid) throws MetaException {
+      if (node_name == null || node_name.equals("")) {
+        node_name = getAnyNode();
+      }
       NodeInfo ni = ndmap.get(node_name);
       if (ni == null) {
         throw new MetaException("Can't find Node '" + node_name + "' in ndmap.");
@@ -2909,7 +2912,9 @@ public class DiskManager {
                   }
                   if (release_fix_limit) {
                     synchronized (fixRepLimit) {
-                      fixRepLimit++;
+                      if (fixRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)) {
+                        fixRepLimit++;
+                      }
                     }
                   }
                   if (args.length < 3) {

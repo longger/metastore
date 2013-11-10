@@ -2279,6 +2279,21 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'create_file_by_policy failed: unknown result')
     end
 
+    def set_file_repnr(fid, repnr)
+      send_set_file_repnr(fid, repnr)
+      recv_set_file_repnr()
+    end
+
+    def send_set_file_repnr(fid, repnr)
+      send_message('set_file_repnr', Set_file_repnr_args, :fid => fid, :repnr => repnr)
+    end
+
+    def recv_set_file_repnr()
+      result = receive_message(Set_file_repnr_result)
+      raise result.o1 unless result.o1.nil?
+      return
+    end
+
     def reopen_file(fid)
       send_reopen_file(fid)
       return recv_reopen_file()
@@ -4865,6 +4880,17 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'create_file_by_policy', seqid)
+    end
+
+    def process_set_file_repnr(seqid, iprot, oprot)
+      args = read_args(iprot, Set_file_repnr_args)
+      result = Set_file_repnr_result.new()
+      begin
+        @handler.set_file_repnr(args.fid, args.repnr)
+      rescue ::FileOperationException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'set_file_repnr', seqid)
     end
 
     def process_reopen_file(seqid, iprot, oprot)
@@ -10626,6 +10652,40 @@ module ThriftHiveMetastore
 
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::STRUCT, :name => 'success', :class => ::SFile},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::FileOperationException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Set_file_repnr_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    FID = 1
+    REPNR = 2
+
+    FIELDS = {
+      FID => {:type => ::Thrift::Types::I64, :name => 'fid'},
+      REPNR => {:type => ::Thrift::Types::I32, :name => 'repnr'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Set_file_repnr_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    O1 = 1
+
+    FIELDS = {
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::FileOperationException}
     }
 

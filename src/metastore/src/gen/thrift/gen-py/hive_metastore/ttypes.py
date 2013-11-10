@@ -1119,6 +1119,8 @@ class statfs:
    - incs
    - clos
    - fnrs
+   - recordnr
+   - length
   """
 
   thrift_spec = (
@@ -1140,9 +1142,11 @@ class statfs:
     (15, TType.LIST, 'incs', (TType.I64,None), None, ), # 15
     (16, TType.LIST, 'clos', (TType.I64,None), None, ), # 16
     (17, TType.MAP, 'fnrs', (TType.STRING,None,TType.I64,None), None, ), # 17
+    (18, TType.I64, 'recordnr', None, None, ), # 18
+    (19, TType.I64, 'length', None, None, ), # 19
   )
 
-  def __init__(self, from=None, to=None, increate=None, close=None, replicated=None, rm_logical=None, rm_physical=None, underrep=None, overrep=None, linger=None, suspect=None, inc_ons=None, inc_ons2=None, cls_offs=None, incs=None, clos=None, fnrs=None,):
+  def __init__(self, from=None, to=None, increate=None, close=None, replicated=None, rm_logical=None, rm_physical=None, underrep=None, overrep=None, linger=None, suspect=None, inc_ons=None, inc_ons2=None, cls_offs=None, incs=None, clos=None, fnrs=None, recordnr=None, length=None,):
     self.from = from
     self.to = to
     self.increate = increate
@@ -1160,6 +1164,8 @@ class statfs:
     self.incs = incs
     self.clos = clos
     self.fnrs = fnrs
+    self.recordnr = recordnr
+    self.length = length
 
   def read(self, iprot):
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
@@ -1271,6 +1277,16 @@ class statfs:
           iprot.readMapEnd()
         else:
           iprot.skip(ftype)
+      elif fid == 18:
+        if ftype == TType.I64:
+          self.recordnr = iprot.readI64();
+        else:
+          iprot.skip(ftype)
+      elif fid == 19:
+        if ftype == TType.I64:
+          self.length = iprot.readI64();
+        else:
+          iprot.skip(ftype)
       else:
         iprot.skip(ftype)
       iprot.readFieldEnd()
@@ -1358,6 +1374,14 @@ class statfs:
         oprot.writeString(kiter90)
         oprot.writeI64(viter91)
       oprot.writeMapEnd()
+      oprot.writeFieldEnd()
+    if self.recordnr is not None:
+      oprot.writeFieldBegin('recordnr', TType.I64, 18)
+      oprot.writeI64(self.recordnr)
+      oprot.writeFieldEnd()
+    if self.length is not None:
+      oprot.writeFieldBegin('length', TType.I64, 19)
+      oprot.writeI64(self.length)
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
