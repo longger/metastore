@@ -1320,6 +1320,8 @@ public class ObjectStore implements RawStore, Configurable {
         if (m == null) {
           continue;
         }
+        s.setRecordnr(s.getRecordnr() + m.getRecord_nr());
+        s.setLength(s.getLength() + m.getLength());
         switch (m.getStore_status()) {
         case MetaStoreConst.MFileStoreStatus.INCREATE:
           s.setIncreate(s.getIncreate() + 1);
@@ -1338,8 +1340,14 @@ public class ObjectStore implements RawStore, Configurable {
           s.setRm_physical(s.getRm_physical() + 1);
           break;
         }
-        if (m.getTable().getTableName() != null) {
-          long fnr = s.getFnrs().get(m.getTable().getTableName());
+        if (m.getTable() != null && m.getTable().getTableName() != null) {
+          if (s.getFnrs() == null) {
+            s.setFnrs(new HashMap<String, Long>());
+          }
+          Long fnr = s.getFnrs().get(m.getTable().getTableName());
+          if (fnr == null) {
+            fnr = 0L;
+          }
           s.putToFnrs(m.getTable().getTableName(), ++fnr);
         }
 
@@ -2772,7 +2780,7 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery(MFileLocation.class, "this.file.fid == fid");
       query.declareParameters("long fid");
-      query.getFetchPlan().setMaxFetchDepth(2);
+      query.getFetchPlan().setMaxFetchDepth(3);
       query.getFetchPlan().setFetchSize(FetchPlan.FETCH_SIZE_GREEDY);
       List l = (List)query.execute(fid);
       Iterator iter = l.iterator();

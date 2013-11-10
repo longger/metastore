@@ -1087,6 +1087,14 @@ class Iface(fb303.FacebookService.Iface):
     """
     pass
 
+  def set_file_repnr(self, fid, repnr):
+    """
+    Parameters:
+     - fid
+     - repnr
+    """
+    pass
+
   def reopen_file(self, fid):
     """
     Parameters:
@@ -6301,6 +6309,38 @@ class Client(fb303.FacebookService.Client, Iface):
       raise result.o1
     raise TApplicationException(TApplicationException.MISSING_RESULT, "create_file_by_policy failed: unknown result");
 
+  def set_file_repnr(self, fid, repnr):
+    """
+    Parameters:
+     - fid
+     - repnr
+    """
+    self.send_set_file_repnr(fid, repnr)
+    self.recv_set_file_repnr()
+
+  def send_set_file_repnr(self, fid, repnr):
+    self._oprot.writeMessageBegin('set_file_repnr', TMessageType.CALL, self._seqid)
+    args = set_file_repnr_args()
+    args.fid = fid
+    args.repnr = repnr
+    args.write(self._oprot)
+    self._oprot.writeMessageEnd()
+    self._oprot.trans.flush()
+
+  def recv_set_file_repnr(self, ):
+    (fname, mtype, rseqid) = self._iprot.readMessageBegin()
+    if mtype == TMessageType.EXCEPTION:
+      x = TApplicationException()
+      x.read(self._iprot)
+      self._iprot.readMessageEnd()
+      raise x
+    result = set_file_repnr_result()
+    result.read(self._iprot)
+    self._iprot.readMessageEnd()
+    if result.o1 is not None:
+      raise result.o1
+    return
+
   def reopen_file(self, fid):
     """
     Parameters:
@@ -8277,6 +8317,7 @@ class Processor(fb303.FacebookService.Processor, Iface, TProcessor):
     self._processMap["cancel_delegation_token"] = Processor.process_cancel_delegation_token
     self._processMap["create_file"] = Processor.process_create_file
     self._processMap["create_file_by_policy"] = Processor.process_create_file_by_policy
+    self._processMap["set_file_repnr"] = Processor.process_set_file_repnr
     self._processMap["reopen_file"] = Processor.process_reopen_file
     self._processMap["close_file"] = Processor.process_close_file
     self._processMap["online_filelocation"] = Processor.process_online_filelocation
@@ -10463,6 +10504,20 @@ class Processor(fb303.FacebookService.Processor, Iface, TProcessor):
     except FileOperationException as o1:
       result.o1 = o1
     oprot.writeMessageBegin("create_file_by_policy", TMessageType.REPLY, seqid)
+    result.write(oprot)
+    oprot.writeMessageEnd()
+    oprot.trans.flush()
+
+  def process_set_file_repnr(self, seqid, iprot, oprot):
+    args = set_file_repnr_args()
+    args.read(iprot)
+    iprot.readMessageEnd()
+    result = set_file_repnr_result()
+    try:
+      self._handler.set_file_repnr(args.fid, args.repnr)
+    except FileOperationException as o1:
+      result.o1 = o1
+    oprot.writeMessageBegin("set_file_repnr", TMessageType.REPLY, seqid)
     result.write(oprot)
     oprot.writeMessageEnd()
     oprot.trans.flush()
@@ -32891,6 +32946,139 @@ class create_file_by_policy_result:
       oprot.writeFieldBegin('success', TType.STRUCT, 0)
       self.success.write(oprot)
       oprot.writeFieldEnd()
+    if self.o1 is not None:
+      oprot.writeFieldBegin('o1', TType.STRUCT, 1)
+      self.o1.write(oprot)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class set_file_repnr_args:
+  """
+  Attributes:
+   - fid
+   - repnr
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.I64, 'fid', None, None, ), # 1
+    (2, TType.I32, 'repnr', None, None, ), # 2
+  )
+
+  def __init__(self, fid=None, repnr=None,):
+    self.fid = fid
+    self.repnr = repnr
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.I64:
+          self.fid = iprot.readI64();
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.I32:
+          self.repnr = iprot.readI32();
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('set_file_repnr_args')
+    if self.fid is not None:
+      oprot.writeFieldBegin('fid', TType.I64, 1)
+      oprot.writeI64(self.fid)
+      oprot.writeFieldEnd()
+    if self.repnr is not None:
+      oprot.writeFieldBegin('repnr', TType.I32, 2)
+      oprot.writeI32(self.repnr)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class set_file_repnr_result:
+  """
+  Attributes:
+   - o1
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.STRUCT, 'o1', (FileOperationException, FileOperationException.thrift_spec), None, ), # 1
+  )
+
+  def __init__(self, o1=None,):
+    self.o1 = o1
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.STRUCT:
+          self.o1 = FileOperationException()
+          self.o1.read(iprot)
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('set_file_repnr_result')
     if self.o1 is not None:
       oprot.writeFieldBegin('o1', TType.STRUCT, 1)
       self.o1.write(oprot)

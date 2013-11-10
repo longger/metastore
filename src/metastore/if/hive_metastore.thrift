@@ -204,6 +204,9 @@ struct statfs {
   15: list<i64> incs,
   16: list<i64> clos,
   17: map<string, i64> fnrs;
+  
+  18: i64 recordnr,
+  19: i64 length,
 }
 
 struct Role {
@@ -965,6 +968,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   SFile create_file(1:string node_name, 2:i32 repnr, 3:string db_name, 4:string table_name, 5:list<SplitValue> values) throws (1:FileOperationException o1)
   
   SFile create_file_by_policy(1:CreatePolicy policy, 2:i32 repnr, 3:string db_name, 4:string table_name, 5:list<SplitValue> values) throws (1:FileOperationException o1)
+  
+  void set_file_repnr(1:i64 fid, 2:i32 repnr) throws (1:FileOperationException o1)
   
   bool reopen_file(1:i64 fid) throws (1:FileOperationException o1, 2:MetaException o2)
   

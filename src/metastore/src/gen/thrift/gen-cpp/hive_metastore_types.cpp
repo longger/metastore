@@ -1154,8 +1154,8 @@ void swap(PrincipalPrivilegeSet &a, PrincipalPrivilegeSet &b) {
   swap(a.__isset, b.__isset);
 }
 
-const char* statfs::ascii_fingerprint = "ACE5978558E7240F7562E6754DEA31A6";
-const uint8_t statfs::binary_fingerprint[16] = {0xAC,0xE5,0x97,0x85,0x58,0xE7,0x24,0x0F,0x75,0x62,0xE6,0x75,0x4D,0xEA,0x31,0xA6};
+const char* statfs::ascii_fingerprint = "E1F7C501B5B805C4D8CDA5C49FD0ACFA";
+const uint8_t statfs::binary_fingerprint[16] = {0xE1,0xF7,0xC5,0x01,0xB5,0xB8,0x05,0xC4,0xD8,0xCD,0xA5,0xC4,0x9F,0xD0,0xAC,0xFA};
 
 uint32_t statfs::read(::apache::thrift::protocol::TProtocol* iprot) {
 
@@ -1352,6 +1352,22 @@ uint32_t statfs::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
+      case 18:
+        if (ftype == ::apache::thrift::protocol::T_I64) {
+          xfer += iprot->readI64(this->recordnr);
+          this->__isset.recordnr = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
+      case 19:
+        if (ftype == ::apache::thrift::protocol::T_I64) {
+          xfer += iprot->readI64(this->length);
+          this->__isset.length = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -1461,6 +1477,14 @@ uint32_t statfs::write(::apache::thrift::protocol::TProtocol* oprot) const {
   }
   xfer += oprot->writeFieldEnd();
 
+  xfer += oprot->writeFieldBegin("recordnr", ::apache::thrift::protocol::T_I64, 18);
+  xfer += oprot->writeI64(this->recordnr);
+  xfer += oprot->writeFieldEnd();
+
+  xfer += oprot->writeFieldBegin("length", ::apache::thrift::protocol::T_I64, 19);
+  xfer += oprot->writeI64(this->length);
+  xfer += oprot->writeFieldEnd();
+
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   return xfer;
@@ -1485,6 +1509,8 @@ void swap(statfs &a, statfs &b) {
   swap(a.incs, b.incs);
   swap(a.clos, b.clos);
   swap(a.fnrs, b.fnrs);
+  swap(a.recordnr, b.recordnr);
+  swap(a.length, b.length);
   swap(a.__isset, b.__isset);
 }
 
