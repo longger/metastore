@@ -1209,7 +1209,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     LOG.debug("----zjw --analyzeAlterDatawareHouse ast:" + ast.toStringTree());
     String dwNum = unescapeIdentifier(ast.getChild(0).getText());
     int dn = Integer.parseInt(dwNum);
-    String sql = unescapeIdentifier(ast.getChild(1).getText());
+    String sql = unescapeSQLString(ast.getChild(1).getText());
     AlterDatawareHouseDesc alterDatawareHouseDesc = new AlterDatawareHouseDesc(dn, sql);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         alterDatawareHouseDesc), conf));

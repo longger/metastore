@@ -1,14 +1,18 @@
 package org.apache.hadoop.hive.metastore.msg;
 
-import java.util.ArrayList;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Semaphore;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
+import org.apache.hadoop.hive.metastore.tools.HiveMetaTool;
 
 import com.taobao.metamorphosis.Message;
 import com.taobao.metamorphosis.client.MessageSessionFactory;
@@ -16,6 +20,7 @@ import com.taobao.metamorphosis.client.MetaClientConfig;
 import com.taobao.metamorphosis.client.MetaMessageSessionFactory;
 import com.taobao.metamorphosis.client.consumer.ConsumerConfig;
 import com.taobao.metamorphosis.client.consumer.MessageConsumer;
+import com.taobao.metamorphosis.client.consumer.MessageListener;
 import com.taobao.metamorphosis.client.producer.MessageProducer;
 import com.taobao.metamorphosis.client.producer.SendResult;
 import com.taobao.metamorphosis.exception.MetaClientException;
@@ -252,9 +257,23 @@ public class MetaMsgServer {
   public static class AsyncConsumer {
     final MetaClientConfig metaClientConfig = new MetaClientConfig();
     final ZKConfig zkConfig = new ZKConfig();
-    //设置zookeeper地址
+    String localhost_name;
+    private  ObjectStore.MsgHandler handler ;
     public void consume() throws MetaClientException{
-      zkConfig.zkConnect = "127.0.0.1:2181";
+      //init objectstore,handler
+      HiveConf hiveConf = new HiveConf(HiveMetaTool.class);
+      ObjectStore ob = new ObjectStore();
+      ob.setConf(hiveConf);
+      handler = ob.new MsgHandler();
+
+      try {
+        localhost_name = InetAddress.getLocalHost().getHostName();
+      } catch (UnknownHostException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
+      //设置zookeeper地址
+      zkConfig.zkConnect = "192.168.1.13:3181";
       metaClientConfig.setZkConfig(zkConfig);
       // New session factory,强烈建议使用单例
       MessageSessionFactory sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
@@ -268,8 +287,35 @@ public class MetaMsgServer {
       MessageConsumer consumer =
       sessionFactory.createConsumer(new ConsumerConfig(group));
       //订阅事件，MessageListener是事件处理接口
-//      consumer.subscribe("事件类型", 1024, new MessageListener());
-//      consumer.completeSubscribe();
+      consumer.subscribe(topic, 1024, new MessageListener(){
+
+        @Override
+        public Executor getExecutor() {
+          // TODO Auto-generated method stub
+          return null;
+        }
+
+        @Override
+        public void recieveMessages(final Message message) {
+          DDLMsg msg = new DDLMsg();
+          String data = new String(message.getData());
+
+//          LOG.info("---zy--consume msg: " + data);
+          System.out.println(data);
+          msg = DDLMsg.fromJson(data);
+          if(msg.getLocalhost_name().equals(localhost_name))
+          {
+            LOG.info("---zy--local msg,no need to refresh " );
+//            handler.refresh(msg);
+          }
+//          else
+          //just test
+          handler.refresh(msg);
+        }
+
+      }
+      );
+      consumer.completeSubscribe();
     }
   }
 
@@ -341,12 +387,14 @@ public class MetaMsgServer {
   }
 
   public static void main(String[] args){
-    List<Long> nl = new ArrayList<Long>();
 
-    nl.add(1l);
-    nl.add(2l);
-    List<DDLMsg> msg = MSGFactory.generateDDLMsgs(MSGType.MSG_ADD_PARTITION_FILE,-1l,-1l,null,nl,null);
-    nl.add(3l);
+
+    try {
+      new AsyncConsumer().consume();
+    } catch (MetaClientException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
   }
 
 
