@@ -745,7 +745,7 @@ public class DiskManager {
       public void do_replicate(SFile f, int nr) {
         int init_size = f.getLocationsSize();
         int valid_idx = 0;
-        boolean no_valid_fl = true;
+        boolean master_marked = false;
         FileLocatingPolicy flp, flp_backup, flp_default;
         Set<String> excludes = new TreeSet<String>();
         Set<String> excl_dev = new TreeSet<String>();
@@ -766,25 +766,30 @@ public class DiskManager {
           excludes.add(f.getLocations().get(i).getNode_name());
           excl_dev.add(f.getLocations().get(i).getDevid());
           if (spec_dev.remove(f.getLocations().get(i).getDevid())) {
-            // this backup device has already used
+            // this backup device has already used, do not use any other backup device
             spec_dev.clear();
           }
-          if (f.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+          if (!master_marked && f.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
             valid_idx = i;
+            master_marked = true;
             if (f.getLocations().get(i).getNode_name().equals("")) {
-              f.getLocations().get(i).setNode_name(getAnyNode());
+              try {
+                f.getLocations().get(i).setNode_name(getAnyNode(f.getLocations().get(i).getDevid()));
+              } catch (MetaException e) {
+                LOG.error(e, e);
+                master_marked = false;
+              }
             }
-            no_valid_fl = false;
-            break;
           }
         }
-        if (no_valid_fl) {
+        if (!master_marked) {
           LOG.error("Async replicate SFile " + f.getFid() + ", but no valid FROM SFileLocations!");
           return;
         }
 
         flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS, false);
         flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
+        flp_backup.origNode = f.getLocations().get(valid_idx).getNode_name();
 
         for (int i = init_size; i < (init_size + nr); i++, flp = flp_default) {
           if (i == init_size) {
@@ -797,6 +802,19 @@ public class DiskManager {
             if (node_name == null) {
               LOG.warn("Could not find any best node to replicate file " + f.getFid());
               break;
+            }
+            // if we are selecting backup device, try to use local shortcut
+            if (flp.origNode != null && flp.nodes.contains(flp.origNode)) {
+              node_name = flp.origNode;
+            }
+            // if the valid location is a shared device, try to use local shortcut
+            try {
+              if (isSharedDevice(f.getLocations().get(valid_idx).getDevid())) {
+                // ok, reset the from loc' node name
+                f.getLocations().get(valid_idx).setNode_name(node_name);
+              }
+            } catch (NoSuchObjectException e1) {
+              LOG.error(e1, e1);
             }
             excludes.add(node_name);
             String devid = findBestDevice(node_name, flp);
@@ -1248,16 +1266,41 @@ public class DiskManager {
       bktimer.schedule(bktt, 0, 5000);
     }
 
-    public String getAnyNode() {
+    public void release_fix_limit() {
+      synchronized (fixRepLimit) {
+        fixRepLimit++;
+      }
+    }
+
+    public String getAnyNode(String devid) throws MetaException {
       String r = null;
 
       synchronized (ndmap) {
         for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
-          r = e.getKey();
-          break;
+          NodeInfo ni = e.getValue();
+
+          if (devid == null) {
+            // anyone is ok
+            r = e.getKey();
+            break;
+          }
+          if (ni.dis != null && ni.dis.size() > 0) {
+            for (DeviceInfo di : ni.dis) {
+              if (di.dev.equalsIgnoreCase(devid)) {
+                r = e.getKey();
+                break;
+              }
+            }
+          }
+          if (r != null) {
+            break;
+          }
         }
       }
 
+      if (r == null) {
+        throw new MetaException("Could not find any avaliable Node that attached device: " + devid);
+      }
       return r;
     }
 
@@ -1333,10 +1376,12 @@ public class DiskManager {
     public String getDMStatus() throws MetaException {
       String r = "";
       Long[] devnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
+      Long[] adevnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
       long free = 0, used = 0;
 
       for (int i = 0; i < devnr.length; i++) {
         devnr[i] = new Long(0);
+        adevnr[i] = new Long(0);
       }
 
       r += "MetaStore Server Disk Manager listening @ " + hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
@@ -1359,8 +1404,6 @@ public class DiskManager {
                 devnr[di.prop]++;
                 break;
               }
-              free += di.free;
-              used += di.used;
             }
           }
           r += "]\n";
@@ -1370,6 +1413,14 @@ public class DiskManager {
       String ANSI_RESET = "\u001B[0m";
 	    String ANSI_RED = "\u001B[31m";
 	    String ANSI_GREEN = "\u001B[32m";
+
+	    synchronized (admap) {
+	      for (Map.Entry<String, DeviceInfo> e : admap.entrySet()) {
+	        free += e.getValue().free;
+	        used += e.getValue().used;
+	        adevnr[e.getValue().prop]++;
+	      }
+	    }
 
 	    if (used + free > 0) {
         if (((double)free / (used + free)) < 0.2) {
@@ -1383,8 +1434,10 @@ public class DiskManager {
       synchronized (rs) {
         r += "Total devices " + rs.countDevice() + ", active {alone " +
             devnr[MetaStoreConst.MDeviceProp.ALONE] + ", backup " +
-            devnr[MetaStoreConst.MDeviceProp.BACKUP] + ", shared " +
-            devnr[MetaStoreConst.MDeviceProp.SHARED] + ", backup_alone " +
+            devnr[MetaStoreConst.MDeviceProp.BACKUP] + " on " +
+            adevnr[MetaStoreConst.MDeviceProp.BACKUP] + ", shared " +
+            devnr[MetaStoreConst.MDeviceProp.SHARED] + " on " +
+            adevnr[MetaStoreConst.MDeviceProp.SHARED] + ", backup_alone " +
             devnr[MetaStoreConst.MDeviceProp.BACKUP_ALONE] + "}.\n";
       }
       r += "Inactive nodes list: {\n";
@@ -1806,7 +1859,7 @@ public class DiskManager {
 
     public String getMP(String node_name, String devid) throws MetaException {
       if (node_name == null || node_name.equals("")) {
-        node_name = getAnyNode();
+        node_name = getAnyNode(devid);
       }
       NodeInfo ni = ndmap.get(node_name);
       if (ni == null) {
@@ -2246,19 +2299,26 @@ public class DiskManager {
 
             // exclude old file locations
             for (int i = 0; i < r.begin_idx; i++) {
+              excludes.add(r.file.getLocations().get(i).getNode_name());
+              excl_dev.add(r.file.getLocations().get(i).getDevid());
+
               // mark master copy id
               if (!master_marked && r.file.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
                 master = i;
+                master_marked = true;
                 // BUG: if the master replica is a SHARED/BACKUP device, get any node
                 if (r.file.getLocations().get(i).getNode_name().equals("")) {
-                  r.file.getLocations().get(i).setNode_name(getAnyNode());
+                  try {
+                    r.file.getLocations().get(i).setNode_name(getAnyNode(r.file.getLocations().get(i).getDevid()));
+                  } catch (MetaException e) {
+                    LOG.error(e, e);
+                    master_marked = false;
+                  }
                 }
-                master_marked = true;
               }
-              excludes.add(r.file.getLocations().get(i).getNode_name());
-              excl_dev.add(r.file.getLocations().get(i).getDevid());
               // remove if this backup device has already used
               if (spec_dev.remove(r.file.getLocations().get(i).getDevid())) {
+                // this backup device has already been used, do not user any other backup device
                 spec_dev.clear();
               }
             }

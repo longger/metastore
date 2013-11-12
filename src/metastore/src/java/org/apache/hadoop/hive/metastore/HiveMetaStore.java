@@ -2657,7 +2657,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throws InvalidOperationException, MetaException {
       startFunction("alter_table", ": db=" + dbname + " tbl=" + name
           + " newtbl=" + newTable.getTableName());
-          + " newtbl=" + newTable.getTableName());
       // Update the time if it hasn't been specified.
       if (newTable.getParameters() == null ||
           newTable.getParameters().get(hive_metastoreConstants.DDL_TIME) == null) {
@@ -5649,10 +5648,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         SFile nfile = create_file_wo_location(3, tbl.getDbName(), tbl.getTableName(), null);
         fileToDel.add(nfile);
 
-        sfl.setNode_name(dm.getAnyNode());
+        try {
+          sfl.setNode_name(dm.getAnyNode(null));
+        } catch (MetaException e) {
+          sfl.setNode_name(null);
+        }
         while (sfl.getNode_name() == null) {
           LOG.warn("No active node in ndmap ... retry it.");
-          sfl.setNode_name(dm.getAnyNode());
+          try {
+            sfl.setNode_name(dm.getAnyNode(null));
+          } catch (MetaException e) {
+            sfl.setNode_name(null);
+          }
           try {
             Thread.sleep(1000);
           } catch (InterruptedException e) {
@@ -6305,10 +6312,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
               files.get(entry.getKey()).getValues());
           fileToDel.add(nfile);
 
-          sfl.setNode_name(dm.getAnyNode());
+          try {
+            sfl.setNode_name(dm.getAnyNode(null));
+          } catch (MetaException e) {
+            sfl.setNode_name(null);
+          }
           while (sfl.getNode_name() == null) {
             LOG.warn("No active node in ndmap ... retry it.");
-            sfl.setNode_name(dm.getAnyNode());
+            try {
+              sfl.setNode_name(dm.getAnyNode(null));
+            } catch (MetaException e) {
+              sfl.setNode_name(null);
+            }
             try {
               Thread.sleep(1000);
             } catch (InterruptedException e) {
