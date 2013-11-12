@@ -2279,6 +2279,21 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'create_file_by_policy failed: unknown result')
     end
 
+    def set_file_repnr(fid, repnr)
+      send_set_file_repnr(fid, repnr)
+      recv_set_file_repnr()
+    end
+
+    def send_set_file_repnr(fid, repnr)
+      send_message('set_file_repnr', Set_file_repnr_args, :fid => fid, :repnr => repnr)
+    end
+
+    def recv_set_file_repnr()
+      result = receive_message(Set_file_repnr_result)
+      raise result.o1 unless result.o1.nil?
+      return
+    end
+
     def reopen_file(fid)
       send_reopen_file(fid)
       return recv_reopen_file()
@@ -2327,6 +2342,22 @@ module ThriftHiveMetastore
       return result.success unless result.success.nil?
       raise result.o1 unless result.o1.nil?
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'online_filelocation failed: unknown result')
+    end
+
+    def offline_filelocation(sfl)
+      send_offline_filelocation(sfl)
+      return recv_offline_filelocation()
+    end
+
+    def send_offline_filelocation(sfl)
+      send_message('offline_filelocation', Offline_filelocation_args, :sfl => sfl)
+    end
+
+    def recv_offline_filelocation()
+      result = receive_message(Offline_filelocation_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'offline_filelocation failed: unknown result')
     end
 
     def toggle_safemode()
@@ -3122,6 +3153,22 @@ module ThriftHiveMetastore
       raise result.o2 unless result.o2.nil?
       raise result.o3 unless result.o3.nil?
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'assiginSchematoDB failed: unknown result')
+    end
+
+    def statFileSystem(begin_time, end_time)
+      send_statFileSystem(begin_time, end_time)
+      return recv_statFileSystem()
+    end
+
+    def send_statFileSystem(begin_time, end_time)
+      send_message('statFileSystem', StatFileSystem_args, :begin_time => begin_time, :end_time => end_time)
+    end
+
+    def recv_statFileSystem()
+      result = receive_message(StatFileSystem_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'statFileSystem failed: unknown result')
     end
 
   end
@@ -4835,6 +4882,17 @@ module ThriftHiveMetastore
       write_result(result, oprot, 'create_file_by_policy', seqid)
     end
 
+    def process_set_file_repnr(seqid, iprot, oprot)
+      args = read_args(iprot, Set_file_repnr_args)
+      result = Set_file_repnr_result.new()
+      begin
+        @handler.set_file_repnr(args.fid, args.repnr)
+      rescue ::FileOperationException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'set_file_repnr', seqid)
+    end
+
     def process_reopen_file(seqid, iprot, oprot)
       args = read_args(iprot, Reopen_file_args)
       result = Reopen_file_result.new()
@@ -4870,6 +4928,17 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'online_filelocation', seqid)
+    end
+
+    def process_offline_filelocation(seqid, iprot, oprot)
+      args = read_args(iprot, Offline_filelocation_args)
+      result = Offline_filelocation_result.new()
+      begin
+        result.success = @handler.offline_filelocation(args.sfl)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'offline_filelocation', seqid)
     end
 
     def process_toggle_safemode(seqid, iprot, oprot)
@@ -5433,6 +5502,17 @@ module ThriftHiveMetastore
         result.o3 = o3
       end
       write_result(result, oprot, 'assiginSchematoDB', seqid)
+    end
+
+    def process_statFileSystem(seqid, iprot, oprot)
+      args = read_args(iprot, StatFileSystem_args)
+      result = StatFileSystem_result.new()
+      begin
+        result.success = @handler.statFileSystem(args.begin_time, args.end_time)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'statFileSystem', seqid)
     end
 
   end
@@ -10583,6 +10663,40 @@ module ThriftHiveMetastore
     ::Thrift::Struct.generate_accessors self
   end
 
+  class Set_file_repnr_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    FID = 1
+    REPNR = 2
+
+    FIELDS = {
+      FID => {:type => ::Thrift::Types::I64, :name => 'fid'},
+      REPNR => {:type => ::Thrift::Types::I32, :name => 'repnr'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Set_file_repnr_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    O1 = 1
+
+    FIELDS = {
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::FileOperationException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
   class Reopen_file_args
     include ::Thrift::Struct, ::Thrift::Struct_Union
     FID = 1
@@ -10672,6 +10786,40 @@ module ThriftHiveMetastore
   end
 
   class Online_filelocation_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Offline_filelocation_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SFL = 1
+
+    FIELDS = {
+      SFL => {:type => ::Thrift::Types::STRUCT, :name => 'sfl', :class => ::SFileLocation}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Offline_filelocation_result
     include ::Thrift::Struct, ::Thrift::Struct_Union
     SUCCESS = 0
     O1 = 1
@@ -12482,6 +12630,42 @@ module ThriftHiveMetastore
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::InvalidObjectException},
       O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::NoSuchObjectException},
       O3 => {:type => ::Thrift::Types::STRUCT, :name => 'o3', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class StatFileSystem_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    BEGIN_TIME = 1
+    END_TIME = 2
+
+    FIELDS = {
+      BEGIN_TIME => {:type => ::Thrift::Types::I64, :name => 'begin_time'},
+      END_TIME => {:type => ::Thrift::Types::I64, :name => 'end_time'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class StatFileSystem_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::STRUCT, :name => 'success', :class => ::Statfs},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
     }
 
     def struct_fields; FIELDS; end

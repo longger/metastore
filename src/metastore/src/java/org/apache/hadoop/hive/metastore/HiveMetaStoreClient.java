@@ -89,6 +89,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
 import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
+import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
@@ -289,7 +290,6 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
    */
   public void alter_table(String dbname, String tbl_name, Table new_tbl)
       throws InvalidOperationException, MetaException, TException {
-    LOG.info("*****************zqh**************** before alter_table");
     client.alter_table(dbname, tbl_name, new_tbl);
   }
 
@@ -2313,4 +2313,24 @@ public boolean authentication(String user_name, String passwd)
     return client.list_device();
   }
 
+  @Override
+  public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException {
+    assert sfl != null;
+    return client.offline_filelocation(sfl);
+  }
+
+  @Override
+  public statfs statFileSystem(long begin_time, long end_time) throws MetaException, TException {
+    return client.statFileSystem(begin_time, end_time);
+  }
+
+  @Override
+  public void setTimeout(int timeout) {
+    ((TSocket)transport).setTimeout(timeout * 1000);
+  }
+
+  @Override
+  public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException {
+    client.set_file_repnr(fid, repnr);
+  }
 }

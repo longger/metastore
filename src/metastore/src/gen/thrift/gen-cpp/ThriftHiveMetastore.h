@@ -152,9 +152,11 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual void cancel_delegation_token(const std::string& token_str_form) = 0;
   virtual void create_file(SFile& _return, const std::string& node_name, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) = 0;
   virtual void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values) = 0;
+  virtual void set_file_repnr(const int64_t fid, const int32_t repnr) = 0;
   virtual bool reopen_file(const int64_t fid) = 0;
   virtual int32_t close_file(const SFile& file) = 0;
   virtual bool online_filelocation(const SFile& file) = 0;
+  virtual bool offline_filelocation(const SFileLocation& sfl) = 0;
   virtual bool toggle_safemode() = 0;
   virtual void get_file_by_id(SFile& _return, const int64_t fid) = 0;
   virtual void get_file_by_name(SFile& _return, const std::string& node, const std::string& devid, const std::string& location) = 0;
@@ -204,6 +206,7 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual bool deleteTableNodeDist(const std::string& db, const std::string& tab, const std::vector<std::string> & ng) = 0;
   virtual void listTableNodeDists(std::vector<NodeGroup> & _return, const std::string& dbName, const std::string& tabName) = 0;
   virtual bool assiginSchematoDB(const std::string& dbName, const std::string& schemaName, const std::vector<FieldSchema> & fileSplitKeys, const std::vector<FieldSchema> & part_keys, const std::vector<NodeGroup> & ngs) = 0;
+  virtual void statFileSystem(statfs& _return, const int64_t begin_time, const int64_t end_time) = 0;
 };
 
 class ThriftHiveMetastoreIfFactory : virtual public  ::facebook::fb303::FacebookServiceIfFactory {
@@ -693,6 +696,9 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   void create_file_by_policy(SFile& /* _return */, const CreatePolicy& /* policy */, const int32_t /* repnr */, const std::string& /* db_name */, const std::string& /* table_name */, const std::vector<SplitValue> & /* values */) {
     return;
   }
+  void set_file_repnr(const int64_t /* fid */, const int32_t /* repnr */) {
+    return;
+  }
   bool reopen_file(const int64_t /* fid */) {
     bool _return = false;
     return _return;
@@ -702,6 +708,10 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
     return _return;
   }
   bool online_filelocation(const SFile& /* file */) {
+    bool _return = false;
+    return _return;
+  }
+  bool offline_filelocation(const SFileLocation& /* sfl */) {
     bool _return = false;
     return _return;
   }
@@ -871,6 +881,9 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   bool assiginSchematoDB(const std::string& /* dbName */, const std::string& /* schemaName */, const std::vector<FieldSchema> & /* fileSplitKeys */, const std::vector<FieldSchema> & /* part_keys */, const std::vector<NodeGroup> & /* ngs */) {
     bool _return = false;
     return _return;
+  }
+  void statFileSystem(statfs& /* _return */, const int64_t /* begin_time */, const int64_t /* end_time */) {
+    return;
   }
 };
 
@@ -19135,6 +19148,123 @@ class ThriftHiveMetastore_create_file_by_policy_presult {
 
 };
 
+typedef struct _ThriftHiveMetastore_set_file_repnr_args__isset {
+  _ThriftHiveMetastore_set_file_repnr_args__isset() : fid(false), repnr(false) {}
+  bool fid;
+  bool repnr;
+} _ThriftHiveMetastore_set_file_repnr_args__isset;
+
+class ThriftHiveMetastore_set_file_repnr_args {
+ public:
+
+  ThriftHiveMetastore_set_file_repnr_args() : fid(0), repnr(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_set_file_repnr_args() throw() {}
+
+  int64_t fid;
+  int32_t repnr;
+
+  _ThriftHiveMetastore_set_file_repnr_args__isset __isset;
+
+  void __set_fid(const int64_t val) {
+    fid = val;
+  }
+
+  void __set_repnr(const int32_t val) {
+    repnr = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_set_file_repnr_args & rhs) const
+  {
+    if (!(fid == rhs.fid))
+      return false;
+    if (!(repnr == rhs.repnr))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_set_file_repnr_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_set_file_repnr_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_set_file_repnr_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_set_file_repnr_pargs() throw() {}
+
+  const int64_t* fid;
+  const int32_t* repnr;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_set_file_repnr_result__isset {
+  _ThriftHiveMetastore_set_file_repnr_result__isset() : o1(false) {}
+  bool o1;
+} _ThriftHiveMetastore_set_file_repnr_result__isset;
+
+class ThriftHiveMetastore_set_file_repnr_result {
+ public:
+
+  ThriftHiveMetastore_set_file_repnr_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_set_file_repnr_result() throw() {}
+
+  FileOperationException o1;
+
+  _ThriftHiveMetastore_set_file_repnr_result__isset __isset;
+
+  void __set_o1(const FileOperationException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_set_file_repnr_result & rhs) const
+  {
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_set_file_repnr_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_set_file_repnr_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_set_file_repnr_presult__isset {
+  _ThriftHiveMetastore_set_file_repnr_presult__isset() : o1(false) {}
+  bool o1;
+} _ThriftHiveMetastore_set_file_repnr_presult__isset;
+
+class ThriftHiveMetastore_set_file_repnr_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_set_file_repnr_presult() throw() {}
+
+  FileOperationException o1;
+
+  _ThriftHiveMetastore_set_file_repnr_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 typedef struct _ThriftHiveMetastore_reopen_file_args__isset {
   _ThriftHiveMetastore_reopen_file_args__isset() : fid(false) {}
   bool fid;
@@ -19504,6 +19634,124 @@ class ThriftHiveMetastore_online_filelocation_presult {
   MetaException o1;
 
   _ThriftHiveMetastore_online_filelocation_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _ThriftHiveMetastore_offline_filelocation_args__isset {
+  _ThriftHiveMetastore_offline_filelocation_args__isset() : sfl(false) {}
+  bool sfl;
+} _ThriftHiveMetastore_offline_filelocation_args__isset;
+
+class ThriftHiveMetastore_offline_filelocation_args {
+ public:
+
+  ThriftHiveMetastore_offline_filelocation_args() {
+  }
+
+  virtual ~ThriftHiveMetastore_offline_filelocation_args() throw() {}
+
+  SFileLocation sfl;
+
+  _ThriftHiveMetastore_offline_filelocation_args__isset __isset;
+
+  void __set_sfl(const SFileLocation& val) {
+    sfl = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_offline_filelocation_args & rhs) const
+  {
+    if (!(sfl == rhs.sfl))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_offline_filelocation_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_offline_filelocation_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_offline_filelocation_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_offline_filelocation_pargs() throw() {}
+
+  const SFileLocation* sfl;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_offline_filelocation_result__isset {
+  _ThriftHiveMetastore_offline_filelocation_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_offline_filelocation_result__isset;
+
+class ThriftHiveMetastore_offline_filelocation_result {
+ public:
+
+  ThriftHiveMetastore_offline_filelocation_result() : success(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_offline_filelocation_result() throw() {}
+
+  bool success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_offline_filelocation_result__isset __isset;
+
+  void __set_success(const bool val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_offline_filelocation_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_offline_filelocation_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_offline_filelocation_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_offline_filelocation_presult__isset {
+  _ThriftHiveMetastore_offline_filelocation_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_offline_filelocation_presult__isset;
+
+class ThriftHiveMetastore_offline_filelocation_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_offline_filelocation_presult() throw() {}
+
+  bool* success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_offline_filelocation_presult__isset __isset;
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
 
@@ -25829,6 +26077,133 @@ class ThriftHiveMetastore_assiginSchematoDB_presult {
 
 };
 
+typedef struct _ThriftHiveMetastore_statFileSystem_args__isset {
+  _ThriftHiveMetastore_statFileSystem_args__isset() : begin_time(false), end_time(false) {}
+  bool begin_time;
+  bool end_time;
+} _ThriftHiveMetastore_statFileSystem_args__isset;
+
+class ThriftHiveMetastore_statFileSystem_args {
+ public:
+
+  ThriftHiveMetastore_statFileSystem_args() : begin_time(0), end_time(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_statFileSystem_args() throw() {}
+
+  int64_t begin_time;
+  int64_t end_time;
+
+  _ThriftHiveMetastore_statFileSystem_args__isset __isset;
+
+  void __set_begin_time(const int64_t val) {
+    begin_time = val;
+  }
+
+  void __set_end_time(const int64_t val) {
+    end_time = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_statFileSystem_args & rhs) const
+  {
+    if (!(begin_time == rhs.begin_time))
+      return false;
+    if (!(end_time == rhs.end_time))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_statFileSystem_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_statFileSystem_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_statFileSystem_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_statFileSystem_pargs() throw() {}
+
+  const int64_t* begin_time;
+  const int64_t* end_time;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_statFileSystem_result__isset {
+  _ThriftHiveMetastore_statFileSystem_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_statFileSystem_result__isset;
+
+class ThriftHiveMetastore_statFileSystem_result {
+ public:
+
+  ThriftHiveMetastore_statFileSystem_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_statFileSystem_result() throw() {}
+
+  statfs success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_statFileSystem_result__isset __isset;
+
+  void __set_success(const statfs& val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_statFileSystem_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_statFileSystem_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_statFileSystem_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_statFileSystem_presult__isset {
+  _ThriftHiveMetastore_statFileSystem_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_statFileSystem_presult__isset;
+
+class ThriftHiveMetastore_statFileSystem_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_statFileSystem_presult() throw() {}
+
+  statfs* success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_statFileSystem_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  ::facebook::fb303::FacebookServiceClient {
  public:
   ThriftHiveMetastoreClient(boost::shared_ptr< ::apache::thrift::protocol::TProtocol> prot) :
@@ -26249,6 +26624,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void create_file_by_policy(SFile& _return, const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
   void send_create_file_by_policy(const CreatePolicy& policy, const int32_t repnr, const std::string& db_name, const std::string& table_name, const std::vector<SplitValue> & values);
   void recv_create_file_by_policy(SFile& _return);
+  void set_file_repnr(const int64_t fid, const int32_t repnr);
+  void send_set_file_repnr(const int64_t fid, const int32_t repnr);
+  void recv_set_file_repnr();
   bool reopen_file(const int64_t fid);
   void send_reopen_file(const int64_t fid);
   bool recv_reopen_file();
@@ -26258,6 +26636,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   bool online_filelocation(const SFile& file);
   void send_online_filelocation(const SFile& file);
   bool recv_online_filelocation();
+  bool offline_filelocation(const SFileLocation& sfl);
+  void send_offline_filelocation(const SFileLocation& sfl);
+  bool recv_offline_filelocation();
   bool toggle_safemode();
   void send_toggle_safemode();
   bool recv_toggle_safemode();
@@ -26405,6 +26786,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   bool assiginSchematoDB(const std::string& dbName, const std::string& schemaName, const std::vector<FieldSchema> & fileSplitKeys, const std::vector<FieldSchema> & part_keys, const std::vector<NodeGroup> & ngs);
   void send_assiginSchematoDB(const std::string& dbName, const std::string& schemaName, const std::vector<FieldSchema> & fileSplitKeys, const std::vector<FieldSchema> & part_keys, const std::vector<NodeGroup> & ngs);
   bool recv_assiginSchematoDB();
+  void statFileSystem(statfs& _return, const int64_t begin_time, const int64_t end_time);
+  void send_statFileSystem(const int64_t begin_time, const int64_t end_time);
+  void recv_statFileSystem(statfs& _return);
 };
 
 class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceProcessor {
@@ -26551,9 +26935,11 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_cancel_delegation_token(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_create_file(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_create_file_by_policy(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_set_file_repnr(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_reopen_file(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_close_file(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_online_filelocation(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_offline_filelocation(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_toggle_safemode(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_get_file_by_id(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_get_file_by_name(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -26603,6 +26989,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_deleteTableNodeDist(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_listTableNodeDists(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_assiginSchematoDB(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_statFileSystem(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
  public:
   ThriftHiveMetastoreProcessor(boost::shared_ptr<ThriftHiveMetastoreIf> iface) :
      ::facebook::fb303::FacebookServiceProcessor(iface),
@@ -26743,9 +27130,11 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["cancel_delegation_token"] = &ThriftHiveMetastoreProcessor::process_cancel_delegation_token;
     processMap_["create_file"] = &ThriftHiveMetastoreProcessor::process_create_file;
     processMap_["create_file_by_policy"] = &ThriftHiveMetastoreProcessor::process_create_file_by_policy;
+    processMap_["set_file_repnr"] = &ThriftHiveMetastoreProcessor::process_set_file_repnr;
     processMap_["reopen_file"] = &ThriftHiveMetastoreProcessor::process_reopen_file;
     processMap_["close_file"] = &ThriftHiveMetastoreProcessor::process_close_file;
     processMap_["online_filelocation"] = &ThriftHiveMetastoreProcessor::process_online_filelocation;
+    processMap_["offline_filelocation"] = &ThriftHiveMetastoreProcessor::process_offline_filelocation;
     processMap_["toggle_safemode"] = &ThriftHiveMetastoreProcessor::process_toggle_safemode;
     processMap_["get_file_by_id"] = &ThriftHiveMetastoreProcessor::process_get_file_by_id;
     processMap_["get_file_by_name"] = &ThriftHiveMetastoreProcessor::process_get_file_by_name;
@@ -26795,6 +27184,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["deleteTableNodeDist"] = &ThriftHiveMetastoreProcessor::process_deleteTableNodeDist;
     processMap_["listTableNodeDists"] = &ThriftHiveMetastoreProcessor::process_listTableNodeDists;
     processMap_["assiginSchematoDB"] = &ThriftHiveMetastoreProcessor::process_assiginSchematoDB;
+    processMap_["statFileSystem"] = &ThriftHiveMetastoreProcessor::process_statFileSystem;
   }
 
   virtual ~ThriftHiveMetastoreProcessor() {}
@@ -28116,6 +28506,15 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
     return;
   }
 
+  void set_file_repnr(const int64_t fid, const int32_t repnr) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->set_file_repnr(fid, repnr);
+    }
+    ifaces_[i]->set_file_repnr(fid, repnr);
+  }
+
   bool reopen_file(const int64_t fid) {
     size_t sz = ifaces_.size();
     size_t i = 0;
@@ -28141,6 +28540,15 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
       ifaces_[i]->online_filelocation(file);
     }
     return ifaces_[i]->online_filelocation(file);
+  }
+
+  bool offline_filelocation(const SFileLocation& sfl) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->offline_filelocation(sfl);
+    }
+    return ifaces_[i]->offline_filelocation(sfl);
   }
 
   bool toggle_safemode() {
@@ -28610,6 +29018,16 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
       ifaces_[i]->assiginSchematoDB(dbName, schemaName, fileSplitKeys, part_keys, ngs);
     }
     return ifaces_[i]->assiginSchematoDB(dbName, schemaName, fileSplitKeys, part_keys, ngs);
+  }
+
+  void statFileSystem(statfs& _return, const int64_t begin_time, const int64_t end_time) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->statFileSystem(_return, begin_time, end_time);
+    }
+    ifaces_[i]->statFileSystem(_return, begin_time, end_time);
+    return;
   }
 
 };

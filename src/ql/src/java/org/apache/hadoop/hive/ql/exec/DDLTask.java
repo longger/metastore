@@ -666,7 +666,6 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       }
       AlterSchemaDesc alterSchDesc = work.getAlterSchDesc();
       if (null != alterSchDesc) {
-        LOG.info("****************zqh****************alterSchema(db, alterSch))");
         return alterSchema(db, alterSchDesc);
       }
 
@@ -4832,7 +4831,6 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
    *           Throws this exception if an unexpected error occurs.
    */
   private int createView(Hive db, CreateViewDesc crtView) throws HiveException {
-    LOG.info("*****************zqh*****************createView" + crtView.getViewName());
     Table oldview = db.getTable(crtView.getViewName(), false);
     if (crtView.getOrReplace() && oldview != null) {
       // replace existing view
@@ -5356,9 +5354,7 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
   }
 
   private int dropSchema(Hive db, DropSchemaDesc dropSchemaDesc) throws HiveException {
-    LOG.info("****************zqh****************dropSchema begin" + dropSchemaDesc.getSchemaName());
     this.db.dropSchema(dropSchemaDesc.getSchemaName());
-    LOG.info("****************zqh****************dropSchema sucessfully");
     return 0;
   }
   /**
@@ -5399,7 +5395,6 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
           oldCols.add(newCol);
         }
         gls.getTSchema().getSd().setCols(oldCols);
-        LOG.info("****************zqh****************AlterSchemaTypes.ADDCOLS SUCCESSFULLY");
     } else if (alterSchDesc.getOp() == AlterSchemaDesc.AlterSchemaTypes.RENAMECOLUMN) {
       List<FieldSchema> oldCols = gls.getCols();
       List<FieldSchema> newCols = new ArrayList<FieldSchema>();
@@ -5492,10 +5487,8 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
         return 1;
       }
       gls.getTSchema().getSd().setCols(alterSchDesc.getNewCols());
-      LOG.info("****************zqh****************AlterSchemaTypes.REPLACECOLS SUCCESSFULLY");
     } else if (alterSchDesc.getOp() == AlterSchemaDesc.AlterSchemaTypes.ADDPROPS) {
       gls.getTSchema().getParameters().putAll(alterSchDesc.getProps());
-      LOG.info("****************zqh****************AlterSchemaTypes.ADDPROPS SUCCESSFULLY");
     } else {
       formatter.consoleError(console,
                              "Unsupported Alter commnad",
@@ -5505,7 +5498,6 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
 
     try {
       db.alterSchema(alterSchDesc.getOldName(), gls);
-      LOG.info("****************zqh****************AlterSchema SUCCESSFULLY");
     } catch (InvalidOperationException e) {
       console.printError("Invalid alter operation: " + e.getMessage());
       LOG.info("alter schema: " + stringifyException(e));

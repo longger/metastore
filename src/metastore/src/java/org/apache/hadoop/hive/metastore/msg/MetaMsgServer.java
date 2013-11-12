@@ -300,7 +300,8 @@ public class MetaMsgServer {
           DDLMsg msg = new DDLMsg();
           String data = new String(message.getData());
 
-          LOG.info("---zy--consume msg: " + data);
+//          LOG.info("---zy--consume msg: " + data);
+          System.out.println(data);
           msg = DDLMsg.fromJson(data);
           if(msg.getLocalhost_name().equals(localhost_name))
           {

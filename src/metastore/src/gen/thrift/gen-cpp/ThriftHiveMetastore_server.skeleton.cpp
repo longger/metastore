@@ -702,6 +702,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("create_file_by_policy\n");
   }
 
+  void set_file_repnr(const int64_t fid, const int32_t repnr) {
+    // Your implementation goes here
+    printf("set_file_repnr\n");
+  }
+
   bool reopen_file(const int64_t fid) {
     // Your implementation goes here
     printf("reopen_file\n");
@@ -715,6 +720,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
   bool online_filelocation(const SFile& file) {
     // Your implementation goes here
     printf("online_filelocation\n");
+  }
+
+  bool offline_filelocation(const SFileLocation& sfl) {
+    // Your implementation goes here
+    printf("offline_filelocation\n");
   }
 
   bool toggle_safemode() {
@@ -960,6 +970,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
   bool assiginSchematoDB(const std::string& dbName, const std::string& schemaName, const std::vector<FieldSchema> & fileSplitKeys, const std::vector<FieldSchema> & part_keys, const std::vector<NodeGroup> & ngs) {
     // Your implementation goes here
     printf("assiginSchematoDB\n");
+  }
+
+  void statFileSystem(statfs& _return, const int64_t begin_time, const int64_t end_time) {
+    // Your implementation goes here
+    printf("statFileSystem\n");
   }
 
 };

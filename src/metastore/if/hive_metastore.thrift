@@ -56,6 +56,7 @@ enum HiveObjectType {
   TABLE = 3,
   PARTITION = 4,
   COLUMN = 5,
+  SCHEMA = 6,
 }
 
 enum PrincipalType {
@@ -181,6 +182,32 @@ enum CreateOperation {
     CREATE_NEW_IN_NODEGROUPS = 3,
     
     CREATE_AUX_IDX_FILE = 4,
+    CREATE_NEW_RANDOM =5,
+}
+
+struct statfs {
+  1: i64 from,
+  2: i64 to,
+  3: i64 increate,
+  4: i64 close,
+  5: i64 replicated,
+  6: i64 rm_logical,
+  7: i64 rm_physical,
+  8: i64 underrep,
+  9: i64 overrep,
+  10: i64 linger,
+  11: i64 suspect,
+
+  12: i64 inc_ons,		// INCREATE, but contains online (1)
+  13: i64 inc_ons2,     // INCREATE, but contains online (>1)
+  14: i64 cls_offs,		// CLOSE, but all offline
+  
+  15: list<i64> incs,
+  16: list<i64> clos,
+  17: map<string, i64> fnrs;
+  
+  18: i64 recordnr,
+  19: i64 length,
 }
 
 struct Role {
@@ -318,7 +345,7 @@ struct Table {
   11: string viewOriginalText,         // original view text, null for non-view
   12: string viewExpandedText,         // expanded view text, null for non-view
   13: string tableType,                 // table type enum, e.g. EXTERNAL_TABLE
-  14: optional list<NodeGroup> nodeGroups,
+  14: list<NodeGroup> nodeGroups,
   15: optional PrincipalPrivilegeSet privileges,
   16: optional list<Partition> partitions
   17: list<FieldSchema> fileSplitKeys,	// file split keys
@@ -943,11 +970,15 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   SFile create_file_by_policy(1:CreatePolicy policy, 2:i32 repnr, 3:string db_name, 4:string table_name, 5:list<SplitValue> values) throws (1:FileOperationException o1)
   
+  void set_file_repnr(1:i64 fid, 2:i32 repnr) throws (1:FileOperationException o1)
+  
   bool reopen_file(1:i64 fid) throws (1:FileOperationException o1, 2:MetaException o2)
   
   i32 close_file(1:SFile file) throws (1:FileOperationException o1, 2:MetaException o2)
   
   bool online_filelocation(1:SFile file) throws (1:MetaException o1)
+  
+  bool offline_filelocation(1:SFileLocation sfl) throws (1:MetaException o1)
   
   bool toggle_safemode() throws (1:MetaException o1)
   
@@ -1034,6 +1065,7 @@ service ThriftHiveMetastore extends fb303.FacebookService
   bool assiginSchematoDB(1:string dbName, 2:string schemaName,3:list<FieldSchema> fileSplitKeys,
       4:list<FieldSchema> part_keys,5:list<NodeGroup> ngs) throws (1:InvalidObjectException o1, 2:NoSuchObjectException o2, 3:MetaException o3)
   
+  statfs statFileSystem(1:i64 begin_time, 2:i64 end_time) throws (1:MetaException o1)
 }
 
 // * Note about the DDL_TIME: When creating or altering a table or a partition,

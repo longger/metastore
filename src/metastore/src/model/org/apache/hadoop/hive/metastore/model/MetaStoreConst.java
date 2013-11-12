@@ -32,6 +32,7 @@ public class MetaStoreConst {
     public static final int SHARED = 1; // might attached to many nodes
     public static final int BACKUP = 2; // this means it's special SHARED device for backup use
     public static final int BACKUP_ALONE = 3; // special ALONE device for backup use
+    public static final int __MAX__ = 4;
   }
 
   public class MDeviceStatus {

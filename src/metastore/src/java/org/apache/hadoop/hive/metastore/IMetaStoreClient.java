@@ -63,6 +63,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
 import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
+import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.thrift.TException;
 
 /**
@@ -998,6 +999,8 @@ public interface IMetaStoreClient {
 
   public boolean online_filelocation(SFile file) throws MetaException, TException;
 
+  public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException;
+
   public SFile get_file_by_id(long fid) throws FileOperationException, MetaException, TException;
 
   public SFile get_file_by_name(String node, String devid, String location)
@@ -1276,4 +1279,9 @@ public interface IMetaStoreClient {
 
   public String pingPong(String str) throws MetaException, TException;
 
+  public statfs statFileSystem(long begin_time, long end_time) throws MetaException, TException;
+
+  public void setTimeout(int timeout);
+
+  public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException;
 }

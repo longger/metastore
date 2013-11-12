@@ -159,9 +159,11 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '  void cancel_delegation_token(string token_str_form)'
   print '  SFile create_file(string node_name, i32 repnr, string db_name, string table_name,  values)'
   print '  SFile create_file_by_policy(CreatePolicy policy, i32 repnr, string db_name, string table_name,  values)'
+  print '  void set_file_repnr(i64 fid, i32 repnr)'
   print '  bool reopen_file(i64 fid)'
   print '  i32 close_file(SFile file)'
   print '  bool online_filelocation(SFile file)'
+  print '  bool offline_filelocation(SFileLocation sfl)'
   print '  bool toggle_safemode()'
   print '  SFile get_file_by_id(i64 fid)'
   print '  SFile get_file_by_name(string node, string devid, string location)'
@@ -211,6 +213,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '  bool deleteTableNodeDist(string db, string tab,  ng)'
   print '   listTableNodeDists(string dbName, string tabName)'
   print '  bool assiginSchematoDB(string dbName, string schemaName,  fileSplitKeys,  part_keys,  ngs)'
+  print '  statfs statFileSystem(i64 begin_time, i64 end_time)'
   print ''
   sys.exit(0)
 
@@ -1078,6 +1081,12 @@ elif cmd == 'create_file_by_policy':
     sys.exit(1)
   pp.pprint(client.create_file_by_policy(eval(args[0]),eval(args[1]),args[2],args[3],eval(args[4]),))
 
+elif cmd == 'set_file_repnr':
+  if len(args) != 2:
+    print 'set_file_repnr requires 2 args'
+    sys.exit(1)
+  pp.pprint(client.set_file_repnr(eval(args[0]),eval(args[1]),))
+
 elif cmd == 'reopen_file':
   if len(args) != 1:
     print 'reopen_file requires 1 args'
@@ -1095,6 +1104,12 @@ elif cmd == 'online_filelocation':
     print 'online_filelocation requires 1 args'
     sys.exit(1)
   pp.pprint(client.online_filelocation(eval(args[0]),))
+
+elif cmd == 'offline_filelocation':
+  if len(args) != 1:
+    print 'offline_filelocation requires 1 args'
+    sys.exit(1)
+  pp.pprint(client.offline_filelocation(eval(args[0]),))
 
 elif cmd == 'toggle_safemode':
   if len(args) != 0:
@@ -1389,6 +1404,12 @@ elif cmd == 'assiginSchematoDB':
     print 'assiginSchematoDB requires 5 args'
     sys.exit(1)
   pp.pprint(client.assiginSchematoDB(args[0],args[1],eval(args[2]),eval(args[3]),eval(args[4]),))
+
+elif cmd == 'statFileSystem':
+  if len(args) != 2:
+    print 'statFileSystem requires 2 args'
+    sys.exit(1)
+  pp.pprint(client.statFileSystem(eval(args[0]),eval(args[1]),))
 
 else:
   print 'Unrecognized method %s' % cmd
