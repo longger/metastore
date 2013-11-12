@@ -7118,6 +7118,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       // generate this msuri
       HMSHandler.msUri = "thrift://" + InetAddress.getLocalHost().getHostName() + ":" + port;
 
+      //start msg consumer
+      new MetaMsgServer.AsyncConsumer().consume();
       // Server will create new threads up to max as necessary. After an idle
       // period, it will destory threads to keep the number of threads in the
       // pool to min.
