@@ -647,7 +647,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       AlterSchemaDesc alterSchDesc = new AlterSchemaDesc(schName, newCols,
           alterType);
       addInputsOutputsAlterSchema(schName, null, alterSchDesc);
-      LOG.info("****************zqh****************addInputsOutputsAlterSchema BACK):"+ schName + newCols.get(0).getName() + newCols.get(0).getType());
       rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
           alterSchDesc), conf));
   }
@@ -657,14 +656,12 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       AlterSchemaDesc alterSchDesc = new AlterSchemaDesc(schName,
           getUnescapedName((ASTNode) ast.getChild(1)), expectView);
       addInputsOutputsAlterSchema(schName, null, alterSchDesc);
-      LOG.info("****************zqh****************addInputsOutputsAlterSchema BACK):");
       rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
           alterSchDesc), conf));
   }
 
   private void analyzeDropSchema(ASTNode ast) throws SemanticException {
     String schemaName = getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
-    LOG.info("****************zqh****************analyzeDropSchema):" + schemaName);
     boolean ifExists = false;
     if (null != ast.getFirstChildWithType(HiveParser.TOK_IFEXISTS)) {
       ifExists = true;
@@ -1744,7 +1741,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     subject.setObject(unescapeIdentifier(ast.getChild(0).getText()));
     if (ast.getChildCount() > 1) {
       if ("TABLE".equals(unescapeIdentifier(ast.getChild(1).getText()))) {
-        LOG.info("****************zqh****************PrivilegeObjectDesc####unescapeIdentifier(ast.getChild(1).getText()):" + unescapeIdentifier(ast.getChild(1).getText()));
         for (int i = 0; i < ast.getChildCount(); i++) {
           ASTNode astChild = (ASTNode) ast.getChild(i);
           if (astChild.getToken().getType() == HiveParser.TOK_PARTSPEC) {
@@ -1752,7 +1748,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
           } else {
             subject.setTable(ast.getChild(0) != null);
             //subject.setSchema(ast.getChild(0) == null);
-            LOG.info("****************zqh****************PrivilegeObjectDesc####ast.getChild(0) != null:" + ast.getChild(0) != null);
           }
         }
       }
@@ -2233,7 +2228,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   private void validateAlterSchemaType(GlobalSchema gls, AlterSchemaTypes op, boolean expectView)
       throws SemanticException {
-    LOG.info("****************zqh****************gls.isView()):"+gls.isView());
     if (gls.isView()) {
       if (!expectView) {
         throw new SemanticException(ErrorMsg.ALTER_COMMAND_FOR_VIEWS.getMsg());
@@ -2432,12 +2426,8 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     inputs.add(new ReadEntity(sch));
     outputs.add(new WriteEntity(sch));
     boolean flag  = (desc != null);
-    LOG.info("****************zqh****************desc != null):"+flag);
     if (desc != null) {
-      LOG.info("****************zqh****************desc.getOp()):"+desc.getOp());
-      LOG.info("****************zqh****************desc.getExpectView()):"+desc.getExpectView());
       validateAlterSchemaType(sch, desc.getOp(), desc.getExpectView());
-
     }
   }
 
@@ -3471,9 +3461,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     }
     List<FieldSchema> fieldSchemas = tab.getFileSplitKeys();
     for(FieldSchema fs : fieldSchemas){
-      LOG.info("*****************zqh****************begin to get tab.getFileSplitKeys()" + fs.getName() + oldColName);
       if (fs.getName().equals(oldColName)){
-        LOG.info("*****************zqh****************fs.getName() == oldColName" + fs.getName() == oldColName);
         throw new SemanticException("AlterColumn error! you can't rename the column which is the table splited by.");
       }
     }
@@ -3538,9 +3526,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
   private void analyzeAlterTableFileSplit(ASTNode ast, AlterTableTypes alterType)
       throws SemanticException {
     String tblName = getUnescapedName((ASTNode) ast.getChild(0));
-    LOG.info("*****************zqh****************" +tblName);
-    //List<FieldSchema> newCols = getColumns((ASTNode) ast.getChild(1));
-    //LOG.info("*****************zqh****************" +newCols);
     PartitionDefinition pd = new PartitionDefinition();
     List<FieldSchema> splitCols = new ArrayList<FieldSchema>();
     pd.setTableName(tblName);
