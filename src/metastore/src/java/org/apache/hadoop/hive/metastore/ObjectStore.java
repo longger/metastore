@@ -139,6 +139,7 @@ import org.apache.hadoop.hive.metastore.model.MPartitionPrivilege;
 import org.apache.hadoop.hive.metastore.model.MRole;
 import org.apache.hadoop.hive.metastore.model.MRoleMap;
 import org.apache.hadoop.hive.metastore.model.MSchema;
+import org.apache.hadoop.hive.metastore.model.MSchemaPrivilege;
 import org.apache.hadoop.hive.metastore.model.MSerDeInfo;
 import org.apache.hadoop.hive.metastore.model.MSplitValue;
 import org.apache.hadoop.hive.metastore.model.MStorageDescriptor;
@@ -4604,7 +4605,8 @@ public class ObjectStore implements RawStore, Configurable {
       }
     //MSG_ALT_TALBE_PARTITIONING
       HashMap<String, Object> altPartitioningParams = new HashMap<String, Object>();
-      if(!oldt.getPartitionKeys().equals(newt.getPartitionKeys()))      //要传什么参数呢．．
+      LOG.warn("---zy-- in alter table,old partition keys:"+oldt.getPartitionKeys()+",new partition keys"+newt.getPartitionKeys());
+      if(newt.getPartitionKeys().size() > oldt.getPartitionKeys().size())      //要传什么参数呢．．
       {
         altPartitioningParams.put("table_name", oldt.getTableName());
         altPartitioningParams.put("db_name", oldt.getDatabase().getName());
@@ -4613,7 +4615,8 @@ public class ObjectStore implements RawStore, Configurable {
 
       //ALT_TABLE_SPLITKEYS
       HashMap<String, Object> altSplitKeyParams = new HashMap<String, Object>();
-      if(!oldt.getFileSplitKeys().equals(newt.getFileSplitKeys()))
+      LOG.warn("---zy-- in alter table,old split keys:"+oldt.getFileSplitKeys()+",new split keys"+newt.getFileSplitKeys());
+      if(newt.getFileSplitKeys().size() > oldt.getFileSplitKeys().size())
       {
         altSplitKeyParams.put("table_name", oldt.getTableName());
         altSplitKeyParams.put("db_name", oldt.getDatabase().getName());
@@ -4652,9 +4655,11 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
       oldt.setPartitionKeys(newFS);
-
-      altPartitioningParams.put("version", cur_version);
-      msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,altPartitioningParams));
+      if(!altPartitioningParams.isEmpty())    //说明该事件被触发了
+      {
+        altPartitioningParams.put("version", cur_version);
+        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,altPartitioningParams));
+      }
       // !NOTE: append new file split keys to old file split key list with new version
       newFS.clear();
       cur_version = 0;
@@ -4685,9 +4690,11 @@ public class ObjectStore implements RawStore, Configurable {
 //        }
 //      }
       oldt.setFileSplitKeys(newFS);
-
-      altSplitKeyParams.put("version", cur_version);
-      msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_SPLITKEYS,db_id,-1, pm, oldt,altSplitKeyParams));
+      if(!altSplitKeyParams.isEmpty())
+      {
+        altSplitKeyParams.put("version", cur_version);
+        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_SPLITKEYS,db_id,-1, pm, oldt,altSplitKeyParams));
+      }
 
       oldt.setTableType(newt.getTableType());
       oldt.setLastAccessTime(newt.getLastAccessTime());
@@ -6343,6 +6350,126 @@ public MUser getMUser(String userName) {
         pm.makePersistentAll(persistentObjs);
       }
       committed = commitTransaction();
+
+      //add by zy for msg queue
+      if(committed)
+      {
+        for(Object obj : persistentObjs)
+        {
+          if(obj instanceof MGlobalPrivilege)
+          {
+            MGlobalPrivilege mgp = (MGlobalPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mgp.getGrantor());
+            params.put("grantor_type", mgp.getGrantorType());
+            params.put("principalName", mgp.getPrincipalName());
+            params.put("principal_type", mgp.getPrincipalType());
+            params.put("privilege", mgp.getPrivilege());
+            params.put("create_time",mgp.getCreateTime());
+            params.put("grant_option",mgp.getGrantOption());
+
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_GLOBAL,-1l,-1l, pm, mgp,params));
+          }
+          else if(obj instanceof MDBPrivilege)
+          {
+            MDBPrivilege mdbp = (MDBPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mdbp.getGrantor());
+            params.put("grantor_type", mdbp.getGrantorType());
+            params.put("principalName", mdbp.getPrincipalName());
+            params.put("principal_type", mdbp.getPrincipalType());
+            params.put("privilege", mdbp.getPrivilege());
+            params.put("create_time",mdbp.getCreateTime());
+            params.put("grant_option",mdbp.getGrantOption());
+            params.put("db_name", mdbp.getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mdbp.getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_DB,db_id,-1l, pm, mdbp.getDatabase(),params));
+          }
+
+          else if(obj instanceof MTablePrivilege)
+          {
+            MTablePrivilege mtp = (MTablePrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mtp.getGrantor());
+            params.put("grantor_type", mtp.getGrantorType());
+            params.put("principalName", mtp.getPrincipalName());
+            params.put("principal_type", mtp.getPrincipalType());
+            params.put("privilege", mtp.getPrivilege());
+            params.put("create_time",mtp.getCreateTime());
+            params.put("grant_option",mtp.getGrantOption());
+            params.put("table_name", mtp.getTable().getTableName());
+            params.put("db_name", mtp.getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtp.getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_TABLE,db_id,-1l, pm, mtp.getTable(),params));
+          }
+          else if(obj instanceof MSchemaPrivilege)
+          {
+            MSchemaPrivilege msp = (MSchemaPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", msp.getGrantor());
+            params.put("grantor_type", msp.getGrantorType());
+            params.put("principalName", msp.getPrincipalName());
+            params.put("principal_type", msp.getPrincipalType());
+            params.put("privilege", msp.getPrivilege());
+            params.put("create_time",msp.getCreateTime());
+            params.put("grant_option",msp.getGrantOption());
+            params.put("schema_name", msp.getSchema().getSchemaName());
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_SCHEMA,-1l,-1l, pm, msp.getSchema(),params));
+          }
+          else if(obj instanceof MPartitionPrivilege)
+          {
+            MPartitionPrivilege mpp = (MPartitionPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mpp.getGrantor());
+            params.put("grantor_type", mpp.getGrantorType());
+            params.put("principalName", mpp.getPrincipalName());
+            params.put("principal_type", mpp.getPrincipalType());
+            params.put("privilege", mpp.getPrivilege());
+            params.put("create_time",mpp.getCreateTime());
+            params.put("grant_option",mpp.getGrantOption());
+            params.put("partition_name", mpp.getPartition().getPartitionName());
+            params.put("table_name", mpp.getPartition().getTable().getTableName());
+            params.put("db_name", mpp.getPartition().getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpp.getPartition().getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_PARTITION,db_id,-1l, pm, mpp.getPartition(),params));
+          }
+          else if(obj instanceof MPartitionColumnPrivilege)
+          {
+            MPartitionColumnPrivilege mpcp = (MPartitionColumnPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mpcp.getGrantor());
+            params.put("grantor_type", mpcp.getGrantorType());
+            params.put("principalName", mpcp.getPrincipalName());
+            params.put("principal_type", mpcp.getPrincipalType());
+            params.put("privilege", mpcp.getPrivilege());
+            params.put("create_time",mpcp.getCreateTime());
+            params.put("grant_option",mpcp.getGrantOption());
+            params.put("column_name", mpcp.getColumnName());
+            params.put("partition_name", mpcp.getPartition().getPartitionName());
+            params.put("table_name", mpcp.getPartition().getTable().getTableName());
+            params.put("db_name", mpcp.getPartition().getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpcp.getPartition().getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_PARTITION_COLUMN,db_id,-1l, pm, mpcp.getPartition().getTable().getSd().getCD(),params));
+          }
+          else if(obj instanceof MTableColumnPrivilege)
+          {
+            MTableColumnPrivilege mtcp = (MTableColumnPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mtcp.getGrantor());
+            params.put("grantor_type", mtcp.getGrantorType());
+            params.put("principalName", mtcp.getPrincipalName());
+            params.put("principal_type", mtcp.getPrincipalType());
+            params.put("privilege", mtcp.getPrivilege());
+            params.put("create_time",mtcp.getCreateTime());
+            params.put("grant_option",mtcp.getGrantOption());
+            params.put("column_name", mtcp.getColumnName());
+            params.put("table_name", mtcp.getTable().getTableName());
+            params.put("db_name", mtcp.getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtcp.getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_TABLE_COLUMN,db_id,-1l, pm, mtcp.getTable().getSd().getCD(),params));
+          }
+        }
+      }
     } finally {
       if (!committed) {
         rollbackTransaction();
@@ -6534,6 +6661,126 @@ public MUser getMUser(String userName) {
         pm.deletePersistentAll(persistentObjs);
       }
       committed = commitTransaction();
+
+    //add by zy for msg queue
+      if(committed)
+      {
+        for(Object obj : persistentObjs)
+        {
+          if(obj instanceof MGlobalPrivilege)
+          {
+            MGlobalPrivilege mgp = (MGlobalPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mgp.getGrantor());
+            params.put("grantor_type", mgp.getGrantorType());
+            params.put("principalName", mgp.getPrincipalName());
+            params.put("principal_type", mgp.getPrincipalType());
+            params.put("privilege", mgp.getPrivilege());
+            params.put("create_time",mgp.getCreateTime());
+            params.put("grant_option",mgp.getGrantOption());
+
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_GLOBAL,-1l,-1l, pm, mgp,params));
+          }
+          else if(obj instanceof MDBPrivilege)
+          {
+            MDBPrivilege mdbp = (MDBPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mdbp.getGrantor());
+            params.put("grantor_type", mdbp.getGrantorType());
+            params.put("principalName", mdbp.getPrincipalName());
+            params.put("principal_type", mdbp.getPrincipalType());
+            params.put("privilege", mdbp.getPrivilege());
+            params.put("create_time",mdbp.getCreateTime());
+            params.put("grant_option",mdbp.getGrantOption());
+            params.put("db_name", mdbp.getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mdbp.getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_DB,db_id,-1l, pm, mdbp.getDatabase(),params));
+          }
+
+          else if(obj instanceof MTablePrivilege)
+          {
+            MTablePrivilege mtp = (MTablePrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mtp.getGrantor());
+            params.put("grantor_type", mtp.getGrantorType());
+            params.put("principalName", mtp.getPrincipalName());
+            params.put("principal_type", mtp.getPrincipalType());
+            params.put("privilege", mtp.getPrivilege());
+            params.put("create_time",mtp.getCreateTime());
+            params.put("grant_option",mtp.getGrantOption());
+            params.put("table_name", mtp.getTable().getTableName());
+            params.put("db_name", mtp.getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtp.getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_TABLE,db_id,-1l, pm, mtp.getTable(),params));
+          }
+          else if(obj instanceof MSchemaPrivilege)
+          {
+            MSchemaPrivilege msp = (MSchemaPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", msp.getGrantor());
+            params.put("grantor_type", msp.getGrantorType());
+            params.put("principalName", msp.getPrincipalName());
+            params.put("principal_type", msp.getPrincipalType());
+            params.put("privilege", msp.getPrivilege());
+            params.put("create_time",msp.getCreateTime());
+            params.put("grant_option",msp.getGrantOption());
+            params.put("schema_name", msp.getSchema().getSchemaName());
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_SCHEMA,-1l,-1l, pm, msp.getSchema(),params));
+          }
+          else if(obj instanceof MPartitionPrivilege)
+          {
+            MPartitionPrivilege mpp = (MPartitionPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mpp.getGrantor());
+            params.put("grantor_type", mpp.getGrantorType());
+            params.put("principalName", mpp.getPrincipalName());
+            params.put("principal_type", mpp.getPrincipalType());
+            params.put("privilege", mpp.getPrivilege());
+            params.put("create_time",mpp.getCreateTime());
+            params.put("grant_option",mpp.getGrantOption());
+            params.put("partition_name", mpp.getPartition().getPartitionName());
+            params.put("table_name", mpp.getPartition().getTable().getTableName());
+            params.put("db_name", mpp.getPartition().getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpp.getPartition().getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_PARTITION,db_id,-1l, pm, mpp.getPartition(),params));
+          }
+          else if(obj instanceof MPartitionColumnPrivilege)
+          {
+            MPartitionColumnPrivilege mpcp = (MPartitionColumnPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mpcp.getGrantor());
+            params.put("grantor_type", mpcp.getGrantorType());
+            params.put("principalName", mpcp.getPrincipalName());
+            params.put("principal_type", mpcp.getPrincipalType());
+            params.put("privilege", mpcp.getPrivilege());
+            params.put("create_time",mpcp.getCreateTime());
+            params.put("grant_option",mpcp.getGrantOption());
+            params.put("column_name", mpcp.getColumnName());
+            params.put("partition_name", mpcp.getPartition().getPartitionName());
+            params.put("table_name", mpcp.getPartition().getTable().getTableName());
+            params.put("db_name", mpcp.getPartition().getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpcp.getPartition().getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_PARTITION_COLUMN,db_id,-1l, pm, mpcp.getPartition().getTable().getSd().getCD(),params));
+          }
+          else if(obj instanceof MTableColumnPrivilege)
+          {
+            MTableColumnPrivilege mtcp = (MTableColumnPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mtcp.getGrantor());
+            params.put("grantor_type", mtcp.getGrantorType());
+            params.put("principalName", mtcp.getPrincipalName());
+            params.put("principal_type", mtcp.getPrincipalType());
+            params.put("privilege", mtcp.getPrivilege());
+            params.put("create_time",mtcp.getCreateTime());
+            params.put("grant_option",mtcp.getGrantOption());
+            params.put("column_name", mtcp.getColumnName());
+            params.put("table_name", mtcp.getTable().getTableName());
+            params.put("db_name", mtcp.getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtcp.getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_TABLE_COLUMN,db_id,-1l, pm, mtcp.getTable().getSd().getCD(),params));
+          }
+        }
+      }
     } finally {
       if (!committed) {
         rollbackTransaction();
@@ -10380,6 +10627,75 @@ public MUser getMUser(String userName) {
       NoSuchObjectException {
     // TODO Auto-generated method stub
     return false;
+
+  }
+
+  public class MsgHandler
+  {
+    public void refresh(MSGFactory.DDLMsg msg)
+    {
+      int eventId = (int) msg.getEvent_id();
+      switch(eventId)
+      {
+        case MSGType.MSG_NEW_TALBE:
+          String d1 = (String) msg.getMsg_data().get("db_name");
+          String t1 = (String)msg.getMsg_data().get("table_name");
+          getMTable(d1,t1);
+          break;
+        //所有修改表和列的事件，都做同一处理，都是把整个表的缓存更新
+        case MSGType.MSG_ALT_TALBE_NAME:
+        case MSGType.MSG_ALT_TALBE_DISTRIBUTE:
+        case MSGType.MSG_ALT_TALBE_PARTITIONING:
+        case MSGType.MSG_ALT_TABLE_SPLITKEYS:
+        case MSGType.MSG_ALT_TALBE_DEL_COL:
+        case MSGType.MSG_ALT_TALBE_ADD_COL:
+        case MSGType.MSG_ALT_TALBE_ALT_COL_NAME:
+        case MSGType.MSG_ALT_TALBE_ALT_COL_TYPE:
+        case MSGType.MSG_ALT_TABLE_PARAM:
+          String dbName = (String) msg.getMsg_data().get("db_name");
+          String tableName = (String)msg.getMsg_data().get("table_name");
+          MTable mt = getMTable(dbName, tableName);
+          //javax.jdo.JDOUserException: Object of type "org.apache.hadoop.hive.metastore.model.MTable"
+          //is detached. Detached objects cannot be used with this operation.
+          //evict，refresh都报这个错
+//          pm.evict(mt);
+//          pm.refresh(mt);
+//          Object obj = pm.getObjectById(msg.getObject_id() );
+//          pm.refresh(obj);
+//          mt = getMTable(dbName, tableName);
+
+
+          break;
+
+        //删除表
+        case MSGType.MSG_DROP_TABLE:
+          String d = (String) msg.getMsg_data().get("db_name");
+          String t = (String)msg.getMsg_data().get("table_name");
+          pm.evict(getMTable(d,t));
+          break;
+
+        case MSGType.MSG_ADD_PARTITION_FILE:
+        case MSGType.MSG_DEL_PARTITION_FILE:
+          break;
+        case MSGType.MSG_ALT_PARTITION_FILE:
+          //未实现
+          break;
+        case MSGType.MSG_REP_FILE_CHANGE:
+        case MSGType.MSG_STA_FILE_CHANGE:
+        case MSGType.MSG_REP_FILE_ONOFF:
+        case MSGType.MSG_FILE_USER_SET_REP_CHANGE:
+
+          break;
+        case MSGType.MSG_NEW_PARTITION_INDEX_FILE:
+        case MSGType.MSG_ALT_PARTITION_INDEX_FILE:
+        case MSGType.MSG_DEL_PARTITION_INDEX_FILE:
+          //未实现
+          break;
+
+
+      }
+
+    }
   }
 
 }

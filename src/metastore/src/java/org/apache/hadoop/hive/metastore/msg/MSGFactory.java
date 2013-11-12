@@ -1,5 +1,7 @@
 package org.apache.hadoop.hive.metastore.msg;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -45,7 +47,7 @@ public class MSGFactory {
      private String event_handler = "";//事件处理函数（可能为空）
      private HashMap<String,Object> old_object_params;//对于修改操作，提供修改前对象的参数
 
-
+     private String localhost_name;//本机主机名
 
      public DDLMsg(){}
 
@@ -66,6 +68,12 @@ public class MSGFactory {
         this.event_handler = event_handler;
       }
       this.old_object_params = old_object_params;
+      try {
+        this.localhost_name = InetAddress.getLocalHost().getHostName();
+      } catch (UnknownHostException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
     }
 
 
@@ -133,6 +141,14 @@ public class MSGFactory {
     }
 
 
+    public String getLocalhost_name() {
+      return localhost_name;
+    }
+
+    public void setLocalhost_name(String localhost_name) {
+      this.localhost_name = localhost_name;
+    }
+
     public String toJson(){
       JSONObject jsonObject = new JSONObject();
       jsonObject.put("event_id", event_id);
@@ -144,6 +160,7 @@ public class MSGFactory {
       jsonObject.put("node_id", node_id);
       jsonObject.put("event_time", event_time);
       jsonObject.put("event_handler", event_handler);
+      jsonObject.put("localhost_name", localhost_name);
 
 
 
@@ -167,6 +184,7 @@ public class MSGFactory {
       msg.node_id = Long.parseLong(json.getString("node_id"));
       msg.event_time = Long.parseLong(json.getString("event_time"));
       msg.event_handler = json.getString("event_handler");
+      msg.localhost_name = json.getString("localhost_name");
 
       return msg;
 
@@ -943,6 +961,16 @@ public class MSGFactory {
         if (msg.getOld_object_params().containsKey("table_name")) {
           params.put("table_name", msg.getOld_object_params().get("table_name"));
         }
+        break;
+      //所有的授权的消息
+      case MSGType.MSG_GRANT_GLOBAL:
+      case MSGType.MSG_GRANT_DB:
+      case MSGType.MSG_GRANT_TABLE:
+      case MSGType.MSG_GRANT_SCHEMA:
+      case MSGType.MSG_GRANT_PARTITION:
+      case MSGType.MSG_GRANT_PARTITION_COLUMN:
+      case MSGType.MSG_GRANT_TABLE_COLUMN:
+        params.putAll(msg.getOld_object_params());
         break;
     }//end of switch
 

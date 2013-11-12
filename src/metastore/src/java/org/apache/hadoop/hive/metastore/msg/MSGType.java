@@ -233,4 +233,21 @@ public class MSGType {
   public static final int MSG_DEL_FILE = 4002;
 
 
+  public static final int MSG_GRANT_GLOBAL = 5101;
+  public static final int MSG_GRANT_DB = 5102;
+  public static final int MSG_GRANT_TABLE = 5103;
+  public static final int MSG_GRANT_SCHEMA = 5104;
+  public static final int MSG_GRANT_PARTITION = 5105;
+  public static final int MSG_GRANT_PARTITION_COLUMN = 5106;
+  public static final int MSG_GRANT_TABLE_COLUMN = 5107;
+
+  public static final int MSG_REVOKE_GLOBAL = 5201;
+  public static final int MSG_REVOKE_DB = 5202;
+  public static final int MSG_REVOKE_TABLE = 5203;
+  public static final int MSG_REVOKE_SCHEMA = 5204;
+  public static final int MSG_REVOKE_PARTITION = 5205;
+  public static final int MSG_REVOKE_PARTITION_COLUMN = 5206;
+  public static final int MSG_REVOKE_TABLE_COLUMN = 5207;
+
+
 }
