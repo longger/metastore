@@ -680,7 +680,7 @@ public class TextMetaDataFormatter implements MetaDataFormatter {
                   boolean first = true;
                   for(String node : nodeGroup.getNodes()){
                     if(!first){
-                      nodes = ","+nodes;
+                      nodes = nodes + ",";
                     }else{
                       first = false;
                     }
