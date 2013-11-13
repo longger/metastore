@@ -951,7 +951,7 @@ public class MSGFactory {
           params.put("table_name", msg.getOld_object_params().get("table_name"));
         }
         break;
-      //所有的授权的消息
+      //所有的授权和撤销授权的消息
       case MSGType.MSG_GRANT_GLOBAL:
       case MSGType.MSG_GRANT_DB:
       case MSGType.MSG_GRANT_TABLE:
@@ -959,6 +959,14 @@ public class MSGFactory {
       case MSGType.MSG_GRANT_PARTITION:
       case MSGType.MSG_GRANT_PARTITION_COLUMN:
       case MSGType.MSG_GRANT_TABLE_COLUMN:
+
+      case MSGType.MSG_REVOKE_GLOBAL:
+      case MSGType.MSG_REVOKE_DB:
+      case MSGType.MSG_REVOKE_TABLE:
+      case MSGType.MSG_REVOKE_PARTITION:
+      case MSGType.MSG_REVOKE_SCHEMA:
+      case MSGType.MSG_REVOKE_PARTITION_COLUMN:
+      case MSGType.MSG_REVOKE_TABLE_COLUMN:
         params.putAll(msg.getOld_object_params());
         break;
     }//end of switch

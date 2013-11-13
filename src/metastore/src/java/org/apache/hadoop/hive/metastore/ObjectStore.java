@@ -4757,7 +4757,8 @@ public class ObjectStore implements RawStore, Configurable {
     //MSG_ALT_TALBE_PARTITIONING
       HashMap<String, Object> altPartitioningParams = new HashMap<String, Object>();
       LOG.warn("---zy-- in alter table,old partition keys:"+oldt.getPartitionKeys()+",new partition keys"+newt.getPartitionKeys());
-      if(newt.getPartitionKeys().size() > oldt.getPartitionKeys().size())      //要传什么参数呢．．
+//      if(newt.getPartitionKeys().size() > oldt.getPartitionKeys().size())
+      if(newt.getPartitionKeys().size() > 0)
       {
         altPartitioningParams.put("table_name", oldt.getTableName());
         altPartitioningParams.put("db_name", oldt.getDatabase().getName());
@@ -4767,7 +4768,8 @@ public class ObjectStore implements RawStore, Configurable {
       //ALT_TABLE_SPLITKEYS
       HashMap<String, Object> altSplitKeyParams = new HashMap<String, Object>();
       LOG.warn("---zy-- in alter table,old split keys:"+oldt.getFileSplitKeys()+",new split keys"+newt.getFileSplitKeys());
-      if(newt.getFileSplitKeys().size() > oldt.getFileSplitKeys().size())
+//      if(newt.getFileSplitKeys().size() > oldt.getFileSplitKeys().size())
+      if(newt.getFileSplitKeys().size() > 0)
       {
         altSplitKeyParams.put("table_name", oldt.getTableName());
         altSplitKeyParams.put("db_name", oldt.getDatabase().getName());
@@ -6807,15 +6809,9 @@ public MUser getMUser(String userName) {
           }
         }
       }
-
+      List<MSGFactory.DDLMsg> msgs = new ArrayList<MSGFactory.DDLMsg>();
       if (persistentObjs.size() > 0) {
-        pm.deletePersistentAll(persistentObjs);
-      }
-      committed = commitTransaction();
-
-    //add by zy for msg queue
-      if(committed)
-      {
+        //add by zy for msg queue
         for(Object obj : persistentObjs)
         {
           if(obj instanceof MGlobalPrivilege)
@@ -6830,7 +6826,7 @@ public MUser getMUser(String userName) {
             params.put("create_time",mgp.getCreateTime());
             params.put("grant_option",mgp.getGrantOption());
 
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_GLOBAL,-1l,-1l, pm, mgp,params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_GLOBAL,-1l,-1l, pm, mgp,params));
           }
           else if(obj instanceof MDBPrivilege)
           {
@@ -6845,7 +6841,7 @@ public MUser getMUser(String userName) {
             params.put("grant_option",mdbp.getGrantOption());
             params.put("db_name", mdbp.getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mdbp.getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_DB,db_id,-1l, pm, mdbp.getDatabase(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_DB,db_id,-1l, pm, mdbp.getDatabase(),params));
           }
 
           else if(obj instanceof MTablePrivilege)
@@ -6862,7 +6858,7 @@ public MUser getMUser(String userName) {
             params.put("table_name", mtp.getTable().getTableName());
             params.put("db_name", mtp.getTable().getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtp.getTable().getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE,db_id,-1l, pm, mtp.getTable(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE,db_id,-1l, pm, mtp.getTable(),params));
           }
           else if(obj instanceof MSchemaPrivilege)
           {
@@ -6876,7 +6872,7 @@ public MUser getMUser(String userName) {
             params.put("create_time",msp.getCreateTime());
             params.put("grant_option",msp.getGrantOption());
             params.put("schema_name", msp.getSchema().getSchemaName());
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_SCHEMA,-1l,-1l, pm, msp.getSchema(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_SCHEMA,-1l,-1l, pm, msp.getSchema(),params));
           }
           else if(obj instanceof MPartitionPrivilege)
           {
@@ -6893,7 +6889,7 @@ public MUser getMUser(String userName) {
             params.put("table_name", mpp.getPartition().getTable().getTableName());
             params.put("db_name", mpp.getPartition().getTable().getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpp.getPartition().getTable().getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION,db_id,-1l, pm, mpp.getPartition(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION,db_id,-1l, pm, mpp.getPartition(),params));
           }
           else if(obj instanceof MPartitionColumnPrivilege)
           {
@@ -6911,7 +6907,7 @@ public MUser getMUser(String userName) {
             params.put("table_name", mpcp.getPartition().getTable().getTableName());
             params.put("db_name", mpcp.getPartition().getTable().getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpcp.getPartition().getTable().getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION_COLUMN,db_id,-1l, pm, mpcp.getPartition().getTable().getSd().getCD(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION_COLUMN,db_id,-1l, pm, mpcp.getPartition().getTable().getSd().getCD(),params));
           }
           else if(obj instanceof MTableColumnPrivilege)
           {
@@ -6928,8 +6924,17 @@ public MUser getMUser(String userName) {
             params.put("table_name", mtcp.getTable().getTableName());
             params.put("db_name", mtcp.getTable().getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtcp.getTable().getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE_COLUMN,db_id,-1l, pm, mtcp.getTable().getSd().getCD(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE_COLUMN,db_id,-1l, pm, mtcp.getTable().getSd().getCD(),params));
           }
+        }
+        pm.deletePersistentAll(persistentObjs);
+      }
+      committed = commitTransaction();
+
+      if(committed)
+      {
+        for(MSGFactory.DDLMsg msg : msgs) {
+          MetaMsgServer.sendMsg(msg);
         }
       }
     } finally {
