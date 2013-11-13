@@ -300,17 +300,17 @@ public class MetaMsgServer {
           DDLMsg msg = new DDLMsg();
           String data = new String(message.getData());
 
-//          LOG.info("---zy--consume msg: " + data);
-          System.out.println(data);
-          msg = DDLMsg.fromJson(data);
-          if(msg.getLocalhost_name().equals(localhost_name))
-          {
-            LOG.info("---zy--local msg,no need to refresh " );
-//            handler.refresh(msg);
-          }
+          LOG.info("---zy--consume msg: " + data);
+//          System.out.println(data);
+//          msg = DDLMsg.fromJson(data);
+//          if(msg.getLocalhost_name().equals(localhost_name))
+//          {
+//            LOG.info("---zy--local msg,no need to refresh " );
+////            handler.refresh(msg);
+//          }
 //          else
           //just test
-          handler.refresh(msg);
+//          handler.refresh(msg);
         }
 
       }
