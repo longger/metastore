@@ -119,6 +119,22 @@ public final class MetaDataFormatUtils {
     indexColumns.add(indexType.getName());
 
     indexColumns.add(index.getParameters().get("comment"));
+    Map<String,String> indexParaKeys = index.getParameters();
+//    StringBuilder keyStr = new StringBuilder();
+//    boolean flag = true;
+//    List<String> keys = new ArrayList<String>(indexParaKeys.keySet());
+//    for (String k : keys)
+//    {
+//      if (!flag)
+//      {
+//        keyStr.append(", ");
+//      }
+//      keyStr.append(k + indexParaKeys.get(k));
+//      flag = false;
+//    }
+//    indexColumns.add(keyStr.toString());
+    indexParaKeys.remove("transient_lastDdlTime");
+    indexColumns.add(indexParaKeys.toString());
 
     formatOutput(indexColumns.toArray(new String[0]), indexInfo);
 

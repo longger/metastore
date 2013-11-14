@@ -5648,10 +5648,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         SFile nfile = create_file_wo_location(3, tbl.getDbName(), tbl.getTableName(), null);
         fileToDel.add(nfile);
 
-        sfl.setNode_name(dm.getAnyNode());
+        try {
+          sfl.setNode_name(dm.getAnyNode(null));
+        } catch (MetaException e) {
+          sfl.setNode_name(null);
+        }
         while (sfl.getNode_name() == null) {
           LOG.warn("No active node in ndmap ... retry it.");
-          sfl.setNode_name(dm.getAnyNode());
+          try {
+            sfl.setNode_name(dm.getAnyNode(null));
+          } catch (MetaException e) {
+            sfl.setNode_name(null);
+          }
           try {
             Thread.sleep(1000);
           } catch (InterruptedException e) {
@@ -6304,10 +6312,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
               files.get(entry.getKey()).getValues());
           fileToDel.add(nfile);
 
-          sfl.setNode_name(dm.getAnyNode());
+          try {
+            sfl.setNode_name(dm.getAnyNode(null));
+          } catch (MetaException e) {
+            sfl.setNode_name(null);
+          }
           while (sfl.getNode_name() == null) {
             LOG.warn("No active node in ndmap ... retry it.");
-            sfl.setNode_name(dm.getAnyNode());
+            try {
+              sfl.setNode_name(dm.getAnyNode(null));
+            } catch (MetaException e) {
+              sfl.setNode_name(null);
+            }
             try {
               Thread.sleep(1000);
             } catch (InterruptedException e) {
@@ -7118,8 +7134,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       // generate this msuri
       HMSHandler.msUri = "thrift://" + InetAddress.getLocalHost().getHostName() + ":" + port;
 
-      //start msg consumer
-      new MetaMsgServer.AsyncConsumer().consume();
       // Server will create new threads up to max as necessary. After an idle
       // period, it will destory threads to keep the number of threads in the
       // pool to min.

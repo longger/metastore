@@ -273,7 +273,7 @@ public class MetaMsgServer {
         e.printStackTrace();
       }
       //设置zookeeper地址
-      zkConfig.zkConnect = "192.168.1.13:3181";
+      zkConfig.zkConnect = MetaMsgServer.zkAddr;
       metaClientConfig.setZkConfig(zkConfig);
       // New session factory,强烈建议使用单例
       MessageSessionFactory sessionFactory = new MetaMessageSessionFactory(metaClientConfig);

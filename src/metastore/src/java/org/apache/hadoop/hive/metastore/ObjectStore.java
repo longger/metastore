@@ -4819,8 +4819,8 @@ public class ObjectStore implements RawStore, Configurable {
         for (MFieldSchema mfs : oldt.getFileSplitKeys()) {
           if (mfs.getVersion() > cur_version) {
             cur_version = mfs.getVersion();
-            newFS.add(mfs);
           }
+          newFS.add(mfs);
         }
       }
       cur_version++;
