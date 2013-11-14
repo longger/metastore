@@ -4757,8 +4757,8 @@ public class ObjectStore implements RawStore, Configurable {
     //MSG_ALT_TALBE_PARTITIONING
       HashMap<String, Object> altPartitioningParams = new HashMap<String, Object>();
       LOG.warn("---zy-- in alter table,old partition keys:"+oldt.getPartitionKeys()+",new partition keys"+newt.getPartitionKeys());
-//      if(newt.getPartitionKeys().size() > oldt.getPartitionKeys().size())
-      if(newt.getPartitionKeys().size() > 0)
+      if(newt.getPartitionKeys().size() > oldt.getPartitionKeys().size())
+//      if(newt.getPartitionKeys().size() > 0)
       {
         altPartitioningParams.put("table_name", oldt.getTableName());
         altPartitioningParams.put("db_name", oldt.getDatabase().getName());
@@ -4768,7 +4768,6 @@ public class ObjectStore implements RawStore, Configurable {
       //ALT_TABLE_SPLITKEYS
       HashMap<String, Object> altSplitKeyParams = new HashMap<String, Object>();
       LOG.warn("---zy-- in alter table,old split keys:"+oldt.getFileSplitKeys()+",new split keys"+newt.getFileSplitKeys());
-//      if(newt.getFileSplitKeys().size() > oldt.getFileSplitKeys().size())
       if(newt.getFileSplitKeys().size() > 0)
       {
         altSplitKeyParams.put("table_name", oldt.getTableName());
@@ -6515,7 +6514,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mgp.getGrantor());
             params.put("grantor_type", mgp.getGrantorType());
-            params.put("principalName", mgp.getPrincipalName());
+            params.put("principal_name", mgp.getPrincipalName());
             params.put("principal_type", mgp.getPrincipalType());
             params.put("privilege", mgp.getPrivilege());
             params.put("create_time",mgp.getCreateTime());
@@ -6529,7 +6528,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mdbp.getGrantor());
             params.put("grantor_type", mdbp.getGrantorType());
-            params.put("principalName", mdbp.getPrincipalName());
+            params.put("principal_name", mdbp.getPrincipalName());
             params.put("principal_type", mdbp.getPrincipalType());
             params.put("privilege", mdbp.getPrivilege());
             params.put("create_time",mdbp.getCreateTime());
@@ -6545,7 +6544,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mtp.getGrantor());
             params.put("grantor_type", mtp.getGrantorType());
-            params.put("principalName", mtp.getPrincipalName());
+            params.put("principal_name", mtp.getPrincipalName());
             params.put("principal_type", mtp.getPrincipalType());
             params.put("privilege", mtp.getPrivilege());
             params.put("create_time",mtp.getCreateTime());
@@ -6561,7 +6560,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", msp.getGrantor());
             params.put("grantor_type", msp.getGrantorType());
-            params.put("principalName", msp.getPrincipalName());
+            params.put("principal_name", msp.getPrincipalName());
             params.put("principal_type", msp.getPrincipalType());
             params.put("privilege", msp.getPrivilege());
             params.put("create_time",msp.getCreateTime());
@@ -6575,7 +6574,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mpp.getGrantor());
             params.put("grantor_type", mpp.getGrantorType());
-            params.put("principalName", mpp.getPrincipalName());
+            params.put("principal_name", mpp.getPrincipalName());
             params.put("principal_type", mpp.getPrincipalType());
             params.put("privilege", mpp.getPrivilege());
             params.put("create_time",mpp.getCreateTime());
@@ -6592,7 +6591,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mpcp.getGrantor());
             params.put("grantor_type", mpcp.getGrantorType());
-            params.put("principalName", mpcp.getPrincipalName());
+            params.put("principal_name", mpcp.getPrincipalName());
             params.put("principal_type", mpcp.getPrincipalType());
             params.put("privilege", mpcp.getPrivilege());
             params.put("create_time",mpcp.getCreateTime());
@@ -6610,7 +6609,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mtcp.getGrantor());
             params.put("grantor_type", mtcp.getGrantorType());
-            params.put("principalName", mtcp.getPrincipalName());
+            params.put("principal_name", mtcp.getPrincipalName());
             params.put("principal_type", mtcp.getPrincipalType());
             params.put("privilege", mtcp.getPrivilege());
             params.put("create_time",mtcp.getCreateTime());
@@ -6820,7 +6819,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mgp.getGrantor());
             params.put("grantor_type", mgp.getGrantorType());
-            params.put("principalName", mgp.getPrincipalName());
+            params.put("principal_name", mgp.getPrincipalName());
             params.put("principal_type", mgp.getPrincipalType());
             params.put("privilege", mgp.getPrivilege());
             params.put("create_time",mgp.getCreateTime());
@@ -6834,7 +6833,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mdbp.getGrantor());
             params.put("grantor_type", mdbp.getGrantorType());
-            params.put("principalName", mdbp.getPrincipalName());
+            params.put("principal_name", mdbp.getPrincipalName());
             params.put("principal_type", mdbp.getPrincipalType());
             params.put("privilege", mdbp.getPrivilege());
             params.put("create_time",mdbp.getCreateTime());
@@ -6850,7 +6849,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mtp.getGrantor());
             params.put("grantor_type", mtp.getGrantorType());
-            params.put("principalName", mtp.getPrincipalName());
+            params.put("principal_name", mtp.getPrincipalName());
             params.put("principal_type", mtp.getPrincipalType());
             params.put("privilege", mtp.getPrivilege());
             params.put("create_time",mtp.getCreateTime());
@@ -6866,7 +6865,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", msp.getGrantor());
             params.put("grantor_type", msp.getGrantorType());
-            params.put("principalName", msp.getPrincipalName());
+            params.put("principal_name", msp.getPrincipalName());
             params.put("principal_type", msp.getPrincipalType());
             params.put("privilege", msp.getPrivilege());
             params.put("create_time",msp.getCreateTime());
@@ -6880,7 +6879,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mpp.getGrantor());
             params.put("grantor_type", mpp.getGrantorType());
-            params.put("principalName", mpp.getPrincipalName());
+            params.put("principal_name", mpp.getPrincipalName());
             params.put("principal_type", mpp.getPrincipalType());
             params.put("privilege", mpp.getPrivilege());
             params.put("create_time",mpp.getCreateTime());
@@ -6897,7 +6896,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mpcp.getGrantor());
             params.put("grantor_type", mpcp.getGrantorType());
-            params.put("principalName", mpcp.getPrincipalName());
+            params.put("principal_name", mpcp.getPrincipalName());
             params.put("principal_type", mpcp.getPrincipalType());
             params.put("privilege", mpcp.getPrivilege());
             params.put("create_time",mpcp.getCreateTime());
@@ -6915,7 +6914,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mtcp.getGrantor());
             params.put("grantor_type", mtcp.getGrantorType());
-            params.put("principalName", mtcp.getPrincipalName());
+            params.put("principal_name", mtcp.getPrincipalName());
             params.put("principal_type", mtcp.getPrincipalType());
             params.put("privilege", mtcp.getPrivilege());
             params.put("create_time",mtcp.getCreateTime());
