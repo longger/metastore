@@ -3880,6 +3880,7 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     try{
       LOG.info("=======================1");
     Table tbl = db.getTable(alterTbl.getOldName());
+    tbl.getFileSplitKeys().clear();
     Partition part = null;
     List<Partition> allPartitions = null;
     if (alterTbl.getPartSpec() != null) {

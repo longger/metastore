@@ -4767,7 +4767,7 @@ public class ObjectStore implements RawStore, Configurable {
       //ALT_TABLE_SPLITKEYS
       HashMap<String, Object> altSplitKeyParams = new HashMap<String, Object>();
       LOG.warn("---zy-- in alter table,old split keys:"+oldt.getFileSplitKeys()+",new split keys"+newt.getFileSplitKeys());
-      if(newt.getFileSplitKeys().size() > oldt.getFileSplitKeys().size())
+      if(newt.getFileSplitKeys().size() > 0)
       {
         altSplitKeyParams.put("table_name", oldt.getTableName());
         altSplitKeyParams.put("db_name", oldt.getDatabase().getName());
