@@ -784,6 +784,8 @@ public class DiskManager {
         }
         if (!master_marked) {
           LOG.error("Async replicate SFile " + f.getFid() + ", but no valid FROM SFileLocations!");
+          // FIXME: this means we should clean this file?
+          do_delete(f, 0);
           return;
         }
 
