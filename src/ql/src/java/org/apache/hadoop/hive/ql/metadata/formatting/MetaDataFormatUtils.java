@@ -29,6 +29,7 @@ import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Index;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
+import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.hive.ql.index.HiveIndex;
 import org.apache.hadoop.hive.ql.index.HiveIndex.IndexType;
 import org.apache.hadoop.hive.ql.metadata.Partition;
@@ -156,6 +157,45 @@ public final class MetaDataFormatUtils {
     }
     return colBuffer.toString();
   }
+  /*
+  Displaying columns unformatted for backward compatibility.
+ */
+public static String displayColsUnformatted(List<FieldSchema> cols,Table tbl) {
+  StringBuilder colBuffer = new StringBuilder(DEFAULT_STRINGBUILDER_SIZE);
+  for (FieldSchema col : cols) {
+    colBuffer.append(col.getName());
+    colBuffer.append(FIELD_DELIM);
+    colBuffer.append(col.getType());
+    colBuffer.append(FIELD_DELIM);
+    colBuffer.append(col.getComment() == null ? "" : col.getComment());
+    List<FieldSchema> fieldschema = tbl.getFileSplitKeys();
+    long version_max = 0;
+    for(FieldSchema fs : fieldschema){
+      if(fs.getVersion() >= version_max){
+        version_max = fs.getVersion();
+      }
+    }
+    List<FieldSchema> newFs = new ArrayList<FieldSchema>();
+    for(FieldSchema fs : fieldschema){
+      if(fs.getVersion() == version_max){
+        newFs.add(fs);
+      }
+    }
+    if(newFs != null){
+      List<PartitionInfo> newFsh =  PartitionInfo.getPartitionInfo(newFs);
+      for(PartitionInfo pif : newFsh){
+        if(pif.getP_col().equals(col.getName())){
+          String comment = "{p_level:" + pif.getP_level() +
+              ",p_version:" + pif.getP_version() + ",p_type:" +
+              pif.getP_type() + ",args" + pif.getArgs().toString() + "}";
+          colBuffer.append("    " + comment);
+        }
+      }
+    }
+    colBuffer.append(LINE_DELIM);
+  }
+  return colBuffer.toString();
+}
 
   public static String getPartitionInformation(Partition part) {
     StringBuilder tableInfo = new StringBuilder(DEFAULT_STRINGBUILDER_SIZE);
