@@ -2701,8 +2701,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throws MetaException {
       startFunction("get_tables", ": db=" + dbname + " pat=" + pattern);
 
-      LOG.warn("-----zjw--haha ");
-
       List<String> ret = null;
       Exception ex = null;
       try {

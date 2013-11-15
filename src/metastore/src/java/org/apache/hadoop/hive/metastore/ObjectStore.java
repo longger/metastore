@@ -9638,7 +9638,6 @@ public MUser getMUser(String userName) {
 
       commited = commitTransaction();
 
-
       long db_id = -1;
       if(commited) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_SCHEMA,db_id,-1, pm, mSchema,null));
