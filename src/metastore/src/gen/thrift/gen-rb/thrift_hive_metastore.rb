@@ -2360,6 +2360,22 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'offline_filelocation failed: unknown result')
     end
 
+    def set_loadstatus_bad(fid)
+      send_set_loadstatus_bad(fid)
+      return recv_set_loadstatus_bad()
+    end
+
+    def send_set_loadstatus_bad(fid)
+      send_message('set_loadstatus_bad', Set_loadstatus_bad_args, :fid => fid)
+    end
+
+    def recv_set_loadstatus_bad()
+      result = receive_message(Set_loadstatus_bad_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'set_loadstatus_bad failed: unknown result')
+    end
+
     def toggle_safemode()
       send_toggle_safemode()
       return recv_toggle_safemode()
@@ -4939,6 +4955,17 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'offline_filelocation', seqid)
+    end
+
+    def process_set_loadstatus_bad(seqid, iprot, oprot)
+      args = read_args(iprot, Set_loadstatus_bad_args)
+      result = Set_loadstatus_bad_result.new()
+      begin
+        result.success = @handler.set_loadstatus_bad(args.fid)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'set_loadstatus_bad', seqid)
     end
 
     def process_toggle_safemode(seqid, iprot, oprot)
@@ -10820,6 +10847,40 @@ module ThriftHiveMetastore
   end
 
   class Offline_filelocation_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Set_loadstatus_bad_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    FID = 1
+
+    FIELDS = {
+      FID => {:type => ::Thrift::Types::I64, :name => 'fid'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Set_loadstatus_bad_result
     include ::Thrift::Struct, ::Thrift::Struct_Union
     SUCCESS = 0
     O1 = 1
