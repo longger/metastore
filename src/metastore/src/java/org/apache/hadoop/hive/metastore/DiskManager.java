@@ -2048,6 +2048,7 @@ public class DiskManager {
         }
       }
       if (largestNode == null && flp.canIgnore) {
+        // FIXME: replicas ignore NODE GROUP settings?
         return findBestNode(false);
       }
 

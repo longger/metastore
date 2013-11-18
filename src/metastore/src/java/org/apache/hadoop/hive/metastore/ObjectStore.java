@@ -810,12 +810,12 @@ public class ObjectStore implements RawStore, Configurable {
     }
     try {
       openTransaction();
-      Query q = pm.newQuery(MFile.class, "this.table.tableName == tableName && this.table.database.name == dbName");
+      Query q = pm.newQuery(MFile.class);
+
+      filter += "this.table.tableName == tableName && this.table.database.name == dbName ";
+
       for (int i = 0; i < values.size(); i++) {
-        if (i != 0) {
-          filter += "&&";
-        }
-        filter += "(this.values.contains(v" + i + ") && (v"
+        filter += "&& (this.values.contains(v" + i + ") && (v"
             + i + ".pkname == v" + i + "pkname && v"
             + i + ".level == v" + i + "level && v"
             + i + ".value == v" + i + "value && v"
