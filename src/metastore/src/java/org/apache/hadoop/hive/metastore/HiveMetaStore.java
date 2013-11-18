@@ -4386,7 +4386,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       di.dev = devid;
       di.prop = prop;
       node = getMS().getNode(node_name);
-      getMS().createOrUpdateDevice(di, node);
+      getMS().createOrUpdateDevice(di, node, null);
 
       Device d = getMS().getDevice(devid);
       return d;
