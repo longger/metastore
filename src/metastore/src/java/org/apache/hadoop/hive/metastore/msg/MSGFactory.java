@@ -414,6 +414,9 @@ public class MSGFactory {
           if(msg.getOld_object_params().containsKey("column_name")){
             params.put("column_name",msg.getOld_object_params().get("column_name"));
           }
+          if(msg.getOld_object_params().containsKey("column_type")){
+            params.put("column_type",msg.getOld_object_params().get("column_type"));
+          }
           break;
       case MSGType.MSG_ALT_TALBE_ADD_COL :
             //修改表新增列

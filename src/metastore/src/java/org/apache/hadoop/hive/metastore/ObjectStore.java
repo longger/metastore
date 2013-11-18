@@ -4682,6 +4682,7 @@ public class ObjectStore implements RawStore, Configurable {
           ps.put("table_name", oldt.getTableName());
           LOG.info("---zy--in alterTable delCol,colname:"+omfs.getName());
           ps.put("column_name",omfs.getName());
+          ps.put("column_type", omfs.getType());
 //          MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL,db_id,-1, pm, oldt.getSd().getCD(),ps));
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL,db_id,-1, pm, newt.getSd().getCD(),ps));
         }
