@@ -2701,8 +2701,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throws MetaException {
       startFunction("get_tables", ": db=" + dbname + " pat=" + pattern);
 
-      LOG.warn("-----zjw--haha ");
-
       List<String> ret = null;
       Exception ex = null;
       try {
@@ -6670,7 +6668,21 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         if (values == null || values.size() == 0) {
           throw new FileOperationException("Invalid file split values.", FOFailReason.INVALID_SPLIT_VALUES);
         }
-        List<PartitionInfo> pis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl.getFileSplitKeys());
+        List<PartitionInfo> allpis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl.getFileSplitKeys());
+        List<PartitionInfo> pis = new ArrayList<PartitionInfo>();
+        // find the max version
+        int version = 0;
+        for (PartitionInfo pi : allpis) {
+          if (pi.getP_version() > version) {
+            version = pi.getP_version();
+          }
+        }
+        // remove non-max versions
+        for (PartitionInfo pi : allpis) {
+          if (pi.getP_version() == version) {
+            pis.add(pi);
+          }
+        }
         int vlen = 0;
         for (PartitionInfo pi : pis) {
           switch (pi.getP_type()) {
@@ -6919,6 +6931,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         // FIXME: Caution, this might be a conflict code section for concurrent sfile field modification.
         getMS().updateSFile(f);
       }
+    }
+
+    @Override
+    public boolean set_loadstatus_bad(long fid) throws MetaException, TException {
+      SFile saved = getMS().getSFile(fid);
+      if (saved == null) {
+        throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
+      }
+
+      saved.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
+      getMS().updateSFile(saved);
+      return true;
     }
 
   }

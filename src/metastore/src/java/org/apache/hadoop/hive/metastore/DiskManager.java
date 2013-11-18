@@ -754,6 +754,23 @@ public class DiskManager {
 
         if (init_size <= 0) {
           LOG.error("Not valid locations for file " + f.getFid());
+          // FIXME: this means we should clean this file?
+          if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
+              f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+            LOG.warn("FID " + f.getFid() + " will be deleted(reason: no locations), however it's status is " + f.getStore_status());
+            if (f.getLocationsSize() == 0) {
+              synchronized (trs) {
+                try {
+                  // delete locations firsta
+                  trs.delSFile(f.getFid());
+                } catch (MetaException e) {
+                  LOG.error(e, e);
+                }
+              }
+            } else {
+              do_delete(f, f.getLocationsSize());
+            }
+          }
           return;
         }
         // find the backup devices
@@ -785,7 +802,22 @@ public class DiskManager {
         if (!master_marked) {
           LOG.error("Async replicate SFile " + f.getFid() + ", but no valid FROM SFileLocations!");
           // FIXME: this means we should clean this file?
-          do_delete(f, 0);
+          if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
+              f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+            LOG.warn("FID " + f.getFid() + " will be deleted(reason: no locations), however it's status is " + f.getStore_status());
+            if (f.getLocationsSize() == 0) {
+              synchronized (trs) {
+                try {
+                  // delete locations first
+                  trs.delSFile(f.getFid());
+                } catch (MetaException e) {
+                  LOG.error(e, e);
+                }
+              }
+            } else {
+              do_delete(f, f.getLocationsSize());
+            }
+          }
           return;
         }
 
@@ -1545,7 +1577,7 @@ public class DiskManager {
         for (DeviceInfo di : ndi) {
           try {
             synchronized (rs) {
-              rs.createOrUpdateDevice(di, node);
+              rs.createOrUpdateDevice(di, node, null);
               Device d = rs.getDevice(di.dev);
               di.prop = d.getProp();
             }
@@ -2016,6 +2048,7 @@ public class DiskManager {
         }
       }
       if (largestNode == null && flp.canIgnore) {
+        // FIXME: replicas ignore NODE GROUP settings?
         return findBestNode(false);
       }
 

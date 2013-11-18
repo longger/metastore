@@ -1001,6 +1001,8 @@ public interface IMetaStoreClient {
 
   public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException;
 
+  public boolean set_loadstatus_bad(long fid) throws MetaException, TException;
+
   public SFile get_file_by_id(long fid) throws FileOperationException, MetaException, TException;
 
   public SFile get_file_by_name(String node, String devid, String location)

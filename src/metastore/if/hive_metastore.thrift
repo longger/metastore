@@ -381,6 +381,7 @@ struct Device {
   2: i32    prop,
   3: string node_name,
   4: i32	status,
+  5: string ng_name,
 }
 
 struct SFileLocation {
@@ -979,6 +980,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   bool online_filelocation(1:SFile file) throws (1:MetaException o1)
   
   bool offline_filelocation(1:SFileLocation sfl) throws (1:MetaException o1)
+  
+  bool set_loadstatus_bad(1:i64 fid) throws (1:MetaException o1)
   
   bool toggle_safemode() throws (1:MetaException o1)
   

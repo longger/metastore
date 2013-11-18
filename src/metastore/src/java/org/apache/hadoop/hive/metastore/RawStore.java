@@ -119,7 +119,7 @@ public interface RawStore extends Configurable {
   public abstract void createTable(Table tbl) throws InvalidObjectException,
       MetaException;
 
-  public abstract void createOrUpdateDevice(DeviceInfo di, Node node) throws
+  public abstract void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng) throws
       InvalidObjectException, MetaException;
 
   public Device modifyDevice(Device dev, Node node) throws MetaException, NoSuchObjectException, InvalidObjectException;

@@ -794,12 +794,14 @@ class Device
   PROP = 2
   NODE_NAME = 3
   STATUS = 4
+  NG_NAME = 5
 
   FIELDS = {
     DEVID => {:type => ::Thrift::Types::STRING, :name => 'devid'},
     PROP => {:type => ::Thrift::Types::I32, :name => 'prop'},
     NODE_NAME => {:type => ::Thrift::Types::STRING, :name => 'node_name'},
-    STATUS => {:type => ::Thrift::Types::I32, :name => 'status'}
+    STATUS => {:type => ::Thrift::Types::I32, :name => 'status'},
+    NG_NAME => {:type => ::Thrift::Types::STRING, :name => 'ng_name'}
   }
 
   def struct_fields; FIELDS; end
