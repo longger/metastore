@@ -178,6 +178,9 @@ public final class PrimitiveObjectInspectorUtils {
   public static final PrimitiveTypeEntry timestampTypeEntry = new PrimitiveTypeEntry(
       PrimitiveCategory.TIMESTAMP, serdeConstants.TIMESTAMP_TYPE_NAME, null,
       Object.class, TimestampWritable.class);
+  public static final PrimitiveTypeEntry blobTypeEntry = new PrimitiveTypeEntry(
+      PrimitiveCategory.BLOB, serdeConstants.BLOB_TYPE_NAME, null,
+      Object.class, BytesWritable.class);
 
   // The following is a complex type for special handling
   public static final PrimitiveTypeEntry unknownTypeEntry = new PrimitiveTypeEntry(
@@ -195,6 +198,7 @@ public final class PrimitiveObjectInspectorUtils {
     registerType(byteTypeEntry);
     registerType(shortTypeEntry);
     registerType(timestampTypeEntry);
+    registerType(blobTypeEntry);
     registerType(unknownTypeEntry);
   }
 
@@ -357,6 +361,10 @@ public final class PrimitiveObjectInspectorUtils {
     case TIMESTAMP: {
       return ((TimestampObjectInspector) oi1).getPrimitiveWritableObject(o1)
           .equals(((TimestampObjectInspector) oi2).getPrimitiveWritableObject(o2));
+    }
+    case BLOB: {
+      return ((BinaryObjectInspector) oi1).getPrimitiveWritableObject(o1)
+          .equals(((BinaryObjectInspector) oi2).getPrimitiveWritableObject(o2));
     }
     case BINARY:{
       return ((BinaryObjectInspector) oi1).getPrimitiveWritableObject(o1).
@@ -731,6 +739,9 @@ public final class PrimitiveObjectInspectorUtils {
       return bw;
 
     case BINARY:
+      return ((BinaryObjectInspector) oi).getPrimitiveWritableObject(o);
+
+    case BLOB:
       return ((BinaryObjectInspector) oi).getPrimitiveWritableObject(o);
 
     default:

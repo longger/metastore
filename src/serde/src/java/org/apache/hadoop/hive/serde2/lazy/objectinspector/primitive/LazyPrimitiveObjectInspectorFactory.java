@@ -55,7 +55,9 @@ public final class LazyPrimitiveObjectInspectorFactory {
       new LazyVoidObjectInspector();
   public static final LazyTimestampObjectInspector LAZY_TIMESTAMP_OBJECT_INSPECTOR =
       new LazyTimestampObjectInspector();
-  public static final LazyBinaryObjectInspector LAZY_BINARY_OBJECT_INSPECTOR =
+  public static final LazyBlobObjectInspector LAZY_BINARY_OBJECT_INSPECTOR =
+      new LazyBlobObjectInspector();
+  public static final LazyBinaryObjectInspector LAZY_BLOB_OBJECT_INSPECTOR =
       new LazyBinaryObjectInspector();
 
   static HashMap<ArrayList<Object>, LazyStringObjectInspector> cachedLazyStringObjectInspector =
@@ -97,6 +99,8 @@ public final class LazyPrimitiveObjectInspectorFactory {
       return getLazyStringObjectInspector(escaped, escapeChar);
     case BINARY:
       return LAZY_BINARY_OBJECT_INSPECTOR;
+    case BLOB:
+      return LAZY_BLOB_OBJECT_INSPECTOR;
     case VOID:
       return LAZY_VOID_OBJECT_INSPECTOR;
     case TIMESTAMP:
