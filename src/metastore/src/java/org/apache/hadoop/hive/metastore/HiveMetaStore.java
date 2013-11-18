@@ -6919,6 +6919,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       }
     }
 
+    @Override
+    public boolean set_loadstatus_bad(long fid) throws MetaException, TException {
+      SFile saved = getMS().getSFile(fid);
+      if (saved == null) {
+        throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
+      }
+
+      saved.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
+      getMS().updateSFile(saved);
+      return true;
+    }
+
   }
 
   public static IHMSHandler newHMSHandler(String name, HiveConf hiveConf) throws MetaException {

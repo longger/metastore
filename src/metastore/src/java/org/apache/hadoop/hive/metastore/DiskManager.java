@@ -758,12 +758,17 @@ public class DiskManager {
           if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
               f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
             LOG.warn("FID " + f.getFid() + " will be deleted(reason: no locations), however it's status is " + f.getStore_status());
-            synchronized (trs) {
-              try {
-                trs.delSFile(f.getFid());
-              } catch (MetaException e) {
-                LOG.error(e, e);
+            if (f.getLocationsSize() == 0) {
+              synchronized (trs) {
+                try {
+                  // delete locations firsta
+                  trs.delSFile(f.getFid());
+                } catch (MetaException e) {
+                  LOG.error(e, e);
+                }
               }
+            } else {
+              do_delete(f, f.getLocationsSize());
             }
           }
           return;
@@ -800,12 +805,17 @@ public class DiskManager {
           if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
               f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
             LOG.warn("FID " + f.getFid() + " will be deleted(reason: no locations), however it's status is " + f.getStore_status());
-            synchronized (trs) {
-              try {
-                trs.delSFile(f.getFid());
-              } catch (MetaException e) {
-                LOG.error(e, e);
+            if (f.getLocationsSize() == 0) {
+              synchronized (trs) {
+                try {
+                  // delete locations first
+                  trs.delSFile(f.getFid());
+                } catch (MetaException e) {
+                  LOG.error(e, e);
+                }
               }
+            } else {
+              do_delete(f, f.getLocationsSize());
             }
           }
           return;

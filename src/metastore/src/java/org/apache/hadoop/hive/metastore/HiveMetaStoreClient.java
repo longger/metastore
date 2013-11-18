@@ -2333,4 +2333,9 @@ public boolean authentication(String user_name, String passwd)
   public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException {
     client.set_file_repnr(fid, repnr);
   }
+
+  @Override
+  public boolean set_loadstatus_bad(long fid) throws MetaException, TException {
+    return client.set_loadstatus_bad(fid);
+  }
 }
