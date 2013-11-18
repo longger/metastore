@@ -1577,7 +1577,7 @@ public class DiskManager {
         for (DeviceInfo di : ndi) {
           try {
             synchronized (rs) {
-              rs.createOrUpdateDevice(di, node);
+              rs.createOrUpdateDevice(di, node, null);
               Device d = rs.getDevice(di.dev);
               di.prop = d.getProp();
             }

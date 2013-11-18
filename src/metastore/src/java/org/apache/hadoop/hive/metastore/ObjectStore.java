@@ -1691,7 +1691,12 @@ public class ObjectStore implements RawStore, Configurable {
     if (mds != null) {
       ds = new ArrayList<Device>();
       for (MDevice md : mds) {
-        Device d = new Device(md.getDev_name(), md.getProp(), md.getNode().getNode_name(), md.getStatus());
+        String ng_name = null;
+        if (md.getNg() != null) {
+          ng_name = md.getNg().getNode_group_name();
+        }
+        Device d = new Device(md.getDev_name(), md.getProp(),
+            md.getNode().getNode_name(), md.getStatus(), ng_name);
         ds.add(d);
       }
     }
@@ -1735,14 +1740,19 @@ public class ObjectStore implements RawStore, Configurable {
     }
     md.setProp(dev.getProp());
     md.setStatus(dev.getStatus());
+    md.setNg(getMNodeGroup(dev.getNg_name()));
 
     createDevice(md);
     return convertToDevice(md);
   }
 
-  public void createOrUpdateDevice(DeviceInfo di, Node node) throws MetaException, InvalidObjectException {
+  public void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng) throws MetaException, InvalidObjectException {
     MDevice md = getMDevice(di.dev.trim());
     boolean doCreate = false;
+    String ng_name = null;
+    if (ng != null) {
+      ng_name = ng.getNode_group_name();
+    }
 
     if (md == null) {
       // create it now
@@ -1750,10 +1760,15 @@ public class ObjectStore implements RawStore, Configurable {
       if (mn == null) {
         throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
       }
-      if (di.mp == null) {
-        md = new MDevice(mn, di.dev.trim(), di.prop);
-      } else {
-        md = new MDevice(mn, di.dev.trim(), di.prop, MetaStoreConst.MDeviceStatus.ONLINE);
+      try {
+        if (di.mp == null) {
+          md = new MDevice(mn, getMNodeGroup(ng_name), di.dev.trim(), di.prop);
+        } else {
+          md = new MDevice(mn, getMNodeGroup(ng_name), di.dev.trim(), di.prop, MetaStoreConst.MDeviceStatus.ONLINE);
+        }
+      } catch (NoSuchObjectException e) {
+        LOG.error(e, e);
+        throw new MetaException(e.getMessage());
       }
       doCreate = true;
     } else {
@@ -1761,6 +1776,7 @@ public class ObjectStore implements RawStore, Configurable {
       if (di.mp != null && md.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT) {
         // if the Device is in SUSPECT state, update it to ONLINE
         md.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
+        doCreate = true;
       }
       if (!md.getNode().getNode_name().equals(node.getNode_name()) &&
           md.getProp() == MetaStoreConst.MDeviceProp.ALONE) {
@@ -1773,6 +1789,7 @@ public class ObjectStore implements RawStore, Configurable {
         md.setNode(mn);
         doCreate = true;
       }
+      // NOTE: do not update NG in this function, please use modifyDevice to update NG!
     }
     if (doCreate) {
       createDevice(md);
@@ -1809,8 +1826,8 @@ public class ObjectStore implements RawStore, Configurable {
     Node n = new Node("macan", ips, MetaStoreConst.MNodeStatus.SUSPECT);
     SFile sf = new SFile(0, "db", "table", 5, 6, "xyzadfads", 1, 2, null, 100, null, null, 0);
     createNode(n);
-    MDevice md1 = new MDevice(getMNode("macan"), "dev-hello", 0, 0);
-    MDevice md2 = new MDevice(getMNode("macan"), "xyz1", 0, 0);
+    MDevice md1 = new MDevice(getMNode("macan"), null, "dev-hello", 0, 0);
+    MDevice md2 = new MDevice(getMNode("macan"), null, "xyz1", 0, 0);
     createDevice(md1);
     createDevice(md2);
 
@@ -2995,8 +3012,12 @@ public class ObjectStore implements RawStore, Configurable {
     if (md == null) {
       return null;
     }
+    String ng_name = null;
+    if (md.getNg() != null) {
+      ng_name = md.getNg().getNode_group_name();
+    }
     return new Device(md.getDev_name(), md.getProp(), md.getNode() != null ? md.getNode().getNode_name() : null,
-        md.getStatus());
+        md.getStatus(), ng_name);
   }
 
   private SFile convertToSFile(MFile mf) throws MetaException {
@@ -3094,8 +3115,14 @@ public class ObjectStore implements RawStore, Configurable {
       return null;
     }
     MNode mn = this.getMNode(device.getNode_name());
+    MNodeGroup mng;
+    try {
+      mng = this.getMNodeGroup(device.getNg_name());
+    } catch (NoSuchObjectException e) {
+      mng = null;
+    }
 
-    return new MDevice(mn, device.getDevid(), device.getProp(), device.getStatus());
+    return new MDevice(mn, mng, device.getDevid(), device.getProp(), device.getStatus());
   }
 
   private MFile convertToMFile(SFile file) throws InvalidObjectException {
@@ -10230,7 +10257,7 @@ public MUser getMUser(String userName) {
     if(nodegroupName == null ) {
       return null;
     }
-    LOG.info("getMnodeGroup groupName:["+nodegroupName+"]");
+    LOG.debug("getMnodeGroup groupName:["+nodegroupName+"]");
     try {
       openTransaction();
       nodegroupName = nodegroupName.toLowerCase().trim();
@@ -10246,7 +10273,7 @@ public MUser getMUser(String userName) {
       }
     }
     if (mng == null) {
-      throw new NoSuchObjectException("There is no schema named " + nodegroupName);
+      throw new NoSuchObjectException("There is no nodegroup named " + nodegroupName);
     }
     return mng;
   }
@@ -10330,10 +10357,10 @@ public MUser getMUser(String userName) {
   private MNodeGroup convertToMNodeGroup(NodeGroup ng) {
     if(ng.getNodes() != null && !ng.getNodes().isEmpty()){
       for(Node node : ng.getNodes()){
-        LOG.info("---zjw--" + node.getNode_name());
+        LOG.debug("---zjw--" + node.getNode_name());
       }
     }else{
-      LOG.info("---zjw--nodes is null");
+      LOG.debug("---zjw--nodes is null");
     }
 
     MNodeGroup mng = new MNodeGroup(ng.getNode_group_name(),
