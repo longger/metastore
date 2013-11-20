@@ -2285,20 +2285,21 @@ class CreatePolicy {
 void swap(CreatePolicy &a, CreatePolicy &b);
 
 typedef struct _Device__isset {
-  _Device__isset() : devid(false), prop(false), node_name(false), status(false) {}
+  _Device__isset() : devid(false), prop(false), node_name(false), status(false), ng_name(false) {}
   bool devid;
   bool prop;
   bool node_name;
   bool status;
+  bool ng_name;
 } _Device__isset;
 
 class Device {
  public:
 
-  static const char* ascii_fingerprint; // = "2A8D2B57C3E20FF7D0F9FCA97EECB292";
-  static const uint8_t binary_fingerprint[16]; // = {0x2A,0x8D,0x2B,0x57,0xC3,0xE2,0x0F,0xF7,0xD0,0xF9,0xFC,0xA9,0x7E,0xEC,0xB2,0x92};
+  static const char* ascii_fingerprint; // = "33584CD6150018AF03D99F89786E9675";
+  static const uint8_t binary_fingerprint[16]; // = {0x33,0x58,0x4C,0xD6,0x15,0x00,0x18,0xAF,0x03,0xD9,0x9F,0x89,0x78,0x6E,0x96,0x75};
 
-  Device() : devid(), prop(0), node_name(), status(0) {
+  Device() : devid(), prop(0), node_name(), status(0), ng_name() {
   }
 
   virtual ~Device() throw() {}
@@ -2307,6 +2308,7 @@ class Device {
   int32_t prop;
   std::string node_name;
   int32_t status;
+  std::string ng_name;
 
   _Device__isset __isset;
 
@@ -2326,6 +2328,10 @@ class Device {
     status = val;
   }
 
+  void __set_ng_name(const std::string& val) {
+    ng_name = val;
+  }
+
   bool operator == (const Device & rhs) const
   {
     if (!(devid == rhs.devid))
@@ -2335,6 +2341,8 @@ class Device {
     if (!(node_name == rhs.node_name))
       return false;
     if (!(status == rhs.status))
+      return false;
+    if (!(ng_name == rhs.ng_name))
       return false;
     return true;
   }

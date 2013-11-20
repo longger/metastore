@@ -561,7 +561,7 @@ public class DummyRawStoreForJdoConnection implements RawStore {
   }
 
   @Override
-  public void createOrUpdateDevice(DeviceInfo di, Node node) throws InvalidObjectException,
+  public void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng) throws InvalidObjectException,
       MetaException {
     // TODO Auto-generated method stub
 

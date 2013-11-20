@@ -38,6 +38,7 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
   private static final org.apache.thrift.protocol.TField PROP_FIELD_DESC = new org.apache.thrift.protocol.TField("prop", org.apache.thrift.protocol.TType.I32, (short)2);
   private static final org.apache.thrift.protocol.TField NODE_NAME_FIELD_DESC = new org.apache.thrift.protocol.TField("node_name", org.apache.thrift.protocol.TType.STRING, (short)3);
   private static final org.apache.thrift.protocol.TField STATUS_FIELD_DESC = new org.apache.thrift.protocol.TField("status", org.apache.thrift.protocol.TType.I32, (short)4);
+  private static final org.apache.thrift.protocol.TField NG_NAME_FIELD_DESC = new org.apache.thrift.protocol.TField("ng_name", org.apache.thrift.protocol.TType.STRING, (short)5);
 
   private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
   static {
@@ -49,13 +50,15 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
   private int prop; // required
   private String node_name; // required
   private int status; // required
+  private String ng_name; // required
 
   /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
   public enum _Fields implements org.apache.thrift.TFieldIdEnum {
     DEVID((short)1, "devid"),
     PROP((short)2, "prop"),
     NODE_NAME((short)3, "node_name"),
-    STATUS((short)4, "status");
+    STATUS((short)4, "status"),
+    NG_NAME((short)5, "ng_name");
 
     private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
 
@@ -78,6 +81,8 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
           return NODE_NAME;
         case 4: // STATUS
           return STATUS;
+        case 5: // NG_NAME
+          return NG_NAME;
         default:
           return null;
       }
@@ -132,6 +137,8 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
     tmpMap.put(_Fields.STATUS, new org.apache.thrift.meta_data.FieldMetaData("status", org.apache.thrift.TFieldRequirementType.DEFAULT, 
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I32)));
+    tmpMap.put(_Fields.NG_NAME, new org.apache.thrift.meta_data.FieldMetaData("ng_name", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+        new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
     metaDataMap = Collections.unmodifiableMap(tmpMap);
     org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(Device.class, metaDataMap);
   }
@@ -143,7 +150,8 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
     String devid,
     int prop,
     String node_name,
-    int status)
+    int status,
+    String ng_name)
   {
     this();
     this.devid = devid;
@@ -152,6 +160,7 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
     this.node_name = node_name;
     this.status = status;
     setStatusIsSet(true);
+    this.ng_name = ng_name;
   }
 
   /**
@@ -167,6 +176,9 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
       this.node_name = other.node_name;
     }
     this.status = other.status;
+    if (other.isSetNg_name()) {
+      this.ng_name = other.ng_name;
+    }
   }
 
   public Device deepCopy() {
@@ -181,6 +193,7 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
     this.node_name = null;
     setStatusIsSet(false);
     this.status = 0;
+    this.ng_name = null;
   }
 
   public String getDevid() {
@@ -273,6 +286,29 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
     __isset_bitfield = EncodingUtils.setBit(__isset_bitfield, __STATUS_ISSET_ID, value);
   }
 
+  public String getNg_name() {
+    return this.ng_name;
+  }
+
+  public void setNg_name(String ng_name) {
+    this.ng_name = ng_name;
+  }
+
+  public void unsetNg_name() {
+    this.ng_name = null;
+  }
+
+  /** Returns true if field ng_name is set (has been assigned a value) and false otherwise */
+  public boolean isSetNg_name() {
+    return this.ng_name != null;
+  }
+
+  public void setNg_nameIsSet(boolean value) {
+    if (!value) {
+      this.ng_name = null;
+    }
+  }
+
   public void setFieldValue(_Fields field, Object value) {
     switch (field) {
     case DEVID:
@@ -307,6 +343,14 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
       }
       break;
 
+    case NG_NAME:
+      if (value == null) {
+        unsetNg_name();
+      } else {
+        setNg_name((String)value);
+      }
+      break;
+
     }
   }
 
@@ -323,6 +367,9 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
 
     case STATUS:
       return Integer.valueOf(getStatus());
+
+    case NG_NAME:
+      return getNg_name();
 
     }
     throw new IllegalStateException();
@@ -343,6 +390,8 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
       return isSetNode_name();
     case STATUS:
       return isSetStatus();
+    case NG_NAME:
+      return isSetNg_name();
     }
     throw new IllegalStateException();
   }
@@ -396,6 +445,15 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
         return false;
     }
 
+    boolean this_present_ng_name = true && this.isSetNg_name();
+    boolean that_present_ng_name = true && that.isSetNg_name();
+    if (this_present_ng_name || that_present_ng_name) {
+      if (!(this_present_ng_name && that_present_ng_name))
+        return false;
+      if (!this.ng_name.equals(that.ng_name))
+        return false;
+    }
+
     return true;
   }
 
@@ -422,6 +480,11 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
     builder.append(present_status);
     if (present_status)
       builder.append(status);
+
+    boolean present_ng_name = true && (isSetNg_name());
+    builder.append(present_ng_name);
+    if (present_ng_name)
+      builder.append(ng_name);
 
     return builder.toHashCode();
   }
@@ -474,6 +537,16 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
         return lastComparison;
       }
     }
+    lastComparison = Boolean.valueOf(isSetNg_name()).compareTo(typedOther.isSetNg_name());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (isSetNg_name()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.ng_name, typedOther.ng_name);
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+    }
     return 0;
   }
 
@@ -516,6 +589,14 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
     if (!first) sb.append(", ");
     sb.append("status:");
     sb.append(this.status);
+    first = false;
+    if (!first) sb.append(", ");
+    sb.append("ng_name:");
+    if (this.ng_name == null) {
+      sb.append("null");
+    } else {
+      sb.append(this.ng_name);
+    }
     first = false;
     sb.append(")");
     return sb.toString();
@@ -594,6 +675,14 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
+          case 5: // NG_NAME
+            if (schemeField.type == org.apache.thrift.protocol.TType.STRING) {
+              struct.ng_name = iprot.readString();
+              struct.setNg_nameIsSet(true);
+            } else { 
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+            }
+            break;
           default:
             org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
         }
@@ -623,6 +712,11 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
       oprot.writeFieldBegin(STATUS_FIELD_DESC);
       oprot.writeI32(struct.status);
       oprot.writeFieldEnd();
+      if (struct.ng_name != null) {
+        oprot.writeFieldBegin(NG_NAME_FIELD_DESC);
+        oprot.writeString(struct.ng_name);
+        oprot.writeFieldEnd();
+      }
       oprot.writeFieldStop();
       oprot.writeStructEnd();
     }
@@ -653,7 +747,10 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
       if (struct.isSetStatus()) {
         optionals.set(3);
       }
-      oprot.writeBitSet(optionals, 4);
+      if (struct.isSetNg_name()) {
+        optionals.set(4);
+      }
+      oprot.writeBitSet(optionals, 5);
       if (struct.isSetDevid()) {
         oprot.writeString(struct.devid);
       }
@@ -666,12 +763,15 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
       if (struct.isSetStatus()) {
         oprot.writeI32(struct.status);
       }
+      if (struct.isSetNg_name()) {
+        oprot.writeString(struct.ng_name);
+      }
     }
 
     @Override
     public void read(org.apache.thrift.protocol.TProtocol prot, Device struct) throws org.apache.thrift.TException {
       TTupleProtocol iprot = (TTupleProtocol) prot;
-      BitSet incoming = iprot.readBitSet(4);
+      BitSet incoming = iprot.readBitSet(5);
       if (incoming.get(0)) {
         struct.devid = iprot.readString();
         struct.setDevidIsSet(true);
@@ -687,6 +787,10 @@ public class Device implements org.apache.thrift.TBase<Device, Device._Fields>, 
       if (incoming.get(3)) {
         struct.status = iprot.readI32();
         struct.setStatusIsSet(true);
+      }
+      if (incoming.get(4)) {
+        struct.ng_name = iprot.readString();
+        struct.setNg_nameIsSet(true);
       }
     }
   }

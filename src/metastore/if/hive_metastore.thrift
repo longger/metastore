@@ -381,6 +381,7 @@ struct Device {
   2: i32    prop,
   3: string node_name,
   4: i32	status,
+  5: string ng_name,
 }
 
 struct SFileLocation {

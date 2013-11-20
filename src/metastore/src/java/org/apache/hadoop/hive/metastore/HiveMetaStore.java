@@ -4386,7 +4386,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       di.dev = devid;
       di.prop = prop;
       node = getMS().getNode(node_name);
-      getMS().createOrUpdateDevice(di, node);
+      getMS().createOrUpdateDevice(di, node, null);
 
       Device d = getMS().getDevice(devid);
       return d;
@@ -6668,7 +6668,21 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         if (values == null || values.size() == 0) {
           throw new FileOperationException("Invalid file split values.", FOFailReason.INVALID_SPLIT_VALUES);
         }
-        List<PartitionInfo> pis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl.getFileSplitKeys());
+        List<PartitionInfo> allpis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl.getFileSplitKeys());
+        List<PartitionInfo> pis = new ArrayList<PartitionInfo>();
+        // find the max version
+        int version = 0;
+        for (PartitionInfo pi : allpis) {
+          if (pi.getP_version() > version) {
+            version = pi.getP_version();
+          }
+        }
+        // remove non-max versions
+        for (PartitionInfo pi : allpis) {
+          if (pi.getP_version() == version) {
+            pis.add(pi);
+          }
+        }
         int vlen = 0;
         for (PartitionInfo pi : pis) {
           switch (pi.getP_type()) {
