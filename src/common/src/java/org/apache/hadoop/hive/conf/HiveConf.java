@@ -712,7 +712,8 @@ public class HiveConf extends Configuration {
     DM_APPEND_CMD_MAX("hive.diskmanager.nr.max", 4),
     DM_USE_VOID_CHECK("hive.diskmanager.use.voidcheck", false),
     DM_CLOSE_REP_LIMIT("hive.diskmanager.closerep.limit", 100L),
-    DM_FIX_REP_LIMIT("hive.diskmanager.fixrep.limit", 100L)
+    DM_FIX_REP_LIMIT("hive.diskmanager.fixrep.limit", 100L),
+    DM_REPORT_DIR("hive.diskmanager.report.dir", null)
     ;
 
     public final String varname;

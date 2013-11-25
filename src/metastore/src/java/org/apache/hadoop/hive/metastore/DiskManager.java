@@ -944,6 +944,30 @@ public class DiskManager {
         }
       }
 
+      public boolean generateReport() {
+        Date d = new Date(System.currentTimeMillis());
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        String str = hiveConf.getVar(HiveConf.ConfVars.DM_REPORT_DIR);
+        if (str == null) {
+          str = System.getProperty("user.dir") + "/sotstore/reports/report-" + sdf.format(d);
+        }
+        File reportFile = new File(str);
+        if (!reportFile.getParentFile().mkdirs()) {
+          LOG.error("Make directory " + reportFile.getParent() + " failed, can't write report data.");
+          return false;
+        }
+        // generate report file
+        try {
+          if (!reportFile.exists()) {
+            reportFile.createNewFile();
+          }
+        } catch (IOException e) {
+          LOG.error(e, e);
+          return false;
+        }
+        return true;
+      }
+
       @Override
       public void run() {
         times++;
