@@ -35,7 +35,8 @@ public class MetaMsgServer {
   static MetaMsgServer server = null;
   private static boolean initalized = false;
   private static SendThread send = new SendThread();
-
+  private static boolean zkfailed = false;
+  private static long sleepSeconds = 60l;
   static ConcurrentLinkedQueue<DDLMsg> queue = new ConcurrentLinkedQueue<DDLMsg>();
 
   private static ConcurrentLinkedQueue<DDLMsg> failed_queue = new ConcurrentLinkedQueue<DDLMsg>();
@@ -50,6 +51,15 @@ public class MetaMsgServer {
     producer.config(zkAddr);
     producer = Producer.getInstance();
     initalized = true;
+    zkfailed = false;
+
+  }
+  private static void reconnect() throws MetaClientException
+  {
+    producer.config(zkAddr);
+    producer = Producer.getInstance();
+    initalized = true;
+    zkfailed = false;
   }
 
 
@@ -91,12 +101,29 @@ public class MetaMsgServer {
             }
           }
 
+          if(zkfailed)
+          {
+            try{
+              Thread.sleep(sleepSeconds*1000l);
+              reconnect();
+            }catch(InterruptedException e)
+            {
+
+            }catch(MetaClientException e){
+              zkfailed = true;
+            }
+
+          }
           DDLMsg msg = queue.peek();
           boolean succ = sendDDLMsg(msg);
           if(!succ){
-            failed_queue.add(msg);
+            if(!failed_queue.contains(msg)) {
+              failed_queue.add(msg);
+            }
           }else{
-            queue.poll();
+
+            failed_queue.remove(queue.poll());
+
             if(!failed_queue.isEmpty()){
               int i=0;
 //              while(i++ < MSG_SEND_BATCH && !failed_queue.isEmpty()){//retry send faild msg
@@ -150,11 +177,10 @@ public class MetaMsgServer {
       return true;
     }
     if(times <= 0){
+      zkfailed = true;
       return false;
     }
-    //zy
-    //第一次失败,第二次发送成功的话依然返回false把..
-    //修改
+
     boolean success = false;
     try{
       success = producer.sendMsg(jsonMsg);

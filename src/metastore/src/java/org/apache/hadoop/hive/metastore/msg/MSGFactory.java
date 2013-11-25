@@ -188,6 +188,20 @@ public class MSGFactory {
       return msg;
 
     }
+
+    //消息发送失败时，防止同一个消息反复的加入到失败的队列中，通过此方法判断重复
+    @Override
+    public boolean equals(Object o)
+    {
+      if(o == null) {
+        return false;
+      }
+      if(!(o instanceof DDLMsg)) {
+        return false;
+      }
+      DDLMsg d = (DDLMsg)o;
+      return d.getMsg_id() == this.getMsg_id();
+    }
   }
 
   public static String parserMapToJson(Map<String,Object> map){
