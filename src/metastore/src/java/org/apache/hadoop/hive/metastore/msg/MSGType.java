@@ -233,7 +233,7 @@ public class MSGType {
    */
   public static final int MSG_DEL_FILE = 4002;
 
-
+  //所有grant
   public static final int MSG_GRANT_GLOBAL = 5101;
   public static final int MSG_GRANT_DB = 5102;
   public static final int MSG_GRANT_TABLE = 5103;
@@ -241,7 +241,7 @@ public class MSGType {
   public static final int MSG_GRANT_PARTITION = 5105;
   public static final int MSG_GRANT_PARTITION_COLUMN = 5106;
   public static final int MSG_GRANT_TABLE_COLUMN = 5107;
-
+  //所有revoke
   public static final int MSG_REVOKE_GLOBAL = 5201;
   public static final int MSG_REVOKE_DB = 5202;
   public static final int MSG_REVOKE_TABLE = 5203;

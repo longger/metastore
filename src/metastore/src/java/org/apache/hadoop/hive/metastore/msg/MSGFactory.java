@@ -188,6 +188,20 @@ public class MSGFactory {
       return msg;
 
     }
+
+    //消息发送失败时，防止同一个消息反复的加入到失败的队列中，通过此方法判断重复
+    @Override
+    public boolean equals(Object o)
+    {
+      if(o == null) {
+        return false;
+      }
+      if(!(o instanceof DDLMsg)) {
+        return false;
+      }
+      DDLMsg d = (DDLMsg)o;
+      return d.getMsg_id() == this.getMsg_id();
+    }
   }
 
   public static String parserMapToJson(Map<String,Object> map){
@@ -413,6 +427,9 @@ public class MSGFactory {
           params.put("table_name",msg.getOld_object_params().get("table_name"));
           if(msg.getOld_object_params().containsKey("column_name")){
             params.put("column_name",msg.getOld_object_params().get("column_name"));
+          }
+          if(msg.getOld_object_params().containsKey("column_type")){
+            params.put("column_type",msg.getOld_object_params().get("column_type"));
           }
           break;
       case MSGType.MSG_ALT_TALBE_ADD_COL :
@@ -951,7 +968,7 @@ public class MSGFactory {
           params.put("table_name", msg.getOld_object_params().get("table_name"));
         }
         break;
-      //所有的授权的消息
+      //所有的授权和撤销授权的消息
       case MSGType.MSG_GRANT_GLOBAL:
       case MSGType.MSG_GRANT_DB:
       case MSGType.MSG_GRANT_TABLE:
@@ -959,6 +976,14 @@ public class MSGFactory {
       case MSGType.MSG_GRANT_PARTITION:
       case MSGType.MSG_GRANT_PARTITION_COLUMN:
       case MSGType.MSG_GRANT_TABLE_COLUMN:
+
+      case MSGType.MSG_REVOKE_GLOBAL:
+      case MSGType.MSG_REVOKE_DB:
+      case MSGType.MSG_REVOKE_TABLE:
+      case MSGType.MSG_REVOKE_PARTITION:
+      case MSGType.MSG_REVOKE_SCHEMA:
+      case MSGType.MSG_REVOKE_PARTITION_COLUMN:
+      case MSGType.MSG_REVOKE_TABLE_COLUMN:
         params.putAll(msg.getOld_object_params());
         break;
     }//end of switch

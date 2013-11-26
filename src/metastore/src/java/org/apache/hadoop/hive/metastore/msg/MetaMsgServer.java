@@ -35,7 +35,8 @@ public class MetaMsgServer {
   static MetaMsgServer server = null;
   private static boolean initalized = false;
   private static SendThread send = new SendThread();
-
+  private static boolean zkfailed = false;
+  private static long sleepSeconds = 60l;
   static ConcurrentLinkedQueue<DDLMsg> queue = new ConcurrentLinkedQueue<DDLMsg>();
 
   private static ConcurrentLinkedQueue<DDLMsg> failed_queue = new ConcurrentLinkedQueue<DDLMsg>();
@@ -50,6 +51,15 @@ public class MetaMsgServer {
     producer.config(zkAddr);
     producer = Producer.getInstance();
     initalized = true;
+    zkfailed = false;
+
+  }
+  private static void reconnect() throws MetaClientException
+  {
+    producer.config(zkAddr);
+    producer = Producer.getInstance();
+    initalized = true;
+    zkfailed = false;
   }
 
 
@@ -91,12 +101,29 @@ public class MetaMsgServer {
             }
           }
 
+          if(zkfailed)
+          {
+            try{
+              Thread.sleep(sleepSeconds*1000l);
+              reconnect();
+            }catch(InterruptedException e)
+            {
+
+            }catch(MetaClientException e){
+              zkfailed = true;
+            }
+
+          }
           DDLMsg msg = queue.peek();
           boolean succ = sendDDLMsg(msg);
           if(!succ){
-            failed_queue.add(msg);
+            if(!failed_queue.contains(msg)) {
+              failed_queue.add(msg);
+            }
           }else{
-            queue.poll();
+
+            failed_queue.remove(queue.poll());
+
             if(!failed_queue.isEmpty()){
               int i=0;
 //              while(i++ < MSG_SEND_BATCH && !failed_queue.isEmpty()){//retry send faild msg
@@ -136,92 +163,6 @@ public class MetaMsgServer {
   public static boolean  sendDDLMsg(DDLMsg msg) {
     String jsonMsg = "";
 
-//    switch((int)msg.getEvent_id()){
-//      case MSGType.MSG_NEW_DATABESE : break;
-//      //新建库
-//      case MSGType.MSG_ALTER_DATABESE : break;
-//            //修改库
-//      case MSGType.MSG_ALTER_DATABESE_PARAM : break;
-//            //修改库属性
-//      case MSGType.MSG_DROP_DATABESE : break;
-//            //删除库
-//      case MSGType.MSG_NEW_TALBE : break;
-//            //新建表
-//      case MSGType.MSG_ALT_TALBE_NAME : break;
-//            //修改表名
-//      case MSGType.MSG_ALT_TALBE_DISTRIBUTE : break;
-//            //修改表数据分布
-//      case MSGType.MSG_ALT_TALBE_PARTITIONING : break;
-//            //修改表分区方式
-//      case MSGType.MSG_ALT_TALBE_DEL_COL : break;
-//            //修改表删除列
-//      case MSGType.MSG_ALT_TALBE_ADD_COL : break;
-//            //修改表新增列
-//      case MSGType.MSG_ALT_TALBE_ALT_COL_NAME : break;
-//            //修改表修改列名
-//      case MSGType.MSG_ALT_TALBE_ALT_COL_TYPE : break;
-//            //修改表修改列类型
-//      case MSGType.MSG_ALT_TALBE_ALT_COL_LENGTH : break;
-//            //修改表修改列类型长度
-//      case MSGType.MSG_NEW_PARTITION : break;
-//            // 新建分区
-//      case MSGType.MSG_ALT_PARTITION : break;
-//            //修改分区
-//      case MSGType.MSG_DEL_PARTITION : break;
-//            // 删除分区
-//      case MSGType.MSG_NEW_PARTITION_FILE : break;
-//            //增加分区文件
-//      case MSGType.MSG_ALT_PARTITION_FILE : break;
-//            //修改分区文件
-//      case MSGType.MSG_REP_PARTITION_FILE_CHAGE : break;
-//            //分区文件副本变化
-//      case MSGType.MSG_STA_PARTITION_FILE_CHAGE : break;
-//            //分区文件状态变化
-//      case MSGType.MSG_REP_PARTITION_FILE_ONOFF : break;
-//            //分区文件副本上下线变化
-//      case MSGType.MSG_DEL_PARTITION_FILE : break;
-//            //删除分区文件
-//      case MSGType.MSG_NEW_INDEX : break;
-//            //新建列索引
-//      case MSGType.MSG_ALT_INDEX : break;
-//            //修改列索引
-//      case MSGType.MSG_ALT_INDEX_PARAM : break;
-//            //修改列索引属性
-//      case MSGType.MSG_DEL_INDEX : break;
-//            //删除列索引
-//      case MSGType.MSG_NEW_PARTITION_INDEX : break;
-//            //新建分区索引
-//      case MSGType.MSG_ALT_PARTITION_INDEX : break;
-//            //修改分区索引
-//      case MSGType.MSG_DEL_PARTITION_INDEX : break;
-//            // 删除分区索引
-//      case MSGType.MSG_NEW_PARTITION_INDEX_FILE : break;
-//            //增加分区索引文件
-//      case MSGType.MSG_ALT_PARTITION_INDEX_FILE : break;
-//            //修改分区索引文件
-//      case MSGType.MSG_REP_PARTITION_INDEX_FILE_CHAGE : break;
-//            //分区索引文件副本变化
-//      case MSGType.MSG_STA_PARTITION_INDEX_FILE_CHAGE : break;
-//            //分区索引文件状态变化
-//      case MSGType.MSG_REP_PARTITION_INDEX_FILE_ONOFF : break;
-//            //分区索引文件副本上下线变化
-//      case MSGType.MSG_DEL_PARTITION_INDEX_FILE : break;
-//            //删除分区索引文件
-//      case MSGType.MSG_NEW_NODE : break;
-//            //新增节点
-//      case MSGType.MSG_DEL_NODE : break;
-//            //删除节点
-//      case MSGType.MSG_FAIL_NODE : break;
-//            //节点故障
-//
-//      case MSGType.MSG_DDL_DIRECT_DW1 : break;
-//        //dw1 专用DDL语句
-//      case MSGType.MSG_DDL_DIRECT_DW2 : break;
-//        //dw2 专用DDL语句
-//    }//end of switch
-
-
-
     jsonMsg = MSGFactory.getMsgData(msg);
     LOG.info("---zjw-- send ddl msg:"+jsonMsg);
     boolean success = false;
@@ -236,11 +177,10 @@ public class MetaMsgServer {
       return true;
     }
     if(times <= 0){
+      zkfailed = true;
       return false;
     }
-    //zy
-    //第一次失败,第二次发送成功的话依然返回false把..
-    //修改
+
     boolean success = false;
     try{
       success = producer.sendMsg(jsonMsg);
@@ -253,6 +193,7 @@ public class MetaMsgServer {
     }
     return success;
   }
+
 
   public static class AsyncConsumer {
     final MetaClientConfig metaClientConfig = new MetaClientConfig();
@@ -274,6 +215,9 @@ public class MetaMsgServer {
       }
       //设置zookeeper地址
       zkConfig.zkConnect = MetaMsgServer.zkAddr;
+
+      //这个地址到底是怎么初始化的。。没看懂呢。。consumer可以放在producer类一样的地方启动
+//      zkConfig.zkConnect = "192.168.1.13:3181";
       metaClientConfig.setZkConfig(zkConfig);
       // New session factory,强烈建议使用单例
       MessageSessionFactory sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
@@ -300,17 +244,17 @@ public class MetaMsgServer {
           DDLMsg msg = new DDLMsg();
           String data = new String(message.getData());
 
-//          LOG.info("---zy--consume msg: " + data);
-          System.out.println(data);
-          msg = DDLMsg.fromJson(data);
-          if(msg.getLocalhost_name().equals(localhost_name))
-          {
-            LOG.info("---zy--local msg,no need to refresh " );
-//            handler.refresh(msg);
-          }
+          LOG.info("---zy--consume msg: " + data);
+//          System.out.println(data);
+//          msg = DDLMsg.fromJson(data);
+//          if(msg.getLocalhost_name().equals(localhost_name))
+//          {
+//            LOG.info("---zy--local msg,no need to refresh " );
+////            handler.refresh(msg);
+//          }
 //          else
           //just test
-          handler.refresh(msg);
+//          handler.refresh(msg);
         }
 
       }
