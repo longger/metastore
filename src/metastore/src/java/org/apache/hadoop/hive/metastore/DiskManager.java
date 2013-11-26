@@ -26,6 +26,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 import net.sf.json.JSONException;
 import net.sf.json.JSONObject;
@@ -52,6 +53,7 @@ import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.thrift.TException;
 
 public class DiskManager {
+    public static long startupTs = System.currentTimeMillis();
     public RawStore rs;
     public Log LOG;
     private final HiveConf hiveConf;
@@ -82,6 +84,27 @@ public class DiskManager {
     // TODO: REP limiting for low I/O bandwidth env
     public Long closeRepLimit = 0L;
     public Long fixRepLimit = 0L;
+
+    public static class DMProfile {
+      public static AtomicLong fcreate1R = new AtomicLong(0);
+      public static AtomicLong fcreate1SuccR = new AtomicLong(0);
+      public static AtomicLong fcreate2R = new AtomicLong(0);
+      public static AtomicLong fcreate2SuccR = new AtomicLong(0);
+      public static AtomicLong freopenR = new AtomicLong(0);
+      public static AtomicLong fgetR = new AtomicLong(0);
+      public static AtomicLong fcloseR = new AtomicLong(0);
+      public static AtomicLong freplicateR = new AtomicLong(0);
+      public static AtomicLong frmlR = new AtomicLong(0);
+      public static AtomicLong frmpR = new AtomicLong(0);
+      public static AtomicLong frestoreR = new AtomicLong(0);
+      public static AtomicLong fdelR = new AtomicLong(0);
+      public static AtomicLong sflcreateR = new AtomicLong(0);
+      public static AtomicLong sflonlineR = new AtomicLong(0);
+      public static AtomicLong sflofflineR = new AtomicLong(0);
+      public static AtomicLong sflsuspectR = new AtomicLong(0);
+      public static AtomicLong sfldelR = new AtomicLong(0);
+
+    }
 
     public static class SFLTriple implements Comparable<SFLTriple> {
       public String node;
@@ -683,6 +706,8 @@ public class DiskManager {
       private long last_voidTs = System.currentTimeMillis();
       private long last_limitTs = System.currentTimeMillis();
 
+      private long last_genRpt = System.currentTimeMillis();
+
       private long ff_start = 0;
       private final long ff_range = 1000;
 
@@ -952,15 +977,76 @@ public class DiskManager {
           str = System.getProperty("user.dir") + "/sotstore/reports/report-" + sdf.format(d);
         }
         File reportFile = new File(str);
-        if (!reportFile.getParentFile().mkdirs()) {
+        if (!reportFile.getParentFile().exists() && !reportFile.getParentFile().mkdirs()) {
           LOG.error("Make directory " + reportFile.getParent() + " failed, can't write report data.");
           return false;
         }
+        // generate report string, EX.
+        // uptime,safemode,total_space,used_space,free_space,total_nodes,active_nodes,
+        // total_device,active_device,
+        // fcreate1R,fcreate1SuccR,fcreate2R,fcreate2SuccR,
+        // freopenR,fgetR,fcloseR,freplicateR,
+        // frmlR,frmpR,frestoreR,fdelR,
+        // sflcreateR,sflonlineR,sflofflineR,sflsuspectR,sfldelR,
+        // {tbls},
+        StringBuffer sb = new StringBuffer(2048);
+        long free = 0, used = 0;
+
+        sb.append((System.currentTimeMillis() - startupTs) / 1000);
+        sb.append("," + safeMode + ",");
+        synchronized (admap) {
+  	      for (Map.Entry<String, DeviceInfo> e : admap.entrySet()) {
+  	        free += e.getValue().free;
+  	        used += e.getValue().used;
+  	      }
+        }
+        sb.append((used + free) + ",");
+        sb.append(used + ",");
+        sb.append(free + ",");
+        synchronized (trs) {
+          try {
+            sb.append(rs.countNode() + ",");
+          } catch (MetaException e) {
+            sb.append("-1,");
+          }
+        }
+        sb.append(ndmap.size() + ",");
+        synchronized (trs) {
+          try {
+            sb.append(rs.countDevice() + ",");
+          } catch (MetaException e) {
+            sb.append("-1,");
+          }
+        }
+        sb.append(admap.size() + ",");
+        sb.append(DMProfile.fcreate1R.get() + ",");
+        sb.append(DMProfile.fcreate1SuccR.get() + ",");
+        sb.append(DMProfile.fcreate2R.get() + ",");
+        sb.append(DMProfile.fcreate2SuccR.get() + ",");
+        sb.append(DMProfile.freopenR.get() + ",");
+        sb.append(DMProfile.fgetR.get() + ",");
+        sb.append(DMProfile.fcloseR.get() + ",");
+        sb.append(DMProfile.freplicateR.get() + ",");
+        sb.append(DMProfile.frmlR.get() + ",");
+        sb.append(DMProfile.frmpR.get() + ",");
+        sb.append(DMProfile.frestoreR.get() + ",");
+        sb.append(DMProfile.fdelR.get() + ",");
+        sb.append(DMProfile.sflcreateR.get() + ",");
+        sb.append(DMProfile.sflonlineR.get() + ",");
+        sb.append(DMProfile.sflofflineR.get() + ",");
+        sb.append(DMProfile.sflsuspectR.get() + ",");
+        sb.append(DMProfile.sfldelR.get());
+        sb.append("\n");
+
         // generate report file
         try {
           if (!reportFile.exists()) {
             reportFile.createNewFile();
           }
+          FileWriter fw = new FileWriter(reportFile.getAbsoluteFile(), true);
+          BufferedWriter bw = new BufferedWriter(fw);
+          bw.write(sb.toString());
+          bw.close();
         } catch (IOException e) {
           LOG.error(e, e);
           return false;
@@ -1291,6 +1377,11 @@ public class DiskManager {
             }
           }
           last_voidTs = System.currentTimeMillis();
+        }
+
+        if (last_genRpt + 60000 <= System.currentTimeMillis()) {
+          generateReport();
+          last_genRpt = System.currentTimeMillis();
         }
 
         updateRunningState();

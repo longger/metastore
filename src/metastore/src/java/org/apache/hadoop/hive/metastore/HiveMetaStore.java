@@ -57,6 +57,7 @@ import org.apache.hadoop.hive.common.metrics.Metrics;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.DiskManager.BackupEntry;
+import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DMRequest;
 import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
 import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
@@ -4419,6 +4420,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public SFile create_file(String node_name, int repnr, String db_name, String table_name, List<SplitValue> values)
         throws FileOperationException, TException {
+      DMProfile.fcreate1R.incrementAndGet();
       if (!fileSplitValuesCheck(values)) {
         throw new FileOperationException("Invalid File Split Values: inconsistent version among values?", FOFailReason.INVALID_FILE);
       }
@@ -4464,6 +4466,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     private SFile create_file_wo_location(int repnr, String dbName, String tableName, List<SplitValue> values)
       throws FileOperationException, TException {
+      DMProfile.fcreate1R.incrementAndGet();
 
       if (!fileSplitValuesCheck(values)) {
         throw new FileOperationException("Invalid File Split Values: inconsistent version among values?", FOFailReason.INVALID_FILE);
@@ -4558,12 +4561,14 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throw new FileOperationException("Internal error: " + e.getMessage(), FOFailReason.INVALID_FILE);
       }
 
+      DMProfile.fcreate1SuccR.incrementAndGet();
       return cfile;
     }
 
     @Override
     public int close_file(SFile file) throws FileOperationException, MetaException, TException {
       startFunction("close_file ", "fid: " + file.getFid());
+      DMProfile.fcloseR.incrementAndGet();
 
       FileOperationException e = null;
       SFile saved = getMS().getSFile(file.getFid());
@@ -4657,6 +4662,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public SFile get_file_by_id(long fid) throws FileOperationException, MetaException, TException {
+      DMProfile.fgetR.incrementAndGet();
       SFile r = getMS().getSFile(fid);
       if (r == null) {
         throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
@@ -4676,6 +4682,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public int rm_file_logical(SFile file) throws FileOperationException, MetaException, TException {
+      DMProfile.frmlR.incrementAndGet();
       SFile saved = getMS().getSFile(file.getFid());
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
@@ -4692,6 +4699,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public int restore_file(SFile file) throws FileOperationException, MetaException, TException {
+      DMProfile.frestoreR.incrementAndGet();
       SFile saved = getMS().getSFile(file.getFid());
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
@@ -4708,6 +4716,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public int rm_file_physical(SFile file) throws FileOperationException, MetaException,
         TException {
+      DMProfile.frmpR.incrementAndGet();
       SFile saved = getMS().getSFile(file.getFid());
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID " + file.getFid(), FOFailReason.INVALID_FILE);
@@ -6619,6 +6628,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name,
         String table_name, List<SplitValue> values) throws FileOperationException, TException {
+      DMProfile.fcreate2R.incrementAndGet();
       Table tbl = null;
       List<NodeGroup> ngs = null;
       Set<String> ngnodes = new HashSet<String>();
@@ -6866,11 +6876,13 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           r = create_file(flp, null, repnr, db_name, table_name, values);
         }
       }
+      DMProfile.fcreate2SuccR.incrementAndGet();
       return r;
     }
 
     @Override
     public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException {
+      DMProfile.freopenR.incrementAndGet();
       startFunction("reopen_file ", "fid: " + fid);
 
       SFile saved = getMS().getSFile(fid);

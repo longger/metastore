@@ -632,7 +632,6 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
       }
       if (struct.type != null) {
         oprot.writeFieldBegin(TYPE_FIELD_DESC);
-        Log.info("############################ZQH#####################struct.type :" + struct.type);
         oprot.writeString(struct.type);
         oprot.writeFieldEnd();
       }

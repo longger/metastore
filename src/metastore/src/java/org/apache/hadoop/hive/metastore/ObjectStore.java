@@ -57,6 +57,7 @@ import org.apache.hadoop.hive.common.classification.InterfaceAudience;
 import org.apache.hadoop.hive.common.classification.InterfaceStability;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
+import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BinaryColumnStatsData;
@@ -1670,6 +1671,8 @@ public class ObjectStore implements RawStore, Configurable {
     } finally {
       if (!commited) {
         rollbackTransaction();
+      } else {
+        DMProfile.sflcreateR.incrementAndGet();
       }
     }
     if (r && mfloc != null && commited) {
@@ -2535,6 +2538,17 @@ public class ObjectStore implements RawStore, Configurable {
     }
 
     if (changed) {
+      switch (newsfl.getVisit_status()) {
+      case MetaStoreConst.MFileLocationVisitStatus.ONLINE:
+        DMProfile.sflonlineR.incrementAndGet();
+        break;
+      case MetaStoreConst.MFileLocationVisitStatus.OFFLINE:
+        DMProfile.sflofflineR.incrementAndGet();
+        break;
+      case MetaStoreConst.MFileLocationVisitStatus.SUSPECT:
+        DMProfile.sflsuspectR.incrementAndGet();
+        break;
+      }
       // send the SFL state change message
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", newsfl.getFid());
@@ -8920,6 +8934,8 @@ public MUser getMUser(String userName) {
     } finally {
       if (!success) {
         rollbackTransaction();
+      } else {
+        DMProfile.fdelR.incrementAndGet();
       }
     }
     return success;
@@ -8954,6 +8970,8 @@ public MUser getMUser(String userName) {
     } finally {
       if (!success) {
         rollbackTransaction();
+      } else {
+        DMProfile.sfldelR.incrementAndGet();
       }
     }
     return success;
