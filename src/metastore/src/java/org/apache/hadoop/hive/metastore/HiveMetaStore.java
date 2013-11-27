@@ -6681,11 +6681,16 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         List<PartitionInfo> allpis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl.getFileSplitKeys());
         List<PartitionInfo> pis = new ArrayList<PartitionInfo>();
         // find the max version
-        int version = 0;
+        long version = 0;
         for (PartitionInfo pi : allpis) {
           if (pi.getP_version() > version) {
             version = pi.getP_version();
           }
+        }
+        if (values.get(0).getVerison() > version) {
+          throw new FileOperationException("Invalid Version specified, provide " + values.get(0).getVerison() + " expected " + version, FOFailReason.INVALID_SPLIT_VALUES);
+        } else {
+          version = values.get(0).getVerison();
         }
         // remove non-max versions
         for (PartitionInfo pi : allpis) {
@@ -6793,7 +6798,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           // check version, column name here
           if (sv.getVerison() != pi.getP_version() ||
               !pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
-            throw new FileOperationException("Version or SplitKeyName mismatch, please check your metadata.", FOFailReason.INVALID_SPLIT_VALUES);
+            throw new FileOperationException("SplitKeyName mismatch, please check your metadata.", FOFailReason.INVALID_SPLIT_VALUES);
           }
 
         }

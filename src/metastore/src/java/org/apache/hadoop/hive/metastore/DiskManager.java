@@ -1005,7 +1005,7 @@ public class DiskManager {
         sb.append(free + ",");
         synchronized (trs) {
           try {
-            sb.append(rs.countNode() + ",");
+            sb.append(trs.countNode() + ",");
           } catch (MetaException e) {
             sb.append("-1,");
           }
@@ -1013,7 +1013,7 @@ public class DiskManager {
         sb.append(ndmap.size() + ",");
         synchronized (trs) {
           try {
-            sb.append(rs.countDevice() + ",");
+            sb.append(trs.countDevice() + ",");
           } catch (MetaException e) {
             sb.append("-1,");
           }
