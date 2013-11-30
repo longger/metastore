@@ -4461,7 +4461,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
       }
 
-      return create_file(flp, node_name, repnr, db_name, table_name, values);
+      SFile rf = create_file(flp, node_name, repnr, db_name, table_name, values);
+      DMProfile.fcreate1SuccR.incrementAndGet();
+
+      return rf;
     }
 
     private SFile create_file_wo_location(int repnr, String dbName, String tableName, List<SplitValue> values)
@@ -4479,6 +4482,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           throw new FileOperationException("Creating file with internal error, metadata inconsistent?", FOFailReason.INVALID_FILE);
       }
 
+      DMProfile.fcreate1SuccR.incrementAndGet();
       return cfile;
     }
 
@@ -4561,7 +4565,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throw new FileOperationException("Internal error: " + e.getMessage(), FOFailReason.INVALID_FILE);
       }
 
-      DMProfile.fcreate1SuccR.incrementAndGet();
       return cfile;
     }
 
@@ -4634,6 +4637,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
       } finally {
         endFunction("close_file", true, e);
+        DMProfile.fcloseSuccRS.incrementAndGet();
       }
       return 0;
     }

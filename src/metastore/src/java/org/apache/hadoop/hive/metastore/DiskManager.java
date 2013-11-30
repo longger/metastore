@@ -93,6 +93,7 @@ public class DiskManager {
       public static AtomicLong freopenR = new AtomicLong(0);
       public static AtomicLong fgetR = new AtomicLong(0);
       public static AtomicLong fcloseR = new AtomicLong(0);
+      public static AtomicLong fcloseSuccRS = new AtomicLong(0);
       public static AtomicLong freplicateR = new AtomicLong(0);
       public static AtomicLong frmlR = new AtomicLong(0);
       public static AtomicLong frmpR = new AtomicLong(0);
@@ -103,7 +104,9 @@ public class DiskManager {
       public static AtomicLong sflofflineR = new AtomicLong(0);
       public static AtomicLong sflsuspectR = new AtomicLong(0);
       public static AtomicLong sfldelR = new AtomicLong(0);
-
+      public static AtomicLong newConn = new AtomicLong(0);
+      public static AtomicLong delConn = new AtomicLong(0);
+      public static AtomicLong query = new AtomicLong(0);
     }
 
     public static class SFLTriple implements Comparable<SFLTriple> {
@@ -988,6 +991,7 @@ public class DiskManager {
         // freopenR,fgetR,fcloseR,freplicateR,
         // frmlR,frmpR,frestoreR,fdelR,
         // sflcreateR,sflonlineR,sflofflineR,sflsuspectR,sfldelR,
+        // fcloseSuccR,newconn,delconn,query
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -1035,7 +1039,11 @@ public class DiskManager {
         sb.append(DMProfile.sflonlineR.get() + ",");
         sb.append(DMProfile.sflofflineR.get() + ",");
         sb.append(DMProfile.sflsuspectR.get() + ",");
-        sb.append(DMProfile.sfldelR.get());
+        sb.append(DMProfile.sfldelR.get() + ",");
+        sb.append(DMProfile.fcloseSuccRS.get() + ",");
+        sb.append(DMProfile.newConn.get() + ",");
+        sb.append(DMProfile.delConn.get() + ",");
+        sb.append(DMProfile.query.get());
         sb.append("\n");
 
         // generate report file

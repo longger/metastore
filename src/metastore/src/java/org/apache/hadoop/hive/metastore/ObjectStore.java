@@ -2481,6 +2481,9 @@ public class ObjectStore implements RawStore, Configurable {
       old_params.put("db_name", dbName);
       old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, pm, mf, old_params));
+      if (newfile.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+        DMProfile.freplicateR.incrementAndGet();
+      }
     }
     if (repnr_changed) {
       // send the SFile state change message
