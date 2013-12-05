@@ -805,3 +805,844 @@ Sep 22, 2013 10:07:29 AM java.util.prefs.FileSystemPreferences syncWorld
 WARNING: Couldn't flush user prefs: java.util.prefs.BackingStoreException: Couldn't get file lock.
 Sep 22, 2013 10:16:12 PM java.util.prefs.FileSystemPreferences syncWorld
 WARNING: Couldn't flush user prefs: java.util.prefs.BackingStoreException: Couldn't get file lock.
+TODO: run and send output to this console
+warning(200): Hive.g:1089:5: 
+Decision can match input such as "Identifier KW_ADD KW_PARTITION" using multiple alternatives: 6, 7
+
+As a result, alternative(s) 7 were disabled for that input
+
+warning(200): Hive.g:1089:5: 
+Decision can match input such as "Identifier KW_MODIFY KW_SUBPARTITION" using multiple alternatives: 7, 8
+
+As a result, alternative(s) 8 were disabled for that input
+
+warning(200): Hive.g:1089:5: 
+Decision can match input such as "Identifier KW_RENAME KW_TO" using multiple alternatives: 1, 13
+
+As a result, alternative(s) 13 were disabled for that input
+
+warning(200): Hive.g:2599:5: 
+Decision can match input such as "Identifier DOT Identifier" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2742:6: 
+Decision can match input such as "Identifier DOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL RPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL {KW_LIKE, KW_REGEXP, KW_RLIKE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN Identifier LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN CharSetName CharSetLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_WHEN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN CharSetName" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN StringLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE CharSetName" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT CharSetName" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_BETWEEN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL {MINUS, PLUS}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN TinyintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN {MINUS, PLUS, TILDE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT {MINUS, PLUS, TILDE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CAST LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE {MINUS, PLUS, TILDE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE Number" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_NOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_NOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_NOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_CASE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_CASE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_CASE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN {KW_ARRAY, KW_IF, KW_MAP, KW_STRUCT, KW_UNIONTYPE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE {KW_ARRAY, KW_IF, KW_MAP, KW_STRUCT, KW_UNIONTYPE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT {KW_ARRAY, KW_IF, KW_MAP, KW_STRUCT, KW_UNIONTYPE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_NULL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN BigintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_NOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_AND" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_NULL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN SmallintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE BigintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE SmallintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_CAST" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_CAST" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_CAST" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN Number" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_FALSE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_NULL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_FALSE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_TRUE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT Number" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_IS" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE TinyintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL BITWISEOR" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL EQUAL_NS" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_IN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_TRUE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL EQUAL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT TinyintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE StringLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT SmallintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL {DIV..DIVIDE, MOD, STAR}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN Identifier" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT BigintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL GREATERTHANOREQUALTO" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT Identifier" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL LESSTHAN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_OR" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN StringLiteral StringLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL AMPERSAND" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL LESSTHANOREQUALTO" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL BITWISEXOR" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_TRUE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL NOTEQUAL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_FALSE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE Identifier" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL DOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL LSQUARE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT StringLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL GREATERTHAN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2847:5: 
+Decision can match input such as "KW_ORDER KW_BY LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2860:5: 
+Decision can match input such as "KW_CLUSTER KW_BY LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2872:5: 
+Decision can match input such as "KW_DISTRIBUTE KW_BY LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): Hive.g:2883:5: 
+Decision can match input such as "KW_SORT KW_BY LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:1089:5: 
+Decision can match input such as "Identifier KW_ADD KW_PARTITION" using multiple alternatives: 6, 7
+
+As a result, alternative(s) 7 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:1089:5: 
+Decision can match input such as "Identifier KW_MODIFY KW_SUBPARTITION" using multiple alternatives: 7, 8
+
+As a result, alternative(s) 8 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:1089:5: 
+Decision can match input such as "Identifier KW_RENAME KW_TO" using multiple alternatives: 1, 13
+
+As a result, alternative(s) 13 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2599:5: 
+Decision can match input such as "Identifier DOT Identifier" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2742:6: 
+Decision can match input such as "Identifier DOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL RPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL {KW_LIKE, KW_REGEXP, KW_RLIKE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN Identifier LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN CharSetName CharSetLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_WHEN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN CharSetName" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN StringLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE CharSetName" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT CharSetName" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_BETWEEN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL {MINUS, PLUS}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN TinyintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN {MINUS, PLUS, TILDE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT {MINUS, PLUS, TILDE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CAST LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE {MINUS, PLUS, TILDE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE Number" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_NOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_NOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_NOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_CASE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_CASE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_CASE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN {KW_ARRAY, KW_IF, KW_MAP, KW_STRUCT, KW_UNIONTYPE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE {KW_ARRAY, KW_IF, KW_MAP, KW_STRUCT, KW_UNIONTYPE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT {KW_ARRAY, KW_IF, KW_MAP, KW_STRUCT, KW_UNIONTYPE}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_NULL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN BigintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_NOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_AND" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_NULL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN SmallintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE BigintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE SmallintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_CAST" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_CAST" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_CAST" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN Number" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_FALSE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_NULL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_FALSE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE KW_TRUE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT Number" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_IS" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE TinyintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL BITWISEOR" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL EQUAL_NS" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_IN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN KW_TRUE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL EQUAL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT TinyintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE StringLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT SmallintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL {DIV..DIVIDE, MOD, STAR}" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN LPAREN Identifier" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT BigintLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL GREATERTHANOREQUALTO" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT Identifier" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL LESSTHAN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL KW_OR" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN StringLiteral StringLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL AMPERSAND" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL LESSTHANOREQUALTO" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL BITWISEXOR" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_TRUE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL NOTEQUAL" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT KW_FALSE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_CASE Identifier" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL DOT" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL LSQUARE" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NOT StringLiteral" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2806:4: 
+Decision can match input such as "LPAREN KW_NULL GREATERTHAN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2847:5: 
+Decision can match input such as "KW_ORDER KW_BY LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2860:5: 
+Decision can match input such as "KW_CLUSTER KW_BY LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2872:5: 
+Decision can match input such as "KW_DISTRIBUTE KW_BY LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+
+warning(200): /home/dennis/workspace/metastore/src/ql/src/java/org/apache/hadoop/hive/ql/parse/Hive.g:2883:5: 
+Decision can match input such as "KW_SORT KW_BY LPAREN" using multiple alternatives: 1, 2
+
+As a result, alternative(s) 2 were disabled for that input
+

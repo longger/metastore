@@ -197,7 +197,9 @@ public class MetaMaster  extends HasThread implements Abortable{
       * now wait until it dies to try and become the next active master.  If we
       * do not succeed on our first attempt, this is no longer a cluster startup.
       */
+     LOG.info("===========================================before becomeActiveMaster==========");
      becomeActiveMaster(startupStatus);
+     LOG.info("===========================================after  becomeActiveMaster==========");
 
      // We are either the active master or we were asked to shutdown
      if (!this.stopped) {

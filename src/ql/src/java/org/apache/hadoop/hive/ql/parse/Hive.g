@@ -1729,8 +1729,8 @@ privilegeIncludeColObject
 privilegeObject
 @init {msgs.push("privilege subject");}
 @after {msgs.pop();}
-    : KW_ON (table=(KW_TABLE|KW_DATABASE|KW_SCHEMA)) Identifier partitionSpec?
-    -> ^(TOK_PRIV_OBJECT Identifier $table partitionSpec?)
+    : KW_ON (table=KW_TABLE|KW_DATABASE) Identifier partitionSpec?
+    -> ^(TOK_PRIV_OBJECT Identifier $table? partitionSpec?)
     ;
 
 privilegeList

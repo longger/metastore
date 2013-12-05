@@ -1742,23 +1742,26 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       throws SemanticException {
     PrivilegeObjectDesc subject = new PrivilegeObjectDesc();
     subject.setObject(unescapeIdentifier(ast.getChild(0).getText()));
-    if ("TABLE".equals(unescapeIdentifier(ast.getChild(1).getText()))) {
-      LOG.info("****************zqh****************PrivilegeObjectDesc####unescapeIdentifier(ast.getChild(1).getText()):" + unescapeIdentifier(ast.getChild(1).getText()));
-      for (int i = 0; i < ast.getChildCount(); i++) {
-        ASTNode astChild = (ASTNode) ast.getChild(i);
-        if (astChild.getToken().getType() == HiveParser.TOK_PARTSPEC) {
-          subject.setPartSpec(DDLSemanticAnalyzer.getPartSpec(astChild));
-        } else {
-          subject.setTable(ast.getChild(0) != null);
-          subject.setSchema(ast.getChild(0) == null);
-          LOG.info("****************zqh****************PrivilegeObjectDesc####ast.getChild(0) != null:" + ast.getChild(0) != null);
+    if (ast.getChildCount() > 1) {
+      if ("TABLE".equals(unescapeIdentifier(ast.getChild(1).getText()))) {
+        LOG.info("****************zqh****************PrivilegeObjectDesc####unescapeIdentifier(ast.getChild(1).getText()):" + unescapeIdentifier(ast.getChild(1).getText()));
+        for (int i = 0; i < ast.getChildCount(); i++) {
+          ASTNode astChild = (ASTNode) ast.getChild(i);
+          if (astChild.getToken().getType() == HiveParser.TOK_PARTSPEC) {
+            subject.setPartSpec(DDLSemanticAnalyzer.getPartSpec(astChild));
+          } else {
+            subject.setTable(ast.getChild(0) != null);
+            //subject.setSchema(ast.getChild(0) == null);
+            LOG.info("****************zqh****************PrivilegeObjectDesc####ast.getChild(0) != null:" + ast.getChild(0) != null);
+          }
         }
       }
-    }else if ("SCHEMA".equals(unescapeIdentifier(ast.getChild(1).getText()))){
+    }
+    /*else if ("SCHEMA".equals(unescapeIdentifier(ast.getChild(1).getText()))){
       LOG.info("****************zqh****************PrivilegeObjectDesc####ast.getChild(0) != null:" + ast.getChild(0) != null);
       subject.setTable(ast.getChild(0) == null);
       subject.setSchema(ast.getChild(0) != null);
-    }
+    }*/
 
     try {
       if (subject.getTable()) {
@@ -3465,6 +3468,14 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       tab = db.getTable(tblName);
     } catch (HiveException e) {
       throw new SemanticException(ErrorMsg.INVALID_TABLE.getMsg(tblName), e);
+    }
+    List<FieldSchema> fieldSchemas = tab.getFileSplitKeys();
+    for(FieldSchema fs : fieldSchemas){
+      LOG.info("*****************zqh****************begin to get tab.getFileSplitKeys()" + fs.getName() + oldColName);
+      if (fs.getName().equals(oldColName)){
+        LOG.info("*****************zqh****************fs.getName() == oldColName" + fs.getName() == oldColName);
+        throw new SemanticException("AlterColumn error! you can't rename the column which is the table splited by.");
+      }
     }
     SkewedInfo skewInfo = tab.getTTable().getSd().getSkewedInfo();
     if ((null != skewInfo)

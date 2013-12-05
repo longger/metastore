@@ -8698,7 +8698,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     String originalText = ctx.getTokenRewriteStream().toString(
         viewSelect.getTokenStartIndex(), viewSelect.getTokenStopIndex());
     createVwDesc.setViewOriginalText(originalText);
-
+    LOG.info("---zjw--1 getting pre view sql:"+createVwDesc.getViewOriginalText());
     // Now expand the view definition with extras such as explicit column
     // references; this expanded form is what we'll re-parse when the view is
     // referenced later.
@@ -8706,6 +8706,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     String expandedText = ctx.getTokenRewriteStream().toString(
         viewSelect.getTokenStartIndex(), viewSelect.getTokenStopIndex());
 
+    LOG.info("---zjw--2 getting expandedText:"+expandedText);
     if (imposedSchema != null) {
       // Merge the names from the imposed schema into the types
       // from the derived schema.

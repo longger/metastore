@@ -338,9 +338,9 @@ public class Driver implements CommandProcessor {
     //add by zjw for test,to lower case all sqls
     //delete this if this dose not work.
 
-    if(command != null){
-      command = command.toLowerCase();
-    }
+//    if(command != null){
+//      command = command.toLowerCase();
+//    }
 
     return compile(command, true);
   }
@@ -568,6 +568,8 @@ public class Driver implements CommandProcessor {
         }
 
       }
+    }else{
+      LOG.warn("---zjw-- Operation in doauthorization is NULL.");
     }
 
     if (inputs != null && inputs.size() > 0) {
