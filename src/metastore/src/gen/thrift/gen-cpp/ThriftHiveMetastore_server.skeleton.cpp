@@ -702,6 +702,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("create_file_by_policy\n");
   }
 
+  void set_file_repnr(const int64_t fid, const int32_t repnr) {
+    // Your implementation goes here
+    printf("set_file_repnr\n");
+  }
+
   bool reopen_file(const int64_t fid) {
     // Your implementation goes here
     printf("reopen_file\n");

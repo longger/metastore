@@ -310,6 +310,9 @@ class Statfs
   CLS_OFFS = 14
   INCS = 15
   CLOS = 16
+  FNRS = 17
+  RECORDNR = 18
+  LENGTH = 19
 
   FIELDS = {
     FROM => {:type => ::Thrift::Types::I64, :name => 'from'},
@@ -327,7 +330,10 @@ class Statfs
     INC_ONS2 => {:type => ::Thrift::Types::I64, :name => 'inc_ons2'},
     CLS_OFFS => {:type => ::Thrift::Types::I64, :name => 'cls_offs'},
     INCS => {:type => ::Thrift::Types::LIST, :name => 'incs', :element => {:type => ::Thrift::Types::I64}},
-    CLOS => {:type => ::Thrift::Types::LIST, :name => 'clos', :element => {:type => ::Thrift::Types::I64}}
+    CLOS => {:type => ::Thrift::Types::LIST, :name => 'clos', :element => {:type => ::Thrift::Types::I64}},
+    FNRS => {:type => ::Thrift::Types::MAP, :name => 'fnrs', :key => {:type => ::Thrift::Types::STRING}, :value => {:type => ::Thrift::Types::I64}},
+    RECORDNR => {:type => ::Thrift::Types::I64, :name => 'recordnr'},
+    LENGTH => {:type => ::Thrift::Types::I64, :name => 'length'}
   }
 
   def struct_fields; FIELDS; end

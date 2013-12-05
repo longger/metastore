@@ -303,6 +303,8 @@ public class DiskManager {
       long totalReportNr = 0;
       long totalFileRep = 0;
       long totalFileDel = 0;
+      long totalFailDel = 0;
+      long totalFailRep = 0;
       InetAddress address = null;
       int port = 0;
 
@@ -679,6 +681,7 @@ public class DiskManager {
       private long last_rerepTs = System.currentTimeMillis();
       private long last_unspcTs = System.currentTimeMillis();
       private long last_voidTs = System.currentTimeMillis();
+      private long last_limitTs = System.currentTimeMillis();
 
       private long ff_start = 0;
       private final long ff_range = 1000;
@@ -917,6 +920,20 @@ public class DiskManager {
           } else {
             isRunning = true;
           }
+        }
+
+        if (last_limitTs + 3600 * 1000 < System.currentTimeMillis()) {
+          synchronized (closeRepLimit) {
+            if (closeRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
+              closeRepLimit++;
+            }
+          }
+          synchronized (fixRepLimit) {
+            if (fixRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)){
+              fixRepLimit++;
+            }
+          }
+          last_limitTs = System.currentTimeMillis();
         }
 
         // check any under/over/linger files
@@ -1352,13 +1369,17 @@ public class DiskManager {
       r += "}\n";
       String ANSI_RESET = "\u001B[0m";
 	    String ANSI_RED = "\u001B[31m";
-      if (free / (used + free) < 0.2) {
-        r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
-            "G, free " + ANSI_RED + (free / 1000000000) + ANSI_RESET + "G \n";
-      } else {
-        r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
-            "G, free " + (free / 1000000000) + "G \n";
-      }
+	    String ANSI_GREEN = "\u001B[32m";
+
+	    if (used + free > 0) {
+        if (((double)free / (used + free)) < 0.2) {
+          r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
+              "G, free " + ANSI_RED + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + " \n";
+        } else {
+          r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
+              "G, free " + ANSI_GREEN + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + "\n";
+        }
+	    }
       synchronized (rs) {
         r += "Total devices " + rs.countDevice() + ", active {alone " +
             devnr[MetaStoreConst.MDeviceProp.ALONE] + ", backup " +
@@ -1422,6 +1443,7 @@ public class DiskManager {
         }
       }
       r += "}\n";
+      r += "Rep Limit: closeRepLimit " + closeRepLimit + ", fixRepLimit " + fixRepLimit + "\n";
 
       return r;
     }
@@ -1456,7 +1478,13 @@ public class DiskManager {
     }
 
     // Return old devs
-    public NodeInfo addToNDMap(Node node, List<DeviceInfo> ndi) {
+    public NodeInfo addToNDMap(long ts, Node node, List<DeviceInfo> ndi) {
+      NodeInfo ni = ndmap.get(node.getNode_name());
+
+      // FIXME: do NOT update unless CUR - lastRptTs > 1000
+      if (ni != null && ((ts - ni.lastRptTs) < 1000)) {
+        return ni;
+      }
       // flush to database
       if (ndi != null) {
         for (DeviceInfo di : ndi) {
@@ -1477,21 +1505,17 @@ public class DiskManager {
           admap.put(di.dev, di);
         }
       }
-      NodeInfo ni = ndmap.get(node.getNode_name());
+
       if (ni == null) {
         ni = new NodeInfo(ndi);
         ni = ndmap.put(node.getNode_name(), ni);
       } else {
-        // FIXME: do NOT update unless CUR - lastRptTs > 1000
-        if (System.currentTimeMillis() - ni.lastRptTs < 1000) {
-          return ni;
-        }
         Set<DeviceInfo> old, cur;
         old = new TreeSet<DeviceInfo>();
         cur = new TreeSet<DeviceInfo>();
 
         synchronized (ni) {
-          ni.lastRptTs = System.currentTimeMillis();
+          ni.lastRptTs = ts;
           if (ni.dis != null) {
             for (DeviceInfo di : ni.dis) {
               old.add(di);
@@ -1550,20 +1574,22 @@ public class DiskManager {
       }
 
       // check if we can leave safe mode
-      try {
-        long cn;
-        synchronized (rs) {
-          cn = rs.countNode();
-        }
-        if (safeMode && ((double) ndmap.size() / (double) cn > 0)) {
+      if (safeMode) {
+        try {
+          long cn;
+          synchronized (rs) {
+            cn = rs.countNode();
+          }
+          if (safeMode && ((double) ndmap.size() / (double) cn > 0)) {
 
-          LOG.info("Nodemap size: " + ndmap.size() + ", saved size: " + cn + ", reach "
-              +
-              (double) ndmap.size() / (double) cn * 100 + "%, leave SafeMode.");
-          safeMode = false;
+            LOG.info("Nodemap size: " + ndmap.size() + ", saved size: " + cn + ", reach "
+                +
+                (double) ndmap.size() / (double) cn * 100 + "%, leave SafeMode.");
+            safeMode = false;
+          }
+        } catch (MetaException e) {
+          LOG.error(e, e);
         }
-      } catch (MetaException e) {
-        LOG.error(e, e);
       }
       return ni;
     }
@@ -1779,6 +1805,9 @@ public class DiskManager {
     }
 
     public String getMP(String node_name, String devid) throws MetaException {
+      if (node_name == null || node_name.equals("")) {
+        node_name = getAnyNode();
+      }
       NodeInfo ni = ndmap.get(node_name);
       if (ni == null) {
         throw new MetaException("Can't find Node '" + node_name + "' in ndmap.");
@@ -2798,6 +2827,7 @@ public class DiskManager {
               oni.totalReportNr++;
               if (report.replies != null && report.replies.size() > 0) {
                 for (DMReply r : report.replies) {
+                  String[] args = r.args.split(",");
                   switch (r.type) {
                   case REPLICATED:
                     oni.totalFileRep++;
@@ -2805,8 +2835,28 @@ public class DiskManager {
                   case DELETED:
                     oni.totalFileDel++;
                   case FAILED_DEL:
+                    oni.totalFailDel++;
+                    // it is ok ignore any del failure
                     break;
                   case FAILED_REP:
+                    oni.totalFailRep++;
+                    // ok, we know that the SFL will be invalid parma...ly
+                    SFileLocation sfl;
+
+                    try {
+                      synchronized (rs) {
+                        sfl = rs.getSFileLocation(args[1], args[2]);
+                        if (sfl != null) {
+                          // delete this SFL right now
+                          if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
+                            LOG.info("Failed Replication for file " + sfl.getFid() + " dev " + sfl.getDevid() + " loc " + sfl.getLocation() + ", delete it now.");
+                            rs.delSFileLocation(args[1], args[2]);
+                          }
+                        }
+                      }
+                    } catch (MetaException e) {
+                      LOG.error(e, e);
+                    }
                     break;
                   }
                 }
@@ -2836,7 +2886,7 @@ public class DiskManager {
 
             // 2. update NDMap
             synchronized (ndmap) {
-              addToNDMap(reportNode, report.dil);
+              addToNDMap(System.currentTimeMillis(), reportNode, report.dil);
             }
 
             // 2.NA update metadata
@@ -2860,7 +2910,9 @@ public class DiskManager {
                   }
                   if (release_fix_limit) {
                     synchronized (fixRepLimit) {
-                      fixRepLimit++;
+                      if (fixRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)) {
+                        fixRepLimit++;
+                      }
                     }
                   }
                   if (args.length < 3) {

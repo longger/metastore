@@ -4591,53 +4591,67 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       FileOperationException e = null;
       SFile saved = getMS().getSFile(file.getFid());
 
-      if (saved == null) {
-        throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
-      }
+      try {
+        if (saved == null) {
+          throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
+        }
 
-      if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-        throw new FileOperationException("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").",
-            FOFailReason.INVALID_STATE);
-      }
+        if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
+          LOG.error("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").");
+          throw new FileOperationException("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").",
+              FOFailReason.INVALID_STATE);
+        }
 
-      // find the valid filelocation, mark it and trigger replication
-      if (file.getLocationsSize() > 0) {
-        int valid_nr = 0;
+        // find the valid filelocation, mark it and trigger replication
+        if (file.getLocationsSize() > 0) {
+          int valid_nr = 0;
 
-        for (SFileLocation sfl : file.getLocations()) {
-          if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
-            valid_nr++;
-            sfl.setRep_id(0);
-            sfl.setDigest(file.getDigest());
-            getMS().updateSFileLocation(sfl);
-          } else {
-            dm.asyncDelSFL(sfl);
+          // find valid Online NR
+          for (SFileLocation sfl : file.getLocations()) {
+            if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+              valid_nr++;
+            }
           }
+          if (valid_nr > 1) {
+            LOG.error("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]");
+            throw new FileOperationException("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]",
+                FOFailReason.INVALID_FILE);
+          } else if (valid_nr < 1) {
+            LOG.error("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]");
+            e = new FileOperationException("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]",
+                FOFailReason.INVALID_FILE);
+          }
+          // finally, do it
+          for (SFileLocation sfl : file.getLocations()) {
+            if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+              sfl.setRep_id(0);
+              sfl.setDigest(file.getDigest());
+              getMS().updateSFileLocation(sfl);
+            } else {
+              dm.asyncDelSFL(sfl);
+            }
+          }
+        } else {
+          LOG.error("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]");
+          e = new FileOperationException("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]",
+                FOFailReason.INVALID_FILE);
         }
-        if (valid_nr > 1) {
-          throw new FileOperationException("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]",
-              FOFailReason.INVALID_FILE);
-        } else if (valid_nr < 1) {
-          e = new FileOperationException("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]",
-              FOFailReason.INVALID_FILE);
+
+        file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
+        // keep repnr unchanged
+        file.setRep_nr(saved.getRep_nr());
+        getMS().updateSFile(file);
+
+        if (e != null) {
+          throw e;
         }
-      } else {
-        e = new FileOperationException("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]",
-              FOFailReason.INVALID_FILE);
-      }
 
-      file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
-      // keep repnr unchanged
-      file.setRep_nr(saved.getRep_nr());
-      getMS().updateSFile(file);
-
-      if (e != null) {
-        throw e;
-      }
-
-      synchronized (dm.repQ) {
-        dm.repQ.add(new DMRequest(file, DMRequest.DMROperation.REPLICATE, 1));
-        dm.repQ.notify();
+        synchronized (dm.repQ) {
+          dm.repQ.add(new DMRequest(file, DMRequest.DMROperation.REPLICATE, 1));
+          dm.repQ.notify();
+        }
+      } finally {
+        endFunction("close_file", true, e);
       }
       return 0;
     }
@@ -6899,6 +6913,17 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throw new MetaException("Invalid time range [" + begin_time + ", " + end_time + ").");
       }
       return getMS().statFileSystem(begin_time, end_time);
+    }
+
+    @Override
+    public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException {
+      startFunction("set_file_repnr", "fid " + fid + " repnr " + repnr);
+      SFile f = get_file_by_id(fid);
+      if (f != null) {
+        f.setRep_nr(repnr);
+        // FIXME: Caution, this might be a conflict code section for concurrent sfile field modification.
+        getMS().updateSFile(f);
+      }
     }
 
   }

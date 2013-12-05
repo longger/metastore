@@ -1281,4 +1281,7 @@ public interface IMetaStoreClient {
 
   public statfs statFileSystem(long begin_time, long end_time) throws MetaException, TException;
 
+  public void setTimeout(int timeout);
+
+  public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException;
 }

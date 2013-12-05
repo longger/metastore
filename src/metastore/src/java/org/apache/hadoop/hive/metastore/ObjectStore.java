@@ -806,7 +806,7 @@ public class ObjectStore implements RawStore, Configurable {
     String filter = "", parameters = "java.lang.String tableName, java.lang.String dbName";
     Map<String, Object> params = new HashMap<String, Object>();
 
-    if (values.size() == 0) {
+    if (values == null || values.size() == 0) {
       return rls;
     }
     try {
@@ -1325,6 +1325,8 @@ public class ObjectStore implements RawStore, Configurable {
         if (m == null) {
           continue;
         }
+        s.setRecordnr(s.getRecordnr() + m.getRecord_nr());
+        s.setLength(s.getLength() + m.getLength());
         switch (m.getStore_status()) {
         case MetaStoreConst.MFileStoreStatus.INCREATE:
           s.setIncreate(s.getIncreate() + 1);
@@ -1343,6 +1345,17 @@ public class ObjectStore implements RawStore, Configurable {
           s.setRm_physical(s.getRm_physical() + 1);
           break;
         }
+        if (m.getTable() != null && m.getTable().getTableName() != null) {
+          if (s.getFnrs() == null) {
+            s.setFnrs(new HashMap<String, Long>());
+          }
+          Long fnr = s.getFnrs().get(m.getTable().getTableName());
+          if (fnr == null) {
+            fnr = 0L;
+          }
+          s.putToFnrs(m.getTable().getTableName(), ++fnr);
+        }
+
         // get under/over/linger files
         List<SFileLocation> l = getSFileLocations(m.getFid());
         int on = 0, off = 0, susp = 0;
@@ -2327,27 +2340,34 @@ public class ObjectStore implements RawStore, Configurable {
 
         List<MFileLocation> mfl = getMFileLocations(file.getFid());
         boolean selected = false;
+        int idx = 0;
+
         if (mfl.size() > 0) {
-          for (MFileLocation x : mfl) {
+          for (int i = 0; i < mfl.size(); i++) {
+            MFileLocation x = mfl.get(i);
+
             if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
-              if (selected) {
+              selected = true;
+              idx = i;
+              break;
+            }
+          }
+          if (selected) {
+            // it is ok to reopen, and close other locations
+            for (int i = 0; i < mfl.size(); i++) {
+              if (i != idx) {
+                MFileLocation x = mfl.get(i);
                 // mark it as OFFLINE
                 x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
                 pm.makePersistent(x);
                 toOffline.add(x);
-              } else {
-                // select it as the only valid location
-                selected = true;
               }
-            } else {
-              // mark it as OFFLINE
-              x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-              pm.makePersistent(x);
-              toOffline.add(x);
             }
           }
         }
-        changed = true;
+        if (selected) {
+          changed = true;
+        }
       }
       commited = commitTransaction();
       if (commited && changed) {
@@ -2766,7 +2786,7 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery(MFileLocation.class, "this.file.fid == fid");
       query.declareParameters("long fid");
-      query.getFetchPlan().setMaxFetchDepth(2);
+      query.getFetchPlan().setMaxFetchDepth(3);
       query.getFetchPlan().setFetchSize(FetchPlan.FETCH_SIZE_GREEDY);
       List l = (List)query.execute(fid);
       Iterator iter = l.iterator();
