@@ -20,7 +20,6 @@ import org.apache.thrift.scheme.IScheme;
 import org.apache.thrift.scheme.SchemeFactory;
 import org.apache.thrift.scheme.StandardScheme;
 import org.apache.thrift.scheme.TupleScheme;
-import org.mortbay.log.Log;
 
 public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSchema._Fields>, java.io.Serializable, Cloneable {
   private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("FieldSchema");
@@ -632,7 +631,6 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
       }
       if (struct.type != null) {
         oprot.writeFieldBegin(TYPE_FIELD_DESC);
-        Log.info("############################ZQH#####################struct.type :" + struct.type);
         oprot.writeString(struct.type);
         oprot.writeFieldEnd();
       }

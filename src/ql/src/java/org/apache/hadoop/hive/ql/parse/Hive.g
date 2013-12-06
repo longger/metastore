@@ -380,6 +380,8 @@ TOK_CREATEROLEASSIGNMENT;
 TOK_DROPROLEASSIGNMENT;
 TOK_SHOWROLEASSIGNMENT;
 TOK_ALTERTABLE_FILESPLIT;
+TOK_ALTERTABLE_ADD_DISTRIBUTION;
+TOK_ALTERTABLE_REPLACE_DISTRIBUTION;
 TOK_SHOWSCHEMAS;
 TOK_DESCSCHEMA;
 
@@ -1091,6 +1093,7 @@ alterTableStatementSuffix
     | alterStatementSuffixAddCol
     | alterStatementSuffixRenameCol
     | alterStatementSuffixFileSplit
+    | alterStatementSuffixDistribution
     | alterStatementSuffixDropPartitions
     | alterStatementSuffixAddPartitions
     | alterStatementSuffixModiFyPartitionDropFiles
@@ -1241,6 +1244,14 @@ alterStatementSuffixFileSplit
 @after { msgs.pop(); }
     : Identifier fileSplit
     ->^(TOK_ALTERTABLE_FILESPLIT Identifier fileSplit)
+    ;
+    
+alterStatementSuffixDistribution
+@init { msgs.push("alter table Distribution"); }
+@after { msgs.pop(); }
+    : Identifier (add=KW_ADD | replace=KW_REPLACE) tableDistribution
+    ->{$add != null}?^(TOK_ALTERTABLE_ADD_DISTRIBUTION Identifier tableDistribution)
+    -> ^(TOK_ALTERTABLE_REPLACE_DISTRIBUTION Identifier tableDistribution)
     ;
     
 alterStatementSuffixRenameCol

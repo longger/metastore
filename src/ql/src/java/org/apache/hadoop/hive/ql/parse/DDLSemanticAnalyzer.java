@@ -259,6 +259,12 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     case HiveParser.TOK_ALTERTABLE_FILESPLIT:
       analyzeAlterTableFileSplit(ast, AlterTableTypes.ALTERFILESPLIT);
       break;
+    case HiveParser.TOK_ALTERTABLE_ADD_DISTRIBUTION:
+      analyzeAlterTableDistribution(ast, AlterTableTypes.ADDNODEGROUP);
+      break;
+    case HiveParser.TOK_ALTERTABLE_REPLACE_DISTRIBUTION:
+      analyzeAlterTableDistribution(ast, AlterTableTypes.REPLACENODEGROUP);
+      break;
     case HiveParser.TOK_ALTERTABLE_TOUCH:
       analyzeAlterTableTouch(ast);
       break;
@@ -2212,6 +2218,8 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       case ADDPROPS:
       case RENAME:
       case ALTERFILESPLIT:
+      case ADDNODEGROUP:
+      case REPLACENODEGROUP:
         // allow this form
         break;
       default:
@@ -3539,8 +3547,18 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
+  private void analyzeAlterTableDistribution(ASTNode ast, AlterTableTypes alterType)
+      throws SemanticException {
+    String tblName = getUnescapedName((ASTNode) ast.getChild(0));
+    List<String> nodeGroupNames = null;
+    ASTNode child = (ASTNode) ast.getChild(1);
+    nodeGroupNames = getNodeGroups((ASTNode)child.getChild(0));
+    AlterTableDesc alterTblDesc = new AlterTableDesc(alterType, tblName, nodeGroupNames);
+    addInputsOutputsAlterTable(tblName, null, alterTblDesc);
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterTblDesc), conf));
 
-
+  }
 
   private void analyzeAlterTableDropParts(ASTNode ast, boolean expectView)
       throws SemanticException {

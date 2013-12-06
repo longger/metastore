@@ -4807,6 +4807,13 @@ public class ObjectStore implements RawStore, Configurable {
       oldt.setTableName(newt.getTableName().toLowerCase());
       oldt.setParameters(newt.getParameters());
       oldt.setOwner(newt.getOwner());
+      if(null != newt.getGroupDistribute()){
+        LOG.info("##############null != newt.getGroupDistribute()");
+        for(MNodeGroup mng :newt.getGroupDistribute()){
+          LOG.info("##############ZQH#############OBJECTSTORE" + mng.getNode_group_name());
+        }
+        oldt.setGroupDistribute(newt.getGroupDistribute());
+      }
 
       // Fully copy over the contents of the new SD into the old SD,
       // so we don't create an extra SD in the metastore db that has no references.
@@ -4873,7 +4880,6 @@ public class ObjectStore implements RawStore, Configurable {
         altSplitKeyParams.put("version", cur_version);
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_SPLITKEYS,db_id,-1, pm, oldt,altSplitKeyParams));
       }
-
       oldt.setTableType(newt.getTableType());
       oldt.setLastAccessTime(newt.getLastAccessTime());
       oldt.setViewOriginalText(newt.getViewOriginalText());
@@ -10260,7 +10266,7 @@ public MUser getMUser(String userName) {
     LOG.debug("getMnodeGroup groupName:["+nodegroupName+"]");
     try {
       openTransaction();
-      nodegroupName = nodegroupName.toLowerCase().trim();
+      nodegroupName = nodegroupName.trim();//.toLowerCase()
       Query query = pm.newQuery(MNodeGroup.class, "node_group_name == nodegroupName");
       query.declareParameters("java.lang.String nodegroupName");
       query.setUnique(true);

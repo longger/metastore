@@ -9522,16 +9522,6 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     return null;
   }
 
-  private List<String> getNodeGroups(ASTNode ast) {
-    List<String> ngNameList = new ArrayList<String>();
-    int numCh = ast.getChildCount();
-    for (int i = 0; i < numCh; i++) {
-      ASTNode child = (ASTNode) ast.getChild(i);
-      ngNameList.add(unescapeSQLString(child.getText()).toLowerCase());
-    }
-    return ngNameList;
-  }
-
   private ASTNode analyzeCreateView(ASTNode ast, QB qb)
       throws SemanticException {
     String tableName = getUnescapedName((ASTNode)ast.getChild(0));

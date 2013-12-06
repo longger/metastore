@@ -47,7 +47,8 @@ public class AlterTableDesc extends DDLDesc implements Serializable {
     RENAME, ADDCOLS, REPLACECOLS, ADDPROPS, ADDSERDE, ADDSERDEPROPS,
     ADDFILEFORMAT, ADDCLUSTERSORTCOLUMN, RENAMECOLUMN, ADDPARTITION,
     TOUCH, ARCHIVE, UNARCHIVE, ALTERPROTECTMODE, ALTERPARTITIONPROTECTMODE,
-    ALTERLOCATION, DROPPARTITION, RENAMEPARTITION, ADDSKEWEDBY, ALTERSKEWEDLOCATION,ALTERFILESPLIT
+    ALTERLOCATION, DROPPARTITION, RENAMEPARTITION, ADDSKEWEDBY,
+    ALTERSKEWEDLOCATION,ALTERFILESPLIT,ADDNODEGROUP,REPLACENODEGROUP
   };
 
   public static enum ProtectModeType {
@@ -84,6 +85,7 @@ public class AlterTableDesc extends DDLDesc implements Serializable {
   boolean isStoredAsSubDirectories = false;
   List<String> skewedColNames;
   List<List<String>> skewedColValues;
+  List<String> nodeGroupNames;
   Table table;
 
   public AlterTableDesc() {
@@ -143,6 +145,14 @@ public class AlterTableDesc extends DDLDesc implements Serializable {
     op = alterType;
     oldName = name;
     this.fileSplitCols = new ArrayList<FieldSchema>(fileSplitCols);
+  }
+
+
+  public AlterTableDesc(AlterTableTypes alterType, String name,
+      List<String> nodeGroupNames) {
+    this.op = alterType;
+    this.oldName = name;
+    this.nodeGroupNames = new ArrayList<String>(nodeGroupNames);
   }
 
   /**
@@ -676,6 +686,14 @@ public class AlterTableDesc extends DDLDesc implements Serializable {
 
   public void setFileSplitCols(List<FieldSchema> fileSplitCols) {
     this.fileSplitCols = fileSplitCols;
+  }
+
+  public List<String> getNodeGroupNames() {
+    return nodeGroupNames;
+  }
+
+  public void setNodeGroupNames(List<String> nodeGroupNames) {
+    this.nodeGroupNames = nodeGroupNames;
   }
 
 }
