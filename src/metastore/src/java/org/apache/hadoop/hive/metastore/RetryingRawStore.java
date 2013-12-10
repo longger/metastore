@@ -130,6 +130,7 @@ public class RetryingRawStore implements InvocationHandler {
       retryCount++;
       if (caughtException != null) {
         LOG.error("JDO ERROR Cause: " + caughtException.getMessage());
+        LOG.error(caughtException, caughtException);
       }
       LOG.error(
           String.format(

@@ -493,6 +493,11 @@ public class ObjectStore implements RawStore, Configurable {
       transactionStatus = TXN_STATUS.ROLLBACK;
       // could already be rolled back
       currentTransaction.rollback();
+      // XXX: HIVE-3826
+      // remove all detached objects from the cache, since the transaction is
+      // being rolled back they are no longer relevant, and this prevents them
+      // from reattaching in future transactions
+      pm.evictAll();
     }
   }
 
@@ -3162,6 +3167,10 @@ public class ObjectStore implements RawStore, Configurable {
         throw new InvalidObjectException("This file does not belong to any TABLE or table contains NONE file split keys, you should not set SplitValues!");
       }
       for (SplitValue sv : file.getValues()) {
+        // Bug-XXX: In XJ, we got Nullpointer Exception, so check here.
+        if (sv.getSplitKeyName() == null) {
+          throw new InvalidObjectException("Null SplitKeyName in SplitValue?!!");
+        }
         values.add(new MSplitValue(sv.getSplitKeyName().toLowerCase(), sv.getLevel(), sv.getValue(), sv.getVerison()));
         if (version == -1) {
           version = sv.getVerison();

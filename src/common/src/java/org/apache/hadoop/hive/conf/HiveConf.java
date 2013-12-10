@@ -699,7 +699,7 @@ public class HiveConf extends Configuration {
     DM_BACKUPQ_TIMEOUT("hive.diskmanager.backupq.timeout", 5 * 3600 * 1000),
     DM_BACKUP_FILESIZE_THRESHOLD("hive.diskmanager.backup.filesizethreshold", 64 * 1024 * 1024),
     DM_BACKUP_BACKUPNODENAME("hive.diskmanager.backup.backupnodename", "BACKUP-STORE"),
-    DM_CHECK_INVALIDATE_TIMEOUT("hive.diskmanager.check.invalidate.timeout", 60 * 1000),
+    DM_CHECK_INVALIDATE_TIMEOUT("hive.diskmanager.check.invalidate.timeout", 90 * 1000),
     DM_CHECK_REPDELCHECK_INTERVAL("hive.diskmanager.check.repdelcheck.interval", 60 * 1000),
     DM_CHECK_VOIDFILECHECK("hive.diskmanager.check.voidfilecheck", 30 * 60 * 1000),
     DM_CHECK_VOIDFILETIMEOUT("hive.diskmanager.check.voidfiletimeout", 12 * 3600 * 1000),

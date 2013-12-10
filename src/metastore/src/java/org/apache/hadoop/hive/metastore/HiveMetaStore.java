@@ -4458,7 +4458,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       if (spec_node.size() > 0) {
         flp = new FileLocatingPolicy(spec_node, excl_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
       } else {
-        flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+        flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
       }
 
       SFile rf = create_file(flp, node_name, repnr, db_name, table_name, values);

@@ -45,6 +45,7 @@ public class HiveMetaStoreServerEventHandler implements TServerEventHandler {
   public void processContext(ServerContext serverContext, TTransport inputTransport,
       TTransport outputTransport) {
     HiveMetaStoreServerContext sc = (HiveMetaStoreServerContext)serverContext;
+    DMProfile.query.incrementAndGet();
     // set the session ID to this thread?
     MSSessionState msss = new MSSessionState();
     msss.setSessionid(sc.getSessionId());
