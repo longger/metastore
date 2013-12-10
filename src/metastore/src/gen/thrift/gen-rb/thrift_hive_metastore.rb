@@ -840,6 +840,23 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'pingPong failed: unknown result')
     end
 
+    def alterNodeGroup(ng)
+      send_alterNodeGroup(ng)
+      return recv_alterNodeGroup()
+    end
+
+    def send_alterNodeGroup(ng)
+      send_message('alterNodeGroup', AlterNodeGroup_args, :ng => ng)
+    end
+
+    def recv_alterNodeGroup()
+      result = receive_message(AlterNodeGroup_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise result.o2 unless result.o2.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'alterNodeGroup failed: unknown result')
+    end
+
     def create_database(database)
       send_create_database(database)
       recv_create_database()
@@ -3771,6 +3788,19 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'pingPong', seqid)
+    end
+
+    def process_alterNodeGroup(seqid, iprot, oprot)
+      args = read_args(iprot, AlterNodeGroup_args)
+      result = AlterNodeGroup_result.new()
+      begin
+        result.success = @handler.alterNodeGroup(args.ng)
+      rescue ::AlreadyExistsException => o1
+        result.o1 = o1
+      rescue ::MetaException => o2
+        result.o2 = o2
+      end
+      write_result(result, oprot, 'alterNodeGroup', seqid)
     end
 
     def process_create_database(seqid, iprot, oprot)
@@ -7360,6 +7390,42 @@ module ThriftHiveMetastore
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::STRING, :name => 'success'},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class AlterNodeGroup_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    NG = 1
+
+    FIELDS = {
+      NG => {:type => ::Thrift::Types::STRUCT, :name => 'ng', :class => ::NodeGroup}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class AlterNodeGroup_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+    O2 = 2
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::AlreadyExistsException},
+      O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::MetaException}
     }
 
     def struct_fields; FIELDS; end
