@@ -37,6 +37,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -604,6 +605,10 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       CreateNodeGroupDesc createNodeGroupDesc = work.getCreateNodeGroupDesc();
       if (null != createNodeGroupDesc) {
         return createNodeGroup(db, createNodeGroupDesc);
+      }
+      AlterNodeGroupDesc alterNodeGroupDesc = work.getAlterNodeGroupDesc();
+      if (null != alterNodeGroupDesc) {
+        return alterNodeGroup(db, alterNodeGroupDesc);
       }
       DropNodeGroupDesc dropNodeGroupDesc = work.getDropNodeGroupDesc();
       if (null != dropNodeGroupDesc) {
@@ -5079,6 +5084,26 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     NodeGroups ng = new NodeGroups(createNodeGroupDesc.getNodeGroupName(),
         createNodeGroupDesc.getComment(),"ONLINE",createNodeGroupDesc.getNodes());
     db.createNodeGroup(ng);
+    return 0;
+  }
+
+  private int alterNodeGroup(Hive db, AlterNodeGroupDesc alterNodeGroupDesc)throws HiveException {
+    List<String> ngNames = new ArrayList<String>();
+    ngNames.add(alterNodeGroupDesc.getNodeGroupName());
+    List<NodeGroup> ngs = db.listNodeGroups(ngNames);
+    NodeGroup nodegroup = ngs.get(0);
+    if(null != nodegroup){
+      Set<Node> nodes = nodegroup.getNodes();
+      Set<String> nds =  alterNodeGroupDesc.getNodes();
+      Set<String> newNodes = new HashSet<String>();
+      for(Node n : nodes){
+        newNodes.add(n.getNode_name());
+      }
+      newNodes.addAll(nds);
+      db.alterNodeGroup(nodegroup,newNodes);
+    }else{
+      throw new HiveException("There is no nodegroup named " + alterNodeGroupDesc.getNodeGroupName());
+    }
     return 0;
   }
 

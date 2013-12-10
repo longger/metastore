@@ -277,7 +277,7 @@ public final class SemanticAnalyzerFactory {
       case HiveParser.TOK_ALTERTABLE_FILESPLIT:
       case HiveParser.TOK_ALTERTABLE_ADD_DISTRIBUTION:
       case HiveParser.TOK_ALTERTABLE_REPLACE_DISTRIBUTION:
-
+      case HiveParser.TOK_ALTERNODEGROUP:
 
         return new DDLSemanticAnalyzer(conf);
       case HiveParser.TOK_ALTERTABLE_PARTITION:

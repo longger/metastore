@@ -1232,6 +1232,8 @@ public interface IMetaStoreClient {
 
   public boolean addNodeGroup(NodeGroup ng) throws AlreadyExistsException, MetaException, TException;
 
+  public boolean alterNodeGroup(NodeGroup ng) throws AlreadyExistsException, MetaException, TException;
+
   public boolean modifyNodeGroup(String schemaName, NodeGroup ng) throws MetaException, TException;
 
   public boolean deleteNodeGroup(NodeGroup ng) throws MetaException, TException;

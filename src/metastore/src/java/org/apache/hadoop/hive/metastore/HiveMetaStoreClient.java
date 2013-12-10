@@ -91,6 +91,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
@@ -2124,6 +2125,12 @@ public boolean authentication(String user_name, String passwd)
   public boolean addNodeGroup(NodeGroup ng) throws AlreadyExistsException, MetaException,
       TException {
     return client.addNodeGroup(ng);
+  }
+
+  @Override
+  public boolean alterNodeGroup(NodeGroup ng) throws AlreadyExistsException, MetaException,
+      TException {
+    return client.alterNodeGroup(ng);
   }
 
   @Override

@@ -10099,6 +10099,42 @@ public MUser getMUser(String userName) {
   }
 
   @Override
+  public boolean alterNodeGroup(NodeGroup ng) throws InvalidObjectException, MetaException {
+
+    boolean success = false;
+    boolean commited = false;
+
+    LOG.info("---zqh--in alterNodeGroup");
+    try {
+      openTransaction();
+      MNodeGroup mng;
+      try {
+        mng = this.getMNodeGroup(ng.getNode_group_name());
+      } catch (NoSuchObjectException e) {
+        throw new MetaException("There in no Nodegroup named " + ng.getNode_group_name());
+      }
+      Set<MNode> mNode = new HashSet<MNode>();
+      for(Node node : ng.getNodes()){
+        MNode mnode = getMNode(node.getNode_name());
+        mNode.add(mnode);
+      }
+      mng.setNodes(mNode);
+      pm.makePersistent(mng);
+//      pm.makePersistentAll(mng.getNodes());
+      commited = commitTransaction();
+      if(commited) {
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_NODEGROUP,-1,-1,pm,mng,null));
+      }
+      success = true;
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    return success;
+  }
+
+  @Override
   public boolean modifyNodeGroup(String ngName,NodeGroup ng) throws InvalidObjectException, MetaException {
     boolean success = false;
     boolean commited = false;

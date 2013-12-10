@@ -347,6 +347,7 @@ TOK_CREATESCHEMA;
 TOK_DROPSCHEMA;
 
 TOK_CREATENODEGROUP;
+TOK_ALTERNODEGROUP;
 TOK_NODEGROUPPROPERTIES;
 TOK_MODIFYNODEGROUP;
 TOK_DROPNODEGROUP;
@@ -514,6 +515,7 @@ ddlStatement
     | showRoleAssignment
     
     | createNodeGroupStatement
+    | alterNodeGroupStatement
     | modifyNodeGroupStatement
     | dropNodeGroupStatement
     
@@ -696,6 +698,17 @@ createNodeGroupStatement
     -> ^(TOK_CREATENODEGROUP $name ifNotExists?  nodegroupComment? $nodegroupprops? $nodes?)
     ;
 
+alterNodeGroupStatement
+@init { msgs.push("alter nodegroup statement"); }
+@after { msgs.pop(); }
+    : KW_ALTER KW_NODEGROUP
+        name=Identifier
+        nodegroupComment?
+        (KW_WITH KW_DBPROPERTIES nodegroupprops=nodegroupProperties)?
+        (KW_ADD KW_NODES nodes=stringLiteralList)?
+    -> ^(TOK_ALTERNODEGROUP $name nodegroupComment? $nodegroupprops? $nodes?)
+    ;
+    
 nodegroupProperties
 @init { msgs.push("nodegroupproperties"); }
 @after { msgs.pop(); }

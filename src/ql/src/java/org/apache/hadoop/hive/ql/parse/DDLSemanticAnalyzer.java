@@ -506,6 +506,9 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     case HiveParser.TOK_CREATENODEGROUP:
       analyzeCreateNodeGroup(ast);
       break;
+    case HiveParser.TOK_ALTERNODEGROUP:
+      analyzeAlterNodeGroup(ast);
+      break;
     case HiveParser.TOK_MODIFYNODEGROUP:
       analyzeModifyNodeGroup(ast);
       break;
@@ -859,6 +862,43 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
+  private void analyzeAlterNodeGroup(ASTNode ast) throws SemanticException {
+    String nodeGroupName = unescapeIdentifier(ast.getChild(0).getText());
+    //boolean ifNotExists = false;
+    String nodeGroupcomment = null;
+    Map<String, String> nodeGroupProps = null;
+    Set<String> nodes = null;
+
+    for (int i = 1; i < ast.getChildCount(); i++) {
+      ASTNode childNode = (ASTNode) ast.getChild(i);
+      switch (childNode.getToken().getType()) {
+      /*case HiveParser.TOK_IFNOTEXISTS:
+        ifNotExists = true;
+        break;*/
+      case HiveParser.TOK_NODEGROUPCOMMENT:
+        nodeGroupcomment = unescapeSQLString(childNode.getChild(0).getText());
+        break;
+      case HiveParser.TOK_NODEGROUPPROPERTIES:
+        nodeGroupProps = DDLSemanticAnalyzer.getProps((ASTNode) childNode.getChild(0));
+        break;
+      case HiveParser.TOK_STRINGLITERALLIST:
+        nodes = DDLSemanticAnalyzer.getNodes((ASTNode) childNode);
+        break;
+      default:
+        throw new SemanticException("Unrecognized token in ALTER NODEGROUP statement");
+      }
+    }
+
+    AlterNodeGroupDesc alterNodeGroupDesc =
+        new AlterNodeGroupDesc(nodeGroupName, nodeGroupcomment, nodes);
+    if (nodeGroupProps != null) {
+      alterNodeGroupDesc.setNodeGroupProps(nodeGroupProps);
+    }
+
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterNodeGroupDesc), conf));
+
+  }
 
   static Set<String> getNodes(ASTNode node) {
     HashSet<String> setNode = new HashSet<String>();
