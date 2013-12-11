@@ -10078,7 +10078,6 @@ public MUser getMUser(String userName) {
     boolean success = false;
     boolean commited = false;
 
-    LOG.info("---zjw--in addNodeGroup");
     try {
       openTransaction();
       MNodeGroup mng = convertToMNodeGroup(ng);
@@ -10104,7 +10103,6 @@ public MUser getMUser(String userName) {
     boolean success = false;
     boolean commited = false;
 
-    LOG.info("---zqh--in alterNodeGroup");
     try {
       openTransaction();
       MNodeGroup mng;

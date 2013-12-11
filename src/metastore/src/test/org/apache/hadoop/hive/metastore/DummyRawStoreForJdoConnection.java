@@ -1250,6 +1250,12 @@ public class DummyRawStoreForJdoConnection implements RawStore {
     return 0;
   }
 
+  @Override
+  public boolean alterNodeGroup(NodeGroup ng) throws InvalidObjectException, MetaException {
+    // TODO Auto-generated method stub
+    return false;
+  }
+
 }
 
 

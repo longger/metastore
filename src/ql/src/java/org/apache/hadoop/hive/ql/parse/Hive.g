@@ -347,7 +347,8 @@ TOK_CREATESCHEMA;
 TOK_DROPSCHEMA;
 
 TOK_CREATENODEGROUP;
-TOK_ALTERNODEGROUP;
+TOK_ALTER_NODEGROUP_ADD_NODES;
+TOK_ALTER_NODEGROUP_DELETE_NODES;
 TOK_NODEGROUPPROPERTIES;
 TOK_MODIFYNODEGROUP;
 TOK_DROPNODEGROUP;
@@ -705,9 +706,10 @@ alterNodeGroupStatement
         name=Identifier
         nodegroupComment?
         (KW_WITH KW_DBPROPERTIES nodegroupprops=nodegroupProperties)?
-        (KW_ADD KW_NODES nodes=stringLiteralList)?
-    -> ^(TOK_ALTERNODEGROUP $name nodegroupComment? $nodegroupprops? $nodes?)
-    ;
+        ( (add=KW_ADD | delete=KW_DELETE) KW_NODES nodes=stringLiteralList)?
+    -> {$add != null}? ^(TOK_ALTER_NODEGROUP_ADD_NODES $name nodegroupComment? $nodegroupprops? $nodes?)
+    -> ^(TOK_ALTER_NODEGROUP_DELETE_NODES $name nodegroupComment? $nodegroupprops? $nodes?)
+    ;   
     
 nodegroupProperties
 @init { msgs.push("nodegroupproperties"); }

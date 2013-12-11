@@ -606,9 +606,13 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       if (null != createNodeGroupDesc) {
         return createNodeGroup(db, createNodeGroupDesc);
       }
-      AlterNodeGroupDesc alterNodeGroupDesc = work.getAlterNodeGroupDesc();
-      if (null != alterNodeGroupDesc) {
-        return alterNodeGroup(db, alterNodeGroupDesc);
+      AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc = work.getAlterNodeGroupAddNodesDesc();
+      if (null != alterNodeGroupAddNodesDesc) {
+        return alterNodeGroupAddNodes(db, alterNodeGroupAddNodesDesc);
+      }
+      AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc = work.getAlterNodeGroupDeleteNodesDesc();
+      if (null != alterNodeGroupDeleteNodesDesc) {
+        return alterNodeGroupDeleteNodes(db, alterNodeGroupDeleteNodesDesc);
       }
       DropNodeGroupDesc dropNodeGroupDesc = work.getDropNodeGroupDesc();
       if (null != dropNodeGroupDesc) {
@@ -5087,14 +5091,14 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     return 0;
   }
 
-  private int alterNodeGroup(Hive db, AlterNodeGroupDesc alterNodeGroupDesc)throws HiveException {
+  private int alterNodeGroupAddNodes(Hive db, AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc)throws HiveException {
     List<String> ngNames = new ArrayList<String>();
-    ngNames.add(alterNodeGroupDesc.getNodeGroupName());
+    ngNames.add(alterNodeGroupAddNodesDesc.getNodeGroupName());
     List<NodeGroup> ngs = db.listNodeGroups(ngNames);
     NodeGroup nodegroup = ngs.get(0);
     if(null != nodegroup){
       Set<Node> nodes = nodegroup.getNodes();
-      Set<String> nds =  alterNodeGroupDesc.getNodes();
+      Set<String> nds =  alterNodeGroupAddNodesDesc.getNodes();
       Set<String> newNodes = new HashSet<String>();
       for(Node n : nodes){
         newNodes.add(n.getNode_name());
@@ -5102,7 +5106,33 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       newNodes.addAll(nds);
       db.alterNodeGroup(nodegroup,newNodes);
     }else{
-      throw new HiveException("There is no nodegroup named " + alterNodeGroupDesc.getNodeGroupName());
+      throw new HiveException("There is no nodegroup named " + alterNodeGroupAddNodesDesc.getNodeGroupName());
+    }
+    return 0;
+  }
+
+  private int alterNodeGroupDeleteNodes(Hive db, AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc)throws HiveException {
+    List<String> ngNames = new ArrayList<String>();
+    ngNames.add(alterNodeGroupDeleteNodesDesc.getNodeGroupName());
+    List<NodeGroup> ngs = db.listNodeGroups(ngNames);
+    NodeGroup nodegroup = ngs.get(0);
+    if(null != nodegroup){
+      Set<Node> nodes = nodegroup.getNodes();
+      Set<String> nds =  alterNodeGroupDeleteNodesDesc.getNodes();
+      Set<String> newNodes = new HashSet<String>();
+      for(Node n : nodes){
+        newNodes.add(n.getNode_name());
+      }
+      for(String name : nds){
+        if(!newNodes.contains(name)){
+          throw new HiveException("Node : " + name + " is not in this nodegroup.");
+        }
+      }
+
+      newNodes.removeAll(nds);
+      db.alterNodeGroup(nodegroup,newNodes);
+    }else{
+      throw new HiveException("There is no nodegroup named " + alterNodeGroupDeleteNodesDesc.getNodeGroupName());
     }
     return 0;
   }

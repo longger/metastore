@@ -5,11 +5,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * AlterNodeGroupDesc.
+ * AlterNodeGroupAddNodesDesc.
  *
  */
-@Explain(displayName = "Alter NodeGroupDesc")
-public class AlterNodeGroupDesc extends DDLDesc implements Serializable {
+@Explain(displayName = "Alter NodeGroupDesc Add Nodes")
+public class AlterNodeGroupAddNodesDesc extends DDLDesc implements Serializable {
 
     private static final long serialVersionUID = 1L;
     String nodeGroupName;
@@ -21,11 +21,11 @@ public class AlterNodeGroupDesc extends DDLDesc implements Serializable {
      * For serialization only.
      */
 
-    public AlterNodeGroupDesc() {
+    public AlterNodeGroupAddNodesDesc() {
       super();
     }
 
-    public AlterNodeGroupDesc(String nodeGroupName, String comment,
+    public AlterNodeGroupAddNodesDesc(String nodeGroupName, String comment,
         Set<String> nodes) {
       super();
       this.nodeGroupName = nodeGroupName;
@@ -33,7 +33,7 @@ public class AlterNodeGroupDesc extends DDLDesc implements Serializable {
       this.nodes = nodes;
     }
 
-    public AlterNodeGroupDesc(String nodeGroupName) {
+    public AlterNodeGroupAddNodesDesc(String nodeGroupName) {
       this(nodeGroupName, null, null);
     }
 

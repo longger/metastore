@@ -153,7 +153,8 @@ public class DDLWork implements Serializable {
   private DescSchemaDesc descSchemaDesc;
   private ShowSchemaDesc showSchemaDesc;
   private AlterSchemaDesc alterSchDesc;
-  private AlterNodeGroupDesc alterNodeGroupDesc;
+  private AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc;
+  private AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc;
 
 
   public DDLWork() {
@@ -886,9 +887,32 @@ public class DDLWork implements Serializable {
   }
 
   public DDLWork(HashSet<ReadEntity> inputs, HashSet<WriteEntity> outputs,
-      AlterNodeGroupDesc alterNodeGroupDesc) {
+      AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc) {
     this(inputs, outputs);
-    this.alterNodeGroupDesc = alterNodeGroupDesc;
+    this.alterNodeGroupAddNodesDesc = alterNodeGroupAddNodesDesc;
+  }
+
+  public DDLWork(HashSet<ReadEntity> inputs, HashSet<WriteEntity> outputs,
+      AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc) {
+    this(inputs, outputs);
+    this.alterNodeGroupDeleteNodesDesc = alterNodeGroupDeleteNodesDesc;
+  }
+
+  public AlterNodeGroupAddNodesDesc getAlterNodeGroupAddNodesDesc() {
+    return alterNodeGroupAddNodesDesc;
+  }
+
+  public void setAlterNodeGroupAddNodesDesc(AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc) {
+    this.alterNodeGroupAddNodesDesc = alterNodeGroupAddNodesDesc;
+  }
+
+  public AlterNodeGroupDeleteNodesDesc getAlterNodeGroupDeleteNodesDesc() {
+    return alterNodeGroupDeleteNodesDesc;
+  }
+
+  public void setAlterNodeGroupDeleteNodesDesc(
+      AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc) {
+    this.alterNodeGroupDeleteNodesDesc = alterNodeGroupDeleteNodesDesc;
   }
 
   /**
@@ -1953,12 +1977,5 @@ public class DDLWork implements Serializable {
     this.alterSchDesc = alterSchDesc;
   }
 
-  public AlterNodeGroupDesc getAlterNodeGroupDesc() {
-    return alterNodeGroupDesc;
-  }
-
-  public void setAlterNodeGroupDesc(AlterNodeGroupDesc alterNodeGroupDesc) {
-    this.alterNodeGroupDesc = alterNodeGroupDesc;
-  }
 
 }

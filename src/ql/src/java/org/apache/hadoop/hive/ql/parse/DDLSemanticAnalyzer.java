@@ -506,8 +506,11 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     case HiveParser.TOK_CREATENODEGROUP:
       analyzeCreateNodeGroup(ast);
       break;
-    case HiveParser.TOK_ALTERNODEGROUP:
-      analyzeAlterNodeGroup(ast);
+    case HiveParser.TOK_ALTER_NODEGROUP_ADD_NODES:
+      analyzeAlterNodeGroupAddNodes(ast);
+      break;
+    case HiveParser.TOK_ALTER_NODEGROUP_DELETE_NODES:
+      analyzeAlterNodeGroupDeleteNodes(ast);
       break;
     case HiveParser.TOK_MODIFYNODEGROUP:
       analyzeModifyNodeGroup(ast);
@@ -862,7 +865,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
-  private void analyzeAlterNodeGroup(ASTNode ast) throws SemanticException {
+  private void analyzeAlterNodeGroupAddNodes(ASTNode ast) throws SemanticException {
     String nodeGroupName = unescapeIdentifier(ast.getChild(0).getText());
     //boolean ifNotExists = false;
     String nodeGroupcomment = null;
@@ -889,14 +892,28 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       }
     }
 
-    AlterNodeGroupDesc alterNodeGroupDesc =
-        new AlterNodeGroupDesc(nodeGroupName, nodeGroupcomment, nodes);
+    AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc =
+        new AlterNodeGroupAddNodesDesc(nodeGroupName, nodeGroupcomment, nodes);
     if (nodeGroupProps != null) {
-      alterNodeGroupDesc.setNodeGroupProps(nodeGroupProps);
+      alterNodeGroupAddNodesDesc.setNodeGroupProps(nodeGroupProps);
     }
 
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
-        alterNodeGroupDesc), conf));
+        alterNodeGroupAddNodesDesc), conf));
+
+  }
+
+  private void analyzeAlterNodeGroupDeleteNodes(ASTNode ast) throws SemanticException {
+    String nodeGroupName = unescapeIdentifier(ast.getChild(0).getText());
+    Set<String> nodes = null;
+    ASTNode childNode = (ASTNode) ast.getChild(1);
+    nodes = DDLSemanticAnalyzer.getNodes((ASTNode) childNode);
+
+    AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc =
+        new AlterNodeGroupDeleteNodesDesc(nodeGroupName,nodes);
+
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterNodeGroupDeleteNodesDesc), conf));
 
   }
 
