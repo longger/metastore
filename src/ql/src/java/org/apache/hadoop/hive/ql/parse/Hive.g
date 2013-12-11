@@ -383,7 +383,7 @@ TOK_DROPROLEASSIGNMENT;
 TOK_SHOWROLEASSIGNMENT;
 TOK_ALTERTABLE_FILESPLIT;
 TOK_ALTERTABLE_ADD_DISTRIBUTION;
-TOK_ALTERTABLE_REPLACE_DISTRIBUTION;
+TOK_ALTERTABLE_DELETE_DISTRIBUTION;
 TOK_SHOWSCHEMAS;
 TOK_DESCSCHEMA;
 
@@ -1264,9 +1264,9 @@ alterStatementSuffixFileSplit
 alterStatementSuffixDistribution
 @init { msgs.push("alter table Distribution"); }
 @after { msgs.pop(); }
-    : Identifier (add=KW_ADD | replace=KW_REPLACE) tableDistribution
+    : Identifier (add=KW_ADD | delete=KW_DELETE) tableDistribution
     ->{$add != null}?^(TOK_ALTERTABLE_ADD_DISTRIBUTION Identifier tableDistribution)
-    -> ^(TOK_ALTERTABLE_REPLACE_DISTRIBUTION Identifier tableDistribution)
+    -> ^(TOK_ALTERTABLE_DELETE_DISTRIBUTION Identifier tableDistribution)
     ;
     
 alterStatementSuffixRenameCol

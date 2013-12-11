@@ -262,8 +262,8 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     case HiveParser.TOK_ALTERTABLE_ADD_DISTRIBUTION:
       analyzeAlterTableDistribution(ast, AlterTableTypes.ADDNODEGROUP);
       break;
-    case HiveParser.TOK_ALTERTABLE_REPLACE_DISTRIBUTION:
-      analyzeAlterTableDistribution(ast, AlterTableTypes.REPLACENODEGROUP);
+    case HiveParser.TOK_ALTERTABLE_DELETE_DISTRIBUTION:
+      analyzeAlterTableDistribution(ast, AlterTableTypes.DELETENODEGROUP);
       break;
     case HiveParser.TOK_ALTERTABLE_TOUCH:
       analyzeAlterTableTouch(ast);
@@ -2276,7 +2276,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       case RENAME:
       case ALTERFILESPLIT:
       case ADDNODEGROUP:
-      case REPLACENODEGROUP:
+      case DELETENODEGROUP:
         // allow this form
         break;
       default:

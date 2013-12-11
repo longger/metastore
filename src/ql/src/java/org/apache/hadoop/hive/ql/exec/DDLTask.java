@@ -3953,6 +3953,11 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
         tbl.getNodeGroups().add(ng);
       }
       tbl.getTTable().setNodeGroups(tbl.getNodeGroups());
+    } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.DELETENODEGROUP) {
+      List<String> newNgNames = alterTbl.getNodeGroupNames();
+      List<NodeGroup> newNgroup = db.listNodeGroups(newNgNames);
+        tbl.getNodeGroups().removeAll(newNgroup);
+      tbl.getTTable().setNodeGroups(tbl.getNodeGroups());
     } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.RENAMECOLUMN) {
       List<FieldSchema> oldCols = tbl.getCols();
       List<FieldSchema> newCols = new ArrayList<FieldSchema>();

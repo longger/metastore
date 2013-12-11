@@ -276,7 +276,7 @@ public final class SemanticAnalyzerFactory {
       case HiveParser.TOK_DESCSCHEMA:
       case HiveParser.TOK_ALTERTABLE_FILESPLIT:
       case HiveParser.TOK_ALTERTABLE_ADD_DISTRIBUTION:
-      case HiveParser.TOK_ALTERTABLE_REPLACE_DISTRIBUTION:
+      case HiveParser.TOK_ALTERTABLE_DELETE_DISTRIBUTION:
       case HiveParser.TOK_ALTER_NODEGROUP_ADD_NODES:
       case HiveParser.TOK_ALTER_NODEGROUP_DELETE_NODES:
 
