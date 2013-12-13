@@ -217,13 +217,19 @@ public class MSGType {
    */
   public static final int MSG_NEW_NODEGROUP = 3001;
   /**
-   * 修改节点组
+   * 修改节点组（暂时没用）
+   *
    */
   public static final int MSG_MODIFY_NODEGROUP = 3002;
   /**
    * 删除节点组
    */
   public static final int MSG_DEL_NODEGROUP = 3003;
+
+  /**
+   * 修改节点组
+   */
+  public static final int MSG_ALTER_NODEGROUP = 3004;
   /**
    * 创建新文件
    */

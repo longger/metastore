@@ -926,6 +926,13 @@ public class MSGFactory {
           params.put("old_nodegroup_name", msg.getOld_object_params().get("old_nodegroup_name"));
         }
         break;
+      case MSGType.MSG_ALTER_NODEGROUP:
+        //修改节点组
+
+        if (msg.getOld_object_params().containsKey("new_nodes")) {
+          params.put("new_nodes", msg.getOld_object_params().get("new_nodes"));
+        }
+        break;
 
       case MSGType.MSG_CREATE_FILE:
         //新建文件

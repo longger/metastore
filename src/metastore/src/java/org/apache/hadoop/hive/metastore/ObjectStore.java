@@ -10112,16 +10112,20 @@ public MUser getMUser(String userName) {
         throw new MetaException("There in no Nodegroup named " + ng.getNode_group_name());
       }
       Set<MNode> mNode = new HashSet<MNode>();
+      String new_nodes = "";
       for(Node node : ng.getNodes()){
         MNode mnode = getMNode(node.getNode_name());
         mNode.add(mnode);
+        new_nodes = new_nodes+node.getNode_name()+";";
       }
       mng.setNodes(mNode);
       pm.makePersistent(mng);
 //      pm.makePersistentAll(mng.getNodes());
       commited = commitTransaction();
+      HashMap<String,Object> params = new HashMap<String,Object>();
+      params.put("new_nodes", new_nodes.substring(0, new_nodes.length()-1));
       if(commited) {
-        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_NODEGROUP,-1,-1,pm,mng,null));
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_ALTER_NODEGROUP,-1,-1,pm,mng,params));
       }
       success = true;
     } finally {
