@@ -67,6 +67,7 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual bool addNodeGroupAssignment(const NodeGroup& ng, const std::string& dbName) = 0;
   virtual bool deleteNodeGroupAssignment(const NodeGroup& ng, const std::string& dbName) = 0;
   virtual void pingPong(std::string& _return, const std::string& str) = 0;
+  virtual bool alterNodeGroup(const NodeGroup& ng) = 0;
   virtual void create_database(const Database& database) = 0;
   virtual void get_database(Database& _return, const std::string& name) = 0;
   virtual void drop_database(const std::string& name, const bool deleteData, const bool cascade) = 0;
@@ -419,6 +420,10 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   }
   void pingPong(std::string& /* _return */, const std::string& /* str */) {
     return;
+  }
+  bool alterNodeGroup(const NodeGroup& /* ng */) {
+    bool _return = false;
+    return _return;
   }
   void create_database(const Database& /* database */) {
     return;
@@ -7232,6 +7237,134 @@ class ThriftHiveMetastore_pingPong_presult {
   MetaException o1;
 
   _ThriftHiveMetastore_pingPong_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _ThriftHiveMetastore_alterNodeGroup_args__isset {
+  _ThriftHiveMetastore_alterNodeGroup_args__isset() : ng(false) {}
+  bool ng;
+} _ThriftHiveMetastore_alterNodeGroup_args__isset;
+
+class ThriftHiveMetastore_alterNodeGroup_args {
+ public:
+
+  ThriftHiveMetastore_alterNodeGroup_args() {
+  }
+
+  virtual ~ThriftHiveMetastore_alterNodeGroup_args() throw() {}
+
+  NodeGroup ng;
+
+  _ThriftHiveMetastore_alterNodeGroup_args__isset __isset;
+
+  void __set_ng(const NodeGroup& val) {
+    ng = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_alterNodeGroup_args & rhs) const
+  {
+    if (!(ng == rhs.ng))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_alterNodeGroup_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_alterNodeGroup_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_alterNodeGroup_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_alterNodeGroup_pargs() throw() {}
+
+  const NodeGroup* ng;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_alterNodeGroup_result__isset {
+  _ThriftHiveMetastore_alterNodeGroup_result__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_alterNodeGroup_result__isset;
+
+class ThriftHiveMetastore_alterNodeGroup_result {
+ public:
+
+  ThriftHiveMetastore_alterNodeGroup_result() : success(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_alterNodeGroup_result() throw() {}
+
+  bool success;
+  AlreadyExistsException o1;
+  MetaException o2;
+
+  _ThriftHiveMetastore_alterNodeGroup_result__isset __isset;
+
+  void __set_success(const bool val) {
+    success = val;
+  }
+
+  void __set_o1(const AlreadyExistsException& val) {
+    o1 = val;
+  }
+
+  void __set_o2(const MetaException& val) {
+    o2 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_alterNodeGroup_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    if (!(o2 == rhs.o2))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_alterNodeGroup_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_alterNodeGroup_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_alterNodeGroup_presult__isset {
+  _ThriftHiveMetastore_alterNodeGroup_presult__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_alterNodeGroup_presult__isset;
+
+class ThriftHiveMetastore_alterNodeGroup_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_alterNodeGroup_presult() throw() {}
+
+  bool* success;
+  AlreadyExistsException o1;
+  MetaException o2;
+
+  _ThriftHiveMetastore_alterNodeGroup_presult__isset __isset;
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
 
@@ -26601,6 +26734,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void pingPong(std::string& _return, const std::string& str);
   void send_pingPong(const std::string& str);
   void recv_pingPong(std::string& _return);
+  bool alterNodeGroup(const NodeGroup& ng);
+  void send_alterNodeGroup(const NodeGroup& ng);
+  bool recv_alterNodeGroup();
   void create_database(const Database& database);
   void send_create_database(const Database& database);
   void recv_create_database();
@@ -27088,6 +27224,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_addNodeGroupAssignment(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_deleteNodeGroupAssignment(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_pingPong(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_alterNodeGroup(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_create_database(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_get_database(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_drop_database(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -27285,6 +27422,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["addNodeGroupAssignment"] = &ThriftHiveMetastoreProcessor::process_addNodeGroupAssignment;
     processMap_["deleteNodeGroupAssignment"] = &ThriftHiveMetastoreProcessor::process_deleteNodeGroupAssignment;
     processMap_["pingPong"] = &ThriftHiveMetastoreProcessor::process_pingPong;
+    processMap_["alterNodeGroup"] = &ThriftHiveMetastoreProcessor::process_alterNodeGroup;
     processMap_["create_database"] = &ThriftHiveMetastoreProcessor::process_create_database;
     processMap_["get_database"] = &ThriftHiveMetastoreProcessor::process_get_database;
     processMap_["drop_database"] = &ThriftHiveMetastoreProcessor::process_drop_database;
@@ -27935,6 +28073,15 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
     }
     ifaces_[i]->pingPong(_return, str);
     return;
+  }
+
+  bool alterNodeGroup(const NodeGroup& ng) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->alterNodeGroup(ng);
+    }
+    return ifaces_[i]->alterNodeGroup(ng);
   }
 
   void create_database(const Database& database) {

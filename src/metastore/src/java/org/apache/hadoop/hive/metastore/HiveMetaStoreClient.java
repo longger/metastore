@@ -2127,6 +2127,12 @@ public boolean authentication(String user_name, String passwd)
   }
 
   @Override
+  public boolean alterNodeGroup(NodeGroup ng) throws AlreadyExistsException, MetaException,
+      TException {
+    return client.alterNodeGroup(ng);
+  }
+
+  @Override
   public boolean modifyNodeGroup(String schemaName, NodeGroup ng) throws MetaException, TException {
     return client.modifyNodeGroup(schemaName, ng);
   }

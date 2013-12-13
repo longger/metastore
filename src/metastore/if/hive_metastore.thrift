@@ -670,6 +670,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
 //end up with cry
 
+  bool alterNodeGroup(1:NodeGroup ng) throws (1:AlreadyExistsException o1, 2:MetaException o2)
+
   void create_database(1:Database database) throws(1:AlreadyExistsException o1, 2:InvalidObjectException o2, 3:MetaException o3)
   Database get_database(1:string name) throws(1:NoSuchObjectException o1, 2:MetaException o2)
   void drop_database(1:string name, 2:bool deleteData, 3:bool cascade) throws(1:NoSuchObjectException o1, 2:InvalidOperationException o2, 3:MetaException o3)

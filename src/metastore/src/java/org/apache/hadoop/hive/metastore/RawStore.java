@@ -601,6 +601,9 @@ public interface RawStore extends Configurable {
   public abstract  boolean addNodeGroup(NodeGroup ng) throws InvalidObjectException, MetaException;
   //新增节点组
 
+  public abstract  boolean alterNodeGroup(NodeGroup ng) throws InvalidObjectException, MetaException;
+  //往节点组新增节点
+
   public abstract  boolean modifyNodeGroup(String ngName,NodeGroup ng) throws InvalidObjectException, MetaException;
   //修改节点组
 

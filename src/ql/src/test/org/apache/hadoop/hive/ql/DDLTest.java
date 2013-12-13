@@ -42,7 +42,9 @@ public class DDLTest {
     //String sql = "alter schema tb set schemeproperties('ff'='FF')";
 
     //String sql = "drop schema z_q_h"
-    String sql = "grant all on database dbzqh to user root";
+    //String sql = "grant all on database dbzqh to user root";
+    //String sql = "alter table t_cdr add distribute on nodegroup 'XX'";
+    String sql = "alter nodegroup zz delete nodes 'NODE34'";
     Driver dr = new Driver(new HiveConf());
     try {
       dr.run(sql);

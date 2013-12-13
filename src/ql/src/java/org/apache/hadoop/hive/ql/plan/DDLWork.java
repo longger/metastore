@@ -153,6 +153,8 @@ public class DDLWork implements Serializable {
   private DescSchemaDesc descSchemaDesc;
   private ShowSchemaDesc showSchemaDesc;
   private AlterSchemaDesc alterSchDesc;
+  private AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc;
+  private AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc;
 
 
   public DDLWork() {
@@ -881,7 +883,37 @@ public class DDLWork implements Serializable {
   public DDLWork(HashSet<ReadEntity> inputs, HashSet<WriteEntity> outputs,
       AlterSchemaDesc alterSchDesc) {
     this(inputs, outputs);
-    this.alterSchDesc = alterSchDesc;  }
+    this.alterSchDesc = alterSchDesc;
+  }
+
+  public DDLWork(HashSet<ReadEntity> inputs, HashSet<WriteEntity> outputs,
+      AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc) {
+    this(inputs, outputs);
+    this.alterNodeGroupAddNodesDesc = alterNodeGroupAddNodesDesc;
+  }
+
+  public DDLWork(HashSet<ReadEntity> inputs, HashSet<WriteEntity> outputs,
+      AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc) {
+    this(inputs, outputs);
+    this.alterNodeGroupDeleteNodesDesc = alterNodeGroupDeleteNodesDesc;
+  }
+
+  public AlterNodeGroupAddNodesDesc getAlterNodeGroupAddNodesDesc() {
+    return alterNodeGroupAddNodesDesc;
+  }
+
+  public void setAlterNodeGroupAddNodesDesc(AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc) {
+    this.alterNodeGroupAddNodesDesc = alterNodeGroupAddNodesDesc;
+  }
+
+  public AlterNodeGroupDeleteNodesDesc getAlterNodeGroupDeleteNodesDesc() {
+    return alterNodeGroupDeleteNodesDesc;
+  }
+
+  public void setAlterNodeGroupDeleteNodesDesc(
+      AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc) {
+    this.alterNodeGroupDeleteNodesDesc = alterNodeGroupDeleteNodesDesc;
+  }
 
   /**
    * @return Create Database descriptor
@@ -1944,5 +1976,6 @@ public class DDLWork implements Serializable {
   public void setAlterSchDesc(AlterSchemaDesc alterSchDesc) {
     this.alterSchDesc = alterSchDesc;
   }
+
 
 }

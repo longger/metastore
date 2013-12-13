@@ -4835,6 +4835,13 @@ public class ObjectStore implements RawStore, Configurable {
       oldt.setTableName(newt.getTableName().toLowerCase());
       oldt.setParameters(newt.getParameters());
       oldt.setOwner(newt.getOwner());
+      if(null != newt.getGroupDistribute()){
+        LOG.info("##############null != newt.getGroupDistribute()");
+        for(MNodeGroup mng :newt.getGroupDistribute()){
+          LOG.info("##############ZQH#############OBJECTSTORE" + mng.getNode_group_name());
+        }
+        oldt.setGroupDistribute(newt.getGroupDistribute());
+      }
 
       // Fully copy over the contents of the new SD into the old SD,
       // so we don't create an extra SD in the metastore db that has no references.
@@ -4901,7 +4908,6 @@ public class ObjectStore implements RawStore, Configurable {
         altSplitKeyParams.put("version", cur_version);
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_SPLITKEYS,db_id,-1, pm, oldt,altSplitKeyParams));
       }
-
       oldt.setTableType(newt.getTableType());
       oldt.setLastAccessTime(newt.getLastAccessTime());
       oldt.setViewOriginalText(newt.getViewOriginalText());
@@ -5367,7 +5373,7 @@ public class ObjectStore implements RawStore, Configurable {
       }
 
       Query query = pm.newQuery(MIndex.class,
-        "origTable.tableName == t1 && origTable.database.name == t2 && indexName == t3");
+        "origTable.tableName == t1 && origTable.database.name == t2 && (indexName.toUpperCase() == t3 || indexName.toLowerCase() == t3)");
       query.declareParameters("java.lang.String t1, java.lang.String t2, java.lang.String t3");
       query.setUnique(true);
       midx = (MIndex) query.execute(originalTblName, dbName, indexName);
@@ -10107,7 +10113,6 @@ public MUser getMUser(String userName) {
     boolean success = false;
     boolean commited = false;
 
-    LOG.info("---zjw--in addNodeGroup");
     try {
       openTransaction();
       MNodeGroup mng = convertToMNodeGroup(ng);
@@ -10117,6 +10122,41 @@ public MUser getMUser(String userName) {
       commited = commitTransaction();
       if(commited) {
         MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODEGROUP,-1,-1,pm,mng,null));
+      }
+      success = true;
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    return success;
+  }
+
+  @Override
+  public boolean alterNodeGroup(NodeGroup ng) throws InvalidObjectException, MetaException {
+
+    boolean success = false;
+    boolean commited = false;
+
+    try {
+      openTransaction();
+      MNodeGroup mng;
+      try {
+        mng = this.getMNodeGroup(ng.getNode_group_name());
+      } catch (NoSuchObjectException e) {
+        throw new MetaException("There in no Nodegroup named " + ng.getNode_group_name());
+      }
+      Set<MNode> mNode = new HashSet<MNode>();
+      for(Node node : ng.getNodes()){
+        MNode mnode = getMNode(node.getNode_name());
+        mNode.add(mnode);
+      }
+      mng.setNodes(mNode);
+      pm.makePersistent(mng);
+//      pm.makePersistentAll(mng.getNodes());
+      commited = commitTransaction();
+      if(commited) {
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_NODEGROUP,-1,-1,pm,mng,null));
       }
       success = true;
     } finally {
@@ -10295,7 +10335,7 @@ public MUser getMUser(String userName) {
     LOG.debug("getMnodeGroup groupName:["+nodegroupName+"]");
     try {
       openTransaction();
-      nodegroupName = nodegroupName.toLowerCase().trim();
+      nodegroupName = nodegroupName.trim();//.toLowerCase()
       Query query = pm.newQuery(MNodeGroup.class, "node_group_name == nodegroupName");
       query.declareParameters("java.lang.String nodegroupName");
       query.setUnique(true);

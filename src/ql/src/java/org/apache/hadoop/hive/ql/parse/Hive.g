@@ -347,6 +347,8 @@ TOK_CREATESCHEMA;
 TOK_DROPSCHEMA;
 
 TOK_CREATENODEGROUP;
+TOK_ALTER_NODEGROUP_ADD_NODES;
+TOK_ALTER_NODEGROUP_DELETE_NODES;
 TOK_NODEGROUPPROPERTIES;
 TOK_MODIFYNODEGROUP;
 TOK_DROPNODEGROUP;
@@ -380,6 +382,8 @@ TOK_CREATEROLEASSIGNMENT;
 TOK_DROPROLEASSIGNMENT;
 TOK_SHOWROLEASSIGNMENT;
 TOK_ALTERTABLE_FILESPLIT;
+TOK_ALTERTABLE_ADD_DISTRIBUTION;
+TOK_ALTERTABLE_DELETE_DISTRIBUTION;
 TOK_SHOWSCHEMAS;
 TOK_DESCSCHEMA;
 
@@ -512,6 +516,7 @@ ddlStatement
     | showRoleAssignment
     
     | createNodeGroupStatement
+    | alterNodeGroupStatement
     | modifyNodeGroupStatement
     | dropNodeGroupStatement
     
@@ -694,6 +699,18 @@ createNodeGroupStatement
     -> ^(TOK_CREATENODEGROUP $name ifNotExists?  nodegroupComment? $nodegroupprops? $nodes?)
     ;
 
+alterNodeGroupStatement
+@init { msgs.push("alter nodegroup statement"); }
+@after { msgs.pop(); }
+    : KW_ALTER KW_NODEGROUP
+        name=Identifier
+        nodegroupComment?
+        (KW_WITH KW_DBPROPERTIES nodegroupprops=nodegroupProperties)?
+        ( (add=KW_ADD | delete=KW_DELETE) KW_NODES nodes=stringLiteralList)?
+    -> {$add != null}? ^(TOK_ALTER_NODEGROUP_ADD_NODES $name nodegroupComment? $nodegroupprops? $nodes?)
+    -> ^(TOK_ALTER_NODEGROUP_DELETE_NODES $name nodegroupComment? $nodegroupprops? $nodes?)
+    ;   
+    
 nodegroupProperties
 @init { msgs.push("nodegroupproperties"); }
 @after { msgs.pop(); }
@@ -757,7 +774,7 @@ busitypeComment
 addNodeStatement
 @init { msgs.push("add node statement"); }
 @after { msgs.pop(); }
-    : KW_CREATE KW_NODE LPAREN name=Identifier COMMA status=Identifier COMMA ip=Identifier RPAREN 
+    : KW_CREATE KW_NODE LPAREN name=Identifier COMMA status=StringLiteral COMMA ip=StringLiteral RPAREN 
         (KW_WITH KW_NODEPROPERTIES nodeprops=nodeProperties)?
     -> ^(TOK_ADDNODE $name $status $ip $nodeprops?)
         ;
@@ -1091,6 +1108,7 @@ alterTableStatementSuffix
     | alterStatementSuffixAddCol
     | alterStatementSuffixRenameCol
     | alterStatementSuffixFileSplit
+    | alterStatementSuffixDistribution
     | alterStatementSuffixDropPartitions
     | alterStatementSuffixAddPartitions
     | alterStatementSuffixModiFyPartitionDropFiles
@@ -1241,6 +1259,14 @@ alterStatementSuffixFileSplit
 @after { msgs.pop(); }
     : Identifier fileSplit
     ->^(TOK_ALTERTABLE_FILESPLIT Identifier fileSplit)
+    ;
+    
+alterStatementSuffixDistribution
+@init { msgs.push("alter table Distribution"); }
+@after { msgs.pop(); }
+    : Identifier (add=KW_ADD | delete=KW_DELETE) tableDistribution
+    ->{$add != null}?^(TOK_ALTERTABLE_ADD_DISTRIBUTION Identifier tableDistribution)
+    -> ^(TOK_ALTERTABLE_DELETE_DISTRIBUTION Identifier tableDistribution)
     ;
     
 alterStatementSuffixRenameCol

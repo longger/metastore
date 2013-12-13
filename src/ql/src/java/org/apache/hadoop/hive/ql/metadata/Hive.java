@@ -3062,6 +3062,23 @@ public class Hive {
       }
   }
 
+  public void alterNodeGroup(NodeGroup ngs, Set<String> nodeNames) throws HiveException {
+    try{
+      Set<Node> nds = new HashSet<Node>();
+      for(String nodeName : nodeNames){
+        Node node = getMSC().get_node(nodeName);
+        if(node == null){
+          throw new HiveException("Not valid node:["+nodeName+"]");
+        }
+        nds.add(node);
+      }
+      ngs.setNodes(nds);
+      getMSC().alterNodeGroup(ngs);
+    } catch (Exception e) {
+      throw new HiveException(e);
+    }
+  }
+
   public void dropNodeGroup(NodeGroups ngs) throws HiveException {
     List<String> ngNames = new ArrayList<String>();
     ngNames.add(ngs.getNode_group_name());

@@ -37,6 +37,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +74,7 @@ import org.apache.hadoop.hive.metastore.api.InvalidOperationException;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Node;
+import org.apache.hadoop.hive.metastore.api.NodeGroup;
 import org.apache.hadoop.hive.metastore.api.Order;
 import org.apache.hadoop.hive.metastore.api.PrincipalType;
 import org.apache.hadoop.hive.metastore.api.PrivilegeBag;
@@ -603,6 +605,14 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
       CreateNodeGroupDesc createNodeGroupDesc = work.getCreateNodeGroupDesc();
       if (null != createNodeGroupDesc) {
         return createNodeGroup(db, createNodeGroupDesc);
+      }
+      AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc = work.getAlterNodeGroupAddNodesDesc();
+      if (null != alterNodeGroupAddNodesDesc) {
+        return alterNodeGroupAddNodes(db, alterNodeGroupAddNodesDesc);
+      }
+      AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc = work.getAlterNodeGroupDeleteNodesDesc();
+      if (null != alterNodeGroupDeleteNodesDesc) {
+        return alterNodeGroupDeleteNodes(db, alterNodeGroupDeleteNodesDesc);
       }
       DropNodeGroupDesc dropNodeGroupDesc = work.getDropNodeGroupDesc();
       if (null != dropNodeGroupDesc) {
@@ -3878,7 +3888,7 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
   private int alterTable(Hive db, AlterTableDesc alterTbl) throws HiveException {
     // alter the table
     try{
-      LOG.info("=======================1");
+    LOG.info("=======================1");
     Table tbl = db.getTable(alterTbl.getOldName());
     tbl.getFileSplitKeys().clear();
     Partition part = null;
@@ -3902,47 +3912,11 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     Table oldTbl = tbl.copy();
 
     if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.RENAME) {
-      LOG.info("=======================2 RENAME");
       tbl.setTableName(alterTbl.getNewName());
     } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ALTERFILESPLIT) {
-
-
-      //List<PartitionInfo> newpis = PartitionInfo.getPartitionInfo(newCols);
-    //  int cur_version = 0;
-//      List<PartitionInfo> new_save_pis = new ArrayList<PartitionInfo>();
-//      List<FieldSchema> allSplitFields = alterTbl.getFileSplitCols();
       List<FieldSchema> newCols = alterTbl.getFileSplitCols();
-//      List<FieldSchema> oldCols = oldTbl.getFileSplitKeys();
-//      List<PartitionInfo> old_pis = PartitionInfo.getPartitionInfo(oldCols);
-//
-//      if (old_pis != null) {
-//        int i=0;
-//        for(PartitionInfo pif : old_pis){//get max
-//          if(pif.getP_version()>cur_version){
-//            cur_version = pif.getP_version();
-//            allSplitFields.add(oldCols.get(i++));
-//
-//          }
-//        }
-//      }
-//      cur_version++;
-
-//      List<PartitionInfo> newPis =  PartitionInfo.getPartitionInfo(alterTbl.getFileSplitCols());
-//      if (newPis != null) {
-//        int i=0;
-//        for (PartitionInfo pif : newPis) {
-//          pif.setP_version(cur_version);
-//          newCols.get(i).setVersion(cur_version);
-//          newCols.get(i).setComment(pif.toJson());
-//          allSplitFields.add(newCols.get(i));
-//          i++;
-//        }
-//      }
-//      tbl.setFileSplitKeys(allSplitFields);
       tbl.setFileSplitKeys(newCols);
-
-    }else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ADDCOLS) {
-      LOG.info("=======================23 ADDCOLS");
+    } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ADDCOLS) {
       List<FieldSchema> newCols = alterTbl.getNewCols();
       List<FieldSchema> oldCols = tbl.getCols();
       if (tbl.getSerializationLib().equals(
@@ -3972,6 +3946,18 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
         }
         tbl.getTTable().getSd().setCols(oldCols);
       }
+    } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.ADDNODEGROUP) {
+      List<String> newNgNames = alterTbl.getNodeGroupNames();
+      List<NodeGroup> newNgroup = db.listNodeGroups(newNgNames);
+      for(NodeGroup ng : newNgroup){
+        tbl.getNodeGroups().add(ng);
+      }
+      tbl.getTTable().setNodeGroups(tbl.getNodeGroups());
+    } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.DELETENODEGROUP) {
+      List<String> newNgNames = alterTbl.getNodeGroupNames();
+      List<NodeGroup> newNgroup = db.listNodeGroups(newNgNames);
+        tbl.getNodeGroups().removeAll(newNgroup);
+      tbl.getTTable().setNodeGroups(tbl.getNodeGroups());
     } else if (alterTbl.getOp() == AlterTableDesc.AlterTableTypes.RENAMECOLUMN) {
       List<FieldSchema> oldCols = tbl.getCols();
       List<FieldSchema> newCols = new ArrayList<FieldSchema>();
@@ -4217,7 +4203,7 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     } else {
       LOG.info("=======================4 else");
       formatter.consoleError(console,
-                             "Unsupported Alter commnad",
+                             "Unsupported Alter command",
                              formatter.ERROR);
       return 1;
     }
@@ -5107,6 +5093,52 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     NodeGroups ng = new NodeGroups(createNodeGroupDesc.getNodeGroupName(),
         createNodeGroupDesc.getComment(),"ONLINE",createNodeGroupDesc.getNodes());
     db.createNodeGroup(ng);
+    return 0;
+  }
+
+  private int alterNodeGroupAddNodes(Hive db, AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc)throws HiveException {
+    List<String> ngNames = new ArrayList<String>();
+    ngNames.add(alterNodeGroupAddNodesDesc.getNodeGroupName());
+    List<NodeGroup> ngs = db.listNodeGroups(ngNames);
+    NodeGroup nodegroup = ngs.get(0);
+    if(null != nodegroup){
+      Set<Node> nodes = nodegroup.getNodes();
+      Set<String> nds =  alterNodeGroupAddNodesDesc.getNodes();
+      Set<String> newNodes = new HashSet<String>();
+      for(Node n : nodes){
+        newNodes.add(n.getNode_name());
+      }
+      newNodes.addAll(nds);
+      db.alterNodeGroup(nodegroup,newNodes);
+    }else{
+      throw new HiveException("There is no nodegroup named " + alterNodeGroupAddNodesDesc.getNodeGroupName());
+    }
+    return 0;
+  }
+
+  private int alterNodeGroupDeleteNodes(Hive db, AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc)throws HiveException {
+    List<String> ngNames = new ArrayList<String>();
+    ngNames.add(alterNodeGroupDeleteNodesDesc.getNodeGroupName());
+    List<NodeGroup> ngs = db.listNodeGroups(ngNames);
+    NodeGroup nodegroup = ngs.get(0);
+    if(null != nodegroup){
+      Set<Node> nodes = nodegroup.getNodes();
+      Set<String> nds =  alterNodeGroupDeleteNodesDesc.getNodes();
+      Set<String> newNodes = new HashSet<String>();
+      for(Node n : nodes){
+        newNodes.add(n.getNode_name());
+      }
+      for(String name : nds){
+        if(!newNodes.contains(name)){
+          throw new HiveException("Node : " + name + " is not in this nodegroup.");
+        }
+      }
+
+      newNodes.removeAll(nds);
+      db.alterNodeGroup(nodegroup,newNodes);
+    }else{
+      throw new HiveException("There is no nodegroup named " + alterNodeGroupDeleteNodesDesc.getNodeGroupName());
+    }
     return 0;
   }
 

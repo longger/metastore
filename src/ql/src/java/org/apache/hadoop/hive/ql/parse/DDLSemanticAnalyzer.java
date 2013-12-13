@@ -259,6 +259,12 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     case HiveParser.TOK_ALTERTABLE_FILESPLIT:
       analyzeAlterTableFileSplit(ast, AlterTableTypes.ALTERFILESPLIT);
       break;
+    case HiveParser.TOK_ALTERTABLE_ADD_DISTRIBUTION:
+      analyzeAlterTableDistribution(ast, AlterTableTypes.ADDNODEGROUP);
+      break;
+    case HiveParser.TOK_ALTERTABLE_DELETE_DISTRIBUTION:
+      analyzeAlterTableDistribution(ast, AlterTableTypes.DELETENODEGROUP);
+      break;
     case HiveParser.TOK_ALTERTABLE_TOUCH:
       analyzeAlterTableTouch(ast);
       break;
@@ -499,6 +505,12 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       break;
     case HiveParser.TOK_CREATENODEGROUP:
       analyzeCreateNodeGroup(ast);
+      break;
+    case HiveParser.TOK_ALTER_NODEGROUP_ADD_NODES:
+      analyzeAlterNodeGroupAddNodes(ast);
+      break;
+    case HiveParser.TOK_ALTER_NODEGROUP_DELETE_NODES:
+      analyzeAlterNodeGroupDeleteNodes(ast);
       break;
     case HiveParser.TOK_MODIFYNODEGROUP:
       analyzeModifyNodeGroup(ast);
@@ -853,6 +865,57 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
+  private void analyzeAlterNodeGroupAddNodes(ASTNode ast) throws SemanticException {
+    String nodeGroupName = unescapeIdentifier(ast.getChild(0).getText());
+    //boolean ifNotExists = false;
+    String nodeGroupcomment = null;
+    Map<String, String> nodeGroupProps = null;
+    Set<String> nodes = null;
+
+    for (int i = 1; i < ast.getChildCount(); i++) {
+      ASTNode childNode = (ASTNode) ast.getChild(i);
+      switch (childNode.getToken().getType()) {
+      /*case HiveParser.TOK_IFNOTEXISTS:
+        ifNotExists = true;
+        break;*/
+      case HiveParser.TOK_NODEGROUPCOMMENT:
+        nodeGroupcomment = unescapeSQLString(childNode.getChild(0).getText());
+        break;
+      case HiveParser.TOK_NODEGROUPPROPERTIES:
+        nodeGroupProps = DDLSemanticAnalyzer.getProps((ASTNode) childNode.getChild(0));
+        break;
+      case HiveParser.TOK_STRINGLITERALLIST:
+        nodes = DDLSemanticAnalyzer.getNodes((ASTNode) childNode);
+        break;
+      default:
+        throw new SemanticException("Unrecognized token in ALTER NODEGROUP statement");
+      }
+    }
+
+    AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc =
+        new AlterNodeGroupAddNodesDesc(nodeGroupName, nodeGroupcomment, nodes);
+    if (nodeGroupProps != null) {
+      alterNodeGroupAddNodesDesc.setNodeGroupProps(nodeGroupProps);
+    }
+
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterNodeGroupAddNodesDesc), conf));
+
+  }
+
+  private void analyzeAlterNodeGroupDeleteNodes(ASTNode ast) throws SemanticException {
+    String nodeGroupName = unescapeIdentifier(ast.getChild(0).getText());
+    Set<String> nodes = null;
+    ASTNode childNode = (ASTNode) ast.getChild(1);
+    nodes = DDLSemanticAnalyzer.getNodes((ASTNode) childNode);
+
+    AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc =
+        new AlterNodeGroupDeleteNodesDesc(nodeGroupName,nodes);
+
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterNodeGroupDeleteNodesDesc), conf));
+
+  }
 
   static Set<String> getNodes(ASTNode node) {
     HashSet<String> setNode = new HashSet<String>();
@@ -1227,7 +1290,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
-  private void analyzeDropNode(ASTNode ast) {
+  private void analyzeDropNode(ASTNode ast) throws SemanticException {
     String nodeName = unescapeIdentifier(ast.getChild(0).getText());
     DropNodeDesc dropNodeDesc = new DropNodeDesc(nodeName);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
@@ -1235,11 +1298,19 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
-  private void analyzeAddNode(ASTNode ast) {
+  private void analyzeAddNode(ASTNode ast) throws SemanticException {
     String nodeName = unescapeIdentifier(ast.getChild(0).getText());
-    String status_str = unescapeIdentifier(ast.getChild(1).getText());
-    Integer status = Integer.parseInt(status_str);
-    String ip = unescapeIdentifier(ast.getChild(2).getText());
+    String status_str = unescapeSQLString(ast.getChild(1).getText());
+    String ip = unescapeSQLString(ast.getChild(2).getText());
+    Integer status = 0;
+    LOG.info("###################ZQH##################analyzeAddNode" + nodeName + status_str + ip);
+    if("offline".equals(status_str)){
+      status = 0;
+    }else if ("online".equals(status_str)){
+      status = 1;
+    }else{
+      throw new SemanticException("The status you put is wrong.");
+    }
     AddNodeDesc addNodeDesc = new AddNodeDesc(nodeName, status, ip);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         addNodeDesc), conf));
@@ -2212,6 +2283,8 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       case ADDPROPS:
       case RENAME:
       case ALTERFILESPLIT:
+      case ADDNODEGROUP:
+      case DELETENODEGROUP:
         // allow this form
         break;
       default:
@@ -3539,8 +3612,18 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
+  private void analyzeAlterTableDistribution(ASTNode ast, AlterTableTypes alterType)
+      throws SemanticException {
+    String tblName = getUnescapedName((ASTNode) ast.getChild(0));
+    List<String> nodeGroupNames = null;
+    ASTNode child = (ASTNode) ast.getChild(1);
+    nodeGroupNames = getNodeGroups((ASTNode)child.getChild(0));
+    AlterTableDesc alterTblDesc = new AlterTableDesc(alterType, tblName, nodeGroupNames);
+    addInputsOutputsAlterTable(tblName, null, alterTblDesc);
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterTblDesc), conf));
 
-
+  }
 
   private void analyzeAlterTableDropParts(ASTNode ast, boolean expectView)
       throws SemanticException {

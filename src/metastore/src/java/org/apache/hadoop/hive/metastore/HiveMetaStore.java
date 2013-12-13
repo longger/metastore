@@ -6049,6 +6049,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     }
 
     @Override
+    public boolean alterNodeGroup(NodeGroup ng) throws AlreadyExistsException,MetaException, TException {
+      return getMS().alterNodeGroup(ng);
+    }
+
+    @Override
     public boolean modifyNodeGroup(String ngName,NodeGroup ng) throws MetaException, TException {
       return getMS().modifyNodeGroup(ngName,ng);
     }

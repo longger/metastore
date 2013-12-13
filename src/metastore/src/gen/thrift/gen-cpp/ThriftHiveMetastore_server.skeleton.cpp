@@ -277,6 +277,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("pingPong\n");
   }
 
+  bool alterNodeGroup(const NodeGroup& ng) {
+    // Your implementation goes here
+    printf("alterNodeGroup\n");
+  }
+
   void create_database(const Database& database) {
     // Your implementation goes here
     printf("create_database\n");
