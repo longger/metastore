@@ -6,21 +6,30 @@
  */
 package org.apache.hadoop.hive.metastore.api;
 
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.commons.lang.builder.HashCodeBuilder;
-import org.apache.thrift.EncodingUtils;
-import org.apache.thrift.protocol.TTupleProtocol;
 import org.apache.thrift.scheme.IScheme;
 import org.apache.thrift.scheme.SchemeFactory;
 import org.apache.thrift.scheme.StandardScheme;
+
 import org.apache.thrift.scheme.TupleScheme;
-import org.mortbay.log.Log;
+import org.apache.thrift.protocol.TTupleProtocol;
+import org.apache.thrift.protocol.TProtocolException;
+import org.apache.thrift.EncodingUtils;
+import org.apache.thrift.TException;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.EnumMap;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.EnumSet;
+import java.util.Collections;
+import java.util.BitSet;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSchema._Fields>, java.io.Serializable, Cloneable {
   private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("FieldSchema");
@@ -80,9 +89,7 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
      */
     public static _Fields findByThriftIdOrThrow(int fieldId) {
       _Fields fields = findByThriftId(fieldId);
-      if (fields == null) {
-        throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
-      }
+      if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
       return fields;
     }
 
@@ -113,17 +120,17 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
   // isset id assignments
   private static final int __VERSION_ISSET_ID = 0;
   private byte __isset_bitfield = 0;
-  private final _Fields optionals[] = {_Fields.VERSION};
+  private _Fields optionals[] = {_Fields.VERSION};
   public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
   static {
     Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
-    tmpMap.put(_Fields.NAME, new org.apache.thrift.meta_data.FieldMetaData("name", org.apache.thrift.TFieldRequirementType.DEFAULT,
+    tmpMap.put(_Fields.NAME, new org.apache.thrift.meta_data.FieldMetaData("name", org.apache.thrift.TFieldRequirementType.DEFAULT, 
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
-    tmpMap.put(_Fields.TYPE, new org.apache.thrift.meta_data.FieldMetaData("type", org.apache.thrift.TFieldRequirementType.DEFAULT,
+    tmpMap.put(_Fields.TYPE, new org.apache.thrift.meta_data.FieldMetaData("type", org.apache.thrift.TFieldRequirementType.DEFAULT, 
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
-    tmpMap.put(_Fields.COMMENT, new org.apache.thrift.meta_data.FieldMetaData("comment", org.apache.thrift.TFieldRequirementType.DEFAULT,
+    tmpMap.put(_Fields.COMMENT, new org.apache.thrift.meta_data.FieldMetaData("comment", org.apache.thrift.TFieldRequirementType.DEFAULT, 
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
-    tmpMap.put(_Fields.VERSION, new org.apache.thrift.meta_data.FieldMetaData("version", org.apache.thrift.TFieldRequirementType.OPTIONAL,
+    tmpMap.put(_Fields.VERSION, new org.apache.thrift.meta_data.FieldMetaData("version", org.apache.thrift.TFieldRequirementType.OPTIONAL, 
         new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.I64)));
     metaDataMap = Collections.unmodifiableMap(tmpMap);
     org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(FieldSchema.class, metaDataMap);
@@ -340,62 +347,51 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
 
   @Override
   public boolean equals(Object that) {
-    if (that == null) {
+    if (that == null)
       return false;
-    }
-    if (that instanceof FieldSchema) {
+    if (that instanceof FieldSchema)
       return this.equals((FieldSchema)that);
-    }
     return false;
   }
 
   public boolean equals(FieldSchema that) {
-    if (that == null) {
+    if (that == null)
       return false;
-    }
 
     boolean this_present_name = true && this.isSetName();
     boolean that_present_name = true && that.isSetName();
     if (this_present_name || that_present_name) {
-      if (!(this_present_name && that_present_name)) {
+      if (!(this_present_name && that_present_name))
         return false;
-      }
-      if (!this.name.equals(that.name)) {
+      if (!this.name.equals(that.name))
         return false;
-      }
     }
 
     boolean this_present_type = true && this.isSetType();
     boolean that_present_type = true && that.isSetType();
     if (this_present_type || that_present_type) {
-      if (!(this_present_type && that_present_type)) {
+      if (!(this_present_type && that_present_type))
         return false;
-      }
-      if (!this.type.equals(that.type)) {
+      if (!this.type.equals(that.type))
         return false;
-      }
     }
 
     boolean this_present_comment = true && this.isSetComment();
     boolean that_present_comment = true && that.isSetComment();
     if (this_present_comment || that_present_comment) {
-      if (!(this_present_comment && that_present_comment)) {
+      if (!(this_present_comment && that_present_comment))
         return false;
-      }
-      if (!this.comment.equals(that.comment)) {
+      if (!this.comment.equals(that.comment))
         return false;
-      }
     }
 
     boolean this_present_version = true && this.isSetVersion();
     boolean that_present_version = true && that.isSetVersion();
     if (this_present_version || that_present_version) {
-      if (!(this_present_version && that_present_version)) {
+      if (!(this_present_version && that_present_version))
         return false;
-      }
-      if (this.version != that.version) {
+      if (this.version != that.version)
         return false;
-      }
     }
 
     return true;
@@ -407,27 +403,23 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
 
     boolean present_name = true && (isSetName());
     builder.append(present_name);
-    if (present_name) {
+    if (present_name)
       builder.append(name);
-    }
 
     boolean present_type = true && (isSetType());
     builder.append(present_type);
-    if (present_type) {
+    if (present_type)
       builder.append(type);
-    }
 
     boolean present_comment = true && (isSetComment());
     builder.append(present_comment);
-    if (present_comment) {
+    if (present_comment)
       builder.append(comment);
-    }
 
     boolean present_version = true && (isSetVersion());
     builder.append(present_version);
-    if (present_version) {
+    if (present_version)
       builder.append(version);
-    }
 
     return builder.toHashCode();
   }
@@ -507,9 +499,7 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
       sb.append(this.name);
     }
     first = false;
-    if (!first) {
-      sb.append(", ");
-    }
+    if (!first) sb.append(", ");
     sb.append("type:");
     if (this.type == null) {
       sb.append("null");
@@ -517,9 +507,7 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
       sb.append(this.type);
     }
     first = false;
-    if (!first) {
-      sb.append(", ");
-    }
+    if (!first) sb.append(", ");
     sb.append("comment:");
     if (this.comment == null) {
       sb.append("null");
@@ -528,9 +516,7 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
     }
     first = false;
     if (isSetVersion()) {
-      if (!first) {
-        sb.append(", ");
-      }
+      if (!first) sb.append(", ");
       sb.append("version:");
       sb.append(this.version);
       first = false;
@@ -576,7 +562,7 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
       while (true)
       {
         schemeField = iprot.readFieldBegin();
-        if (schemeField.type == org.apache.thrift.protocol.TType.STOP) {
+        if (schemeField.type == org.apache.thrift.protocol.TType.STOP) { 
           break;
         }
         switch (schemeField.id) {
@@ -584,7 +570,7 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
             if (schemeField.type == org.apache.thrift.protocol.TType.STRING) {
               struct.name = iprot.readString();
               struct.setNameIsSet(true);
-            } else {
+            } else { 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
@@ -592,7 +578,7 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
             if (schemeField.type == org.apache.thrift.protocol.TType.STRING) {
               struct.type = iprot.readString();
               struct.setTypeIsSet(true);
-            } else {
+            } else { 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
@@ -600,7 +586,7 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
             if (schemeField.type == org.apache.thrift.protocol.TType.STRING) {
               struct.comment = iprot.readString();
               struct.setCommentIsSet(true);
-            } else {
+            } else { 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;
@@ -608,7 +594,7 @@ public class FieldSchema implements org.apache.thrift.TBase<FieldSchema, FieldSc
             if (schemeField.type == org.apache.thrift.protocol.TType.I64) {
               struct.version = iprot.readI64();
               struct.setVersionIsSet(true);
-            } else {
+            } else { 
               org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
             }
             break;

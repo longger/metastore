@@ -208,6 +208,7 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual void listTableNodeDists(std::vector<NodeGroup> & _return, const std::string& dbName, const std::string& tabName) = 0;
   virtual bool assiginSchematoDB(const std::string& dbName, const std::string& schemaName, const std::vector<FieldSchema> & fileSplitKeys, const std::vector<FieldSchema> & part_keys, const std::vector<NodeGroup> & ngs) = 0;
   virtual void statFileSystem(statfs& _return, const int64_t begin_time, const int64_t end_time) = 0;
+  virtual int64_t getMaxFid() = 0;
 };
 
 class ThriftHiveMetastoreIfFactory : virtual public  ::facebook::fb303::FacebookServiceIfFactory {
@@ -889,6 +890,10 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   }
   void statFileSystem(statfs& /* _return */, const int64_t /* begin_time */, const int64_t /* end_time */) {
     return;
+  }
+  int64_t getMaxFid() {
+    int64_t _return = 0;
+    return _return;
   }
 };
 
@@ -26327,6 +26332,110 @@ class ThriftHiveMetastore_statFileSystem_presult {
 
 };
 
+
+class ThriftHiveMetastore_getMaxFid_args {
+ public:
+
+  ThriftHiveMetastore_getMaxFid_args() {
+  }
+
+  virtual ~ThriftHiveMetastore_getMaxFid_args() throw() {}
+
+
+  bool operator == (const ThriftHiveMetastore_getMaxFid_args & /* rhs */) const
+  {
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_getMaxFid_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_getMaxFid_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_getMaxFid_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_getMaxFid_pargs() throw() {}
+
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_getMaxFid_result__isset {
+  _ThriftHiveMetastore_getMaxFid_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_getMaxFid_result__isset;
+
+class ThriftHiveMetastore_getMaxFid_result {
+ public:
+
+  ThriftHiveMetastore_getMaxFid_result() : success(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_getMaxFid_result() throw() {}
+
+  int64_t success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_getMaxFid_result__isset __isset;
+
+  void __set_success(const int64_t val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_getMaxFid_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_getMaxFid_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_getMaxFid_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_getMaxFid_presult__isset {
+  _ThriftHiveMetastore_getMaxFid_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_getMaxFid_presult__isset;
+
+class ThriftHiveMetastore_getMaxFid_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_getMaxFid_presult() throw() {}
+
+  int64_t* success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_getMaxFid_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  ::facebook::fb303::FacebookServiceClient {
  public:
   ThriftHiveMetastoreClient(boost::shared_ptr< ::apache::thrift::protocol::TProtocol> prot) :
@@ -26915,6 +27024,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void statFileSystem(statfs& _return, const int64_t begin_time, const int64_t end_time);
   void send_statFileSystem(const int64_t begin_time, const int64_t end_time);
   void recv_statFileSystem(statfs& _return);
+  int64_t getMaxFid();
+  void send_getMaxFid();
+  int64_t recv_getMaxFid();
 };
 
 class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceProcessor {
@@ -27117,6 +27229,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_listTableNodeDists(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_assiginSchematoDB(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_statFileSystem(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_getMaxFid(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
  public:
   ThriftHiveMetastoreProcessor(boost::shared_ptr<ThriftHiveMetastoreIf> iface) :
      ::facebook::fb303::FacebookServiceProcessor(iface),
@@ -27313,6 +27426,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["listTableNodeDists"] = &ThriftHiveMetastoreProcessor::process_listTableNodeDists;
     processMap_["assiginSchematoDB"] = &ThriftHiveMetastoreProcessor::process_assiginSchematoDB;
     processMap_["statFileSystem"] = &ThriftHiveMetastoreProcessor::process_statFileSystem;
+    processMap_["getMaxFid"] = &ThriftHiveMetastoreProcessor::process_getMaxFid;
   }
 
   virtual ~ThriftHiveMetastoreProcessor() {}
@@ -29165,6 +29279,15 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
     }
     ifaces_[i]->statFileSystem(_return, begin_time, end_time);
     return;
+  }
+
+  int64_t getMaxFid() {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->getMaxFid();
+    }
+    return ifaces_[i]->getMaxFid();
   }
 
 };

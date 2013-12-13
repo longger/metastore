@@ -5072,7 +5072,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public String getDMStatus() throws MetaException, TException {
-      LOG.info("--------> GOT SessionId: " + msss.getSessionId());
+      LOG.debug("--------> GOT SessionId: " + msss.getSessionId());
       if (dm != null) {
         return dm.getDMStatus();
       }
@@ -6852,6 +6852,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
               }
             }
             if (policy.getOperation() == CreateOperation.CREATE_NEW_RANDOM) {
+              // TODO: Do we need random dev selection here?
               flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.RANDOM_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
             } else {
               flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);

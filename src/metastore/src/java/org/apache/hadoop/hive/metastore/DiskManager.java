@@ -712,7 +712,7 @@ public class DiskManager {
       private long last_genRpt = System.currentTimeMillis();
 
       private long ff_start = 0;
-      private final long ff_range = 1000;
+      private long ff_range = 1000;
 
       private boolean useVoidCheck = false;
 
@@ -725,6 +725,7 @@ public class DiskManager {
         delTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_DEL_TIMEOUT);
         rerepTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_REREP_TIMEOUT);
         offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
+        ff_range = hiveConf.getLongVar(HiveConf.ConfVars.DM_FF_RANGE);
 
         String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
         Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
@@ -1581,6 +1582,7 @@ public class DiskManager {
         adevnr[i] = new Long(0);
       }
 
+      r += "Timestamp " + System.currentTimeMillis() / 1000;
       r += "MetaStore Server Disk Manager listening @ " + hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
       r += "\nSafeMode: " + safeMode + "\n";
       synchronized (rs) {
