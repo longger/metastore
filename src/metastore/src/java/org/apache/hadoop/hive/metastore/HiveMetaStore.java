@@ -6972,6 +6972,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       return true;
     }
 
+    @Override
+    public long getMaxFid() throws MetaException, TException {
+      return getMS().getCurrentFID();
+    }
+
   }
 
   public static IHMSHandler newHMSHandler(String name, HiveConf hiveConf) throws MetaException {

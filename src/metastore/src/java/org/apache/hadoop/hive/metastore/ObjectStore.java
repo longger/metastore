@@ -10155,8 +10155,16 @@ public MUser getMUser(String userName) {
       pm.makePersistent(mng);
 //      pm.makePersistentAll(mng.getNodes());
       commited = commitTransaction();
+
+      HashMap<String,Object> params = new HashMap<String,Object>();
+      String r = "";
+      for (MNode mn : mng.getNodes()) {
+        r += mn.getNode_name() + ",";
+      }
+      params.put("nodes", r);
+      params.put("nodegroup_name", mng.getNode_group_name());
       if(commited) {
-        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_NODEGROUP,-1,-1,pm,mng,null));
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_ALTER_NODEGROUP,-1,-1,pm,mng,params));
       }
       success = true;
     } finally {

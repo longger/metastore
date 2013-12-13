@@ -943,7 +943,18 @@ public class MSGFactory {
           params.put("old_nodegroup_name", msg.getOld_object_params().get("old_nodegroup_name"));
         }
         break;
-
+      case MSGType.MSG_ALTER_NODEGROUP:
+        //修改节点组
+        MNodeGroup altmng = (MNodeGroup)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("nodegroup_name")) {
+          params.put("nodegroup_name", msg.getOld_object_params().get("nodegroup_name"));
+        } else {
+          params.put("nodegroup_name", altmng.getNode_group_name());
+        }
+        if (msg.getOld_object_params().containsKey("nodes")) {
+          params.put("nodes", msg.getOld_object_params().get("nodes"));
+        }
+        break;
       case MSGType.MSG_CREATE_FILE:
         //新建文件
         if (msg.getOld_object_params().containsKey("f_id")) {

@@ -986,17 +986,17 @@ public class DiskManager {
           return false;
         }
         // generate report string, EX.
-        //7 uptime,safemode,total_space,used_space,free_space,total_nodes,active_nodes,
-        //2 total_device,active_device,
-        //4 fcreate1R,fcreate1SuccR,fcreate2R,fcreate2SuccR,
-        //4 freopenR,fgetR,fcloseR,freplicateR,
-        //4 frmlR,frmpR,frestoreR,fdelR,
-        //5 sflcreateR,sflonlineR,sflofflineR,sflsuspectR,sfldelR,
-        //4 fcloseSuccR,newconn,delconn,query,
-        //2 closeRepLimit,fixRepLimit,
-        //3 reqQlen,cleanQlen,backupQlen,
-        //6 totalReportNr,totalFileRep,totalFileDel,toRepNr,toDeleteNr,avgReportTs,
-        //1 timestamp,
+        //0  uptime,safemode,total_space,used_space,free_space,total_nodes,active_nodes,
+        //7  total_device,active_device,
+        //9  fcreate1R,fcreate1SuccR,fcreate2R,fcreate2SuccR,
+        //13 freopenR,fgetR,fcloseR,freplicateR,
+        //17 frmlR,frmpR,frestoreR,fdelR,
+        //21 sflcreateR,sflonlineR,sflofflineR,sflsuspectR,sfldelR,
+        //26 fcloseSuccR,newconn,delconn,query,
+        //30 closeRepLimit,fixRepLimit,
+        //32 reqQlen,cleanQlen,backupQlen,
+        //35 totalReportNr,totalFileRep,totalFileDel,toRepNr,toDeleteNr,avgReportTs,
+        //41 timestamp,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;

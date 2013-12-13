@@ -225,8 +225,13 @@ public class MSGType {
    */
   public static final int MSG_DEL_NODEGROUP = 3003;
   /**
+   * 修改节点组
+   */
+  public static final int MSG_ALTER_NODEGROUP = 3004;
+  /**
    * 创建新文件
    */
+
   public static final int MSG_CREATE_FILE = 4001;
   /**
    * 物理删除文件：后续对该fid的访问将会失败
