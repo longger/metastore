@@ -385,7 +385,7 @@ public abstract class BaseSemanticAnalyzer {
     int numCh = ast.getChildCount();
     for (int i = 0; i < numCh; i++) {
       ASTNode child = (ASTNode) ast.getChild(i);
-      ngNameList.add(unescapeSQLString(child.getText()));//.toLowerCase()
+      ngNameList.add(unescapeSQLString(child.getText()).toLowerCase());
     }
     return ngNameList;
   }

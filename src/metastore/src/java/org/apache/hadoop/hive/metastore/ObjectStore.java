@@ -5345,7 +5345,7 @@ public class ObjectStore implements RawStore, Configurable {
       }
 
       Query query = pm.newQuery(MIndex.class,
-        "origTable.tableName == t1 && origTable.database.name == t2 && indexName == t3");
+        "origTable.tableName == t1 && origTable.database.name == t2 && (indexName.toUpperCase() == t3 || indexName.toLowerCase() == t3)");
       query.declareParameters("java.lang.String t1, java.lang.String t2, java.lang.String t3");
       query.setUnique(true);
       midx = (MIndex) query.execute(originalTblName, dbName, indexName);

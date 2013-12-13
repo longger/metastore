@@ -1290,7 +1290,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
-  private void analyzeDropNode(ASTNode ast) {
+  private void analyzeDropNode(ASTNode ast) throws SemanticException {
     String nodeName = unescapeIdentifier(ast.getChild(0).getText());
     DropNodeDesc dropNodeDesc = new DropNodeDesc(nodeName);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
@@ -1298,11 +1298,19 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
-  private void analyzeAddNode(ASTNode ast) {
+  private void analyzeAddNode(ASTNode ast) throws SemanticException {
     String nodeName = unescapeIdentifier(ast.getChild(0).getText());
-    String status_str = unescapeIdentifier(ast.getChild(1).getText());
-    Integer status = Integer.parseInt(status_str);
-    String ip = unescapeIdentifier(ast.getChild(2).getText());
+    String status_str = unescapeSQLString(ast.getChild(1).getText());
+    String ip = unescapeSQLString(ast.getChild(2).getText());
+    Integer status = 0;
+    LOG.info("###################ZQH##################analyzeAddNode" + nodeName + status_str + ip);
+    if("offline".equals(status_str)){
+      status = 0;
+    }else if ("online".equals(status_str)){
+      status = 1;
+    }else{
+      throw new SemanticException("The status you put is wrong.");
+    }
     AddNodeDesc addNodeDesc = new AddNodeDesc(nodeName, status, ip);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         addNodeDesc), conf));

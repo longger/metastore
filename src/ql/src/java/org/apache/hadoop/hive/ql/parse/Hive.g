@@ -774,7 +774,7 @@ busitypeComment
 addNodeStatement
 @init { msgs.push("add node statement"); }
 @after { msgs.pop(); }
-    : KW_CREATE KW_NODE LPAREN name=Identifier COMMA status=Identifier COMMA ip=Identifier RPAREN 
+    : KW_CREATE KW_NODE LPAREN name=Identifier COMMA status=StringLiteral COMMA ip=StringLiteral RPAREN 
         (KW_WITH KW_NODEPROPERTIES nodeprops=nodeProperties)?
     -> ^(TOK_ADDNODE $name $status $ip $nodeprops?)
         ;
