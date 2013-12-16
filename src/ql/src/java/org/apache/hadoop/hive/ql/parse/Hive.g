@@ -774,9 +774,9 @@ busitypeComment
 addNodeStatement
 @init { msgs.push("add node statement"); }
 @after { msgs.pop(); }
-    : KW_CREATE KW_NODE LPAREN name=Identifier COMMA status=StringLiteral COMMA ip=StringLiteral RPAREN 
+    : KW_CREATE KW_NODE LPAREN name=StringLiteral COMMA status=StringLiteral COMMA ip=StringLiteral RPAREN 
         (KW_WITH KW_NODEPROPERTIES nodeprops=nodeProperties)?
-    -> ^(TOK_ADDNODE $name $status $ip $nodeprops?)
+    -> ^(TOK_ADDNODE $name $ip $status $nodeprops?)
         ;
 nodeProperties
 @init { msgs.push("nodeproperties"); }
@@ -794,8 +794,8 @@ nodePropertiesList
 dropNodeStatement
 @init { msgs.push("drop node statement"); }
 @after { msgs.pop(); }
-    : KW_DROP KW_NODE Identifier 
-    -> ^(TOK_DROPNODE Identifier)
+    : KW_DROP KW_NODE StringLiteral 
+    -> ^(TOK_DROPNODE StringLiteral)
     ;
     
     

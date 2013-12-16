@@ -99,7 +99,9 @@ import org.apache.hadoop.hive.ql.lockmgr.HiveLockManager;
 import org.apache.hadoop.hive.ql.lockmgr.HiveLockMode;
 import org.apache.hadoop.hive.ql.lockmgr.HiveLockObject;
 import org.apache.hadoop.hive.ql.lockmgr.HiveLockObject.HiveLockObjectData;
+import org.apache.hadoop.hive.ql.metadata.AddNode;
 import org.apache.hadoop.hive.ql.metadata.CheckResult;
+import org.apache.hadoop.hive.ql.metadata.DropNode;
 import org.apache.hadoop.hive.ql.metadata.EqRoom;
 import org.apache.hadoop.hive.ql.metadata.GeoLoc;
 import org.apache.hadoop.hive.ql.metadata.GlobalSchema;
@@ -1256,13 +1258,16 @@ public class DDLTask extends Task<DDLWork> implements Serializable {
     return 0;
   }
 
-  private int addNode(Hive db, AddNodeDesc addNodeDesc) {
-    // TODO Auto-generated method stub
+  private int addNode(Hive db, AddNodeDesc addNodeDesc) throws HiveException {
+    AddNode an = new AddNode(addNodeDesc.getName(),
+        addNodeDesc.getStatus(), addNodeDesc.getIp(), addNodeDesc.getNodeProperties());
+    this.db.addNode(an);
     return 0;
   }
 
-  private int dropNode(Hive db, DropNodeDesc dropNodeDesc) {
-    // TODO Auto-generated method stub
+  private int dropNode(Hive db, DropNodeDesc dropNodeDesc) throws HiveException {
+    DropNode dn = new DropNode(dropNodeDesc.getNodeName());
+    this.db.dropNode(dn);
     return 0;
   }
 

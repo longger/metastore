@@ -1291,7 +1291,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
   }
 
   private void analyzeDropNode(ASTNode ast) throws SemanticException {
-    String nodeName = unescapeIdentifier(ast.getChild(0).getText());
+    String nodeName = unescapeSQLString(ast.getChild(0).getText());
     DropNodeDesc dropNodeDesc = new DropNodeDesc(nodeName);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         dropNodeDesc), conf));
@@ -1299,19 +1299,33 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
   }
 
   private void analyzeAddNode(ASTNode ast) throws SemanticException {
-    String nodeName = unescapeIdentifier(ast.getChild(0).getText());
+    String nodeName = unescapeSQLString(ast.getChild(0).getText());
     String status_str = unescapeSQLString(ast.getChild(1).getText());
     String ip = unescapeSQLString(ast.getChild(2).getText());
+    List<String> ipList = new ArrayList<String>();
+    String[] ips = ip.split(",");
+    for(String s : ips){
+      ipList.add(s);
+    }
     Integer status = 0;
-    LOG.info("###################ZQH##################analyzeAddNode" + nodeName + status_str + ip);
-    if("offline".equals(status_str)){
+    Map<String, String> nodeProperties = new HashMap<String, String>();
+    if("offline".equalsIgnoreCase(status_str)){
       status = 0;
-    }else if ("online".equals(status_str)){
+    }else if ("online".equalsIgnoreCase(status_str)){
       status = 1;
     }else{
       throw new SemanticException("The status you put is wrong.");
     }
-    AddNodeDesc addNodeDesc = new AddNodeDesc(nodeName, status, ip);
+    if(ast.getChildCount() == 4) {
+      nodeProperties = DDLSemanticAnalyzer.getProps((ASTNode) ast.getChild(3).getChild(0));
+    }
+    AddNodeDesc addNodeDesc = null;
+    if(ast.getChildCount() == 3){
+      addNodeDesc = new AddNodeDesc(nodeName, status, ipList);
+    }else {
+      addNodeDesc = new AddNodeDesc(nodeName, status, ipList, nodeProperties);
+    }
+
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         addNodeDesc), conf));
 

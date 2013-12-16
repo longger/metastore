@@ -8878,12 +8878,14 @@ public MUser getMUser(String userName) {
     try {
       openTransaction();
       MNode mnode = getMNode(node_name);
+      HashMap<String,Object> params = new HashMap<String,Object>();
+      params.put("node_name", node_name);
       if (mnode != null) {
         pm.deletePersistent(mnode);
       }
       success = commitTransaction();
       if(success) {
-        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_DEL_NODE,-1,-1,pm,mnode,null));
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_DEL_NODE,-1,-1,pm,mnode,params));
       }
     } finally {
       if (!success) {

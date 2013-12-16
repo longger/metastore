@@ -3405,4 +3405,20 @@ public class Hive {
       throw new Exception("Unable to alter schema.", e);
     }
   }
+
+  public void addNode(AddNode an) throws HiveException {
+    try {
+      getMSC().add_node(an.getName(), an.getIp());
+    } catch (Exception e) {
+      throw new HiveException(e);
+    }
+  }
+
+  public void dropNode(DropNode dn) throws HiveException {
+    try {
+      getMSC().del_node(dn.getName());
+    } catch (Exception e) {
+      throw new HiveException(e);
+    }
+  }
 };
