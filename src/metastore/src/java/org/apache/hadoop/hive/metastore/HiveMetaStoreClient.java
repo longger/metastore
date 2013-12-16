@@ -2344,4 +2344,9 @@ public boolean authentication(String user_name, String passwd)
   public boolean set_loadstatus_bad(long fid) throws MetaException, TException {
     return client.set_loadstatus_bad(fid);
   }
+
+  @Override
+  public long getMaxFid() throws MetaException, TException {
+    return client.getMaxFid();
+  }
 }
