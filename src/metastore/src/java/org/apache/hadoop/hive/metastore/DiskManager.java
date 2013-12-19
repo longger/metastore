@@ -28,6 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
+import javax.jdo.JDOObjectNotFoundException;
+
 import net.sf.json.JSONException;
 import net.sf.json.JSONObject;
 
@@ -1161,6 +1163,10 @@ public class DiskManager {
                 if (ff_start > trs.getCurrentFID()) {
                   ff_start = 0;
                 }
+              } catch (JDOObjectNotFoundException e) {
+                LOG.error(e, e);
+                updateRunningState();
+                return;
               } catch (MetaException e) {
                 LOG.error(e, e);
                 updateRunningState();
@@ -1582,7 +1588,8 @@ public class DiskManager {
         adevnr[i] = new Long(0);
       }
 
-      r += "Timestamp " + System.currentTimeMillis() / 1000;
+      r += "Uptime " + ((System.currentTimeMillis() - startupTs) / 1000) + " s, ";
+      r += ", Timestamp " + System.currentTimeMillis() / 1000 + "\n";
       r += "MetaStore Server Disk Manager listening @ " + hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
       r += "\nSafeMode: " + safeMode + "\n";
       synchronized (rs) {
