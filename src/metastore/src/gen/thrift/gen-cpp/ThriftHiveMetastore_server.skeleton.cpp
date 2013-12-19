@@ -987,6 +987,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("statFileSystem\n");
   }
 
+  int64_t getMaxFid() {
+    // Your implementation goes here
+    printf("getMaxFid\n");
+  }
+
 };
 
 int main(int argc, char **argv) {

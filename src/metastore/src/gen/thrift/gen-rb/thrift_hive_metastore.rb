@@ -3204,6 +3204,22 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'statFileSystem failed: unknown result')
     end
 
+    def getMaxFid()
+      send_getMaxFid()
+      return recv_getMaxFid()
+    end
+
+    def send_getMaxFid()
+      send_message('getMaxFid', GetMaxFid_args)
+    end
+
+    def recv_getMaxFid()
+      result = receive_message(GetMaxFid_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'getMaxFid failed: unknown result')
+    end
+
   end
 
   class Processor < ::FacebookService::Processor 
@@ -5570,6 +5586,17 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'statFileSystem', seqid)
+    end
+
+    def process_getMaxFid(seqid, iprot, oprot)
+      args = read_args(iprot, GetMaxFid_args)
+      result = GetMaxFid_result.new()
+      begin
+        result.success = @handler.getMaxFid()
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'getMaxFid', seqid)
     end
 
   end
@@ -12792,6 +12819,39 @@ module ThriftHiveMetastore
 
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::STRUCT, :name => 'success', :class => ::Statfs},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class GetMaxFid_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+
+    FIELDS = {
+
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class GetMaxFid_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::I64, :name => 'success'},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
     }
 

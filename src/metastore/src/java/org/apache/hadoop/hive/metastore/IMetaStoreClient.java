@@ -1288,4 +1288,6 @@ public interface IMetaStoreClient {
   public void setTimeout(int timeout);
 
   public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException;
+
+  public long getMaxFid() throws MetaException, TException;
 }

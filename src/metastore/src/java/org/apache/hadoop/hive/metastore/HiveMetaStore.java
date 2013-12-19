@@ -57,6 +57,7 @@ import org.apache.hadoop.hive.common.metrics.Metrics;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.DiskManager.BackupEntry;
+import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DMRequest;
 import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
 import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
@@ -4419,6 +4420,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public SFile create_file(String node_name, int repnr, String db_name, String table_name, List<SplitValue> values)
         throws FileOperationException, TException {
+      DMProfile.fcreate1R.incrementAndGet();
       if (!fileSplitValuesCheck(values)) {
         throw new FileOperationException("Invalid File Split Values: inconsistent version among values?", FOFailReason.INVALID_FILE);
       }
@@ -4456,14 +4458,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       if (spec_node.size() > 0) {
         flp = new FileLocatingPolicy(spec_node, excl_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
       } else {
-        flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+        flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
       }
 
-      return create_file(flp, node_name, repnr, db_name, table_name, values);
+      SFile rf = create_file(flp, node_name, repnr, db_name, table_name, values);
+      DMProfile.fcreate1SuccR.incrementAndGet();
+
+      return rf;
     }
 
     private SFile create_file_wo_location(int repnr, String dbName, String tableName, List<SplitValue> values)
       throws FileOperationException, TException {
+      DMProfile.fcreate1R.incrementAndGet();
 
       if (!fileSplitValuesCheck(values)) {
         throw new FileOperationException("Invalid File Split Values: inconsistent version among values?", FOFailReason.INVALID_FILE);
@@ -4476,6 +4482,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           throw new FileOperationException("Creating file with internal error, metadata inconsistent?", FOFailReason.INVALID_FILE);
       }
 
+      DMProfile.fcreate1SuccR.incrementAndGet();
       return cfile;
     }
 
@@ -4564,6 +4571,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public int close_file(SFile file) throws FileOperationException, MetaException, TException {
       startFunction("close_file ", "fid: " + file.getFid());
+      DMProfile.fcloseR.incrementAndGet();
 
       FileOperationException e = null;
       SFile saved = getMS().getSFile(file.getFid());
@@ -4629,6 +4637,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
       } finally {
         endFunction("close_file", true, e);
+        DMProfile.fcloseSuccRS.incrementAndGet();
       }
       return 0;
     }
@@ -4657,6 +4666,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public SFile get_file_by_id(long fid) throws FileOperationException, MetaException, TException {
+      DMProfile.fgetR.incrementAndGet();
       SFile r = getMS().getSFile(fid);
       if (r == null) {
         throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
@@ -4676,6 +4686,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public int rm_file_logical(SFile file) throws FileOperationException, MetaException, TException {
+      DMProfile.frmlR.incrementAndGet();
       SFile saved = getMS().getSFile(file.getFid());
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
@@ -4692,6 +4703,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public int restore_file(SFile file) throws FileOperationException, MetaException, TException {
+      DMProfile.frestoreR.incrementAndGet();
       SFile saved = getMS().getSFile(file.getFid());
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
@@ -4708,6 +4720,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public int rm_file_physical(SFile file) throws FileOperationException, MetaException,
         TException {
+      DMProfile.frmpR.incrementAndGet();
       SFile saved = getMS().getSFile(file.getFid());
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID " + file.getFid(), FOFailReason.INVALID_FILE);
@@ -5059,7 +5072,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public String getDMStatus() throws MetaException, TException {
-      LOG.info("--------> GOT SessionId: " + msss.getSessionId());
+      LOG.debug("--------> GOT SessionId: " + msss.getSessionId());
       if (dm != null) {
         return dm.getDMStatus();
       }
@@ -6624,6 +6637,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name,
         String table_name, List<SplitValue> values) throws FileOperationException, TException {
+      DMProfile.fcreate2R.incrementAndGet();
       Table tbl = null;
       List<NodeGroup> ngs = null;
       Set<String> ngnodes = new HashSet<String>();
@@ -6676,11 +6690,16 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         List<PartitionInfo> allpis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl.getFileSplitKeys());
         List<PartitionInfo> pis = new ArrayList<PartitionInfo>();
         // find the max version
-        int version = 0;
+        long version = 0;
         for (PartitionInfo pi : allpis) {
           if (pi.getP_version() > version) {
             version = pi.getP_version();
           }
+        }
+        if (values.get(0).getVerison() > version) {
+          throw new FileOperationException("Invalid Version specified, provide " + values.get(0).getVerison() + " expected " + version, FOFailReason.INVALID_SPLIT_VALUES);
+        } else {
+          version = values.get(0).getVerison();
         }
         // remove non-max versions
         for (PartitionInfo pi : allpis) {
@@ -6788,7 +6807,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           // check version, column name here
           if (sv.getVerison() != pi.getP_version() ||
               !pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
-            throw new FileOperationException("Version or SplitKeyName mismatch, please check your metadata.", FOFailReason.INVALID_SPLIT_VALUES);
+            throw new FileOperationException("SplitKeyName mismatch, please check your metadata.", FOFailReason.INVALID_SPLIT_VALUES);
           }
 
         }
@@ -6838,6 +6857,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
               }
             }
             if (policy.getOperation() == CreateOperation.CREATE_NEW_RANDOM) {
+              // TODO: Do we need random dev selection here?
               flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.RANDOM_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
             } else {
               flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
@@ -6871,11 +6891,13 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           r = create_file(flp, null, repnr, db_name, table_name, values);
         }
       }
+      DMProfile.fcreate2SuccR.incrementAndGet();
       return r;
     }
 
     @Override
     public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException {
+      DMProfile.freopenR.incrementAndGet();
       startFunction("reopen_file ", "fid: " + fid);
 
       SFile saved = getMS().getSFile(fid);
@@ -6948,6 +6970,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       saved.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
       getMS().updateSFile(saved);
       return true;
+    }
+
+    @Override
+    public long getMaxFid() throws MetaException, TException {
+      return getMS().getCurrentFID();
     }
 
   }

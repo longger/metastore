@@ -57,6 +57,7 @@ import org.apache.hadoop.hive.common.classification.InterfaceAudience;
 import org.apache.hadoop.hive.common.classification.InterfaceStability;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
+import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BinaryColumnStatsData;
@@ -492,6 +493,11 @@ public class ObjectStore implements RawStore, Configurable {
       transactionStatus = TXN_STATUS.ROLLBACK;
       // could already be rolled back
       currentTransaction.rollback();
+      // XXX: HIVE-3826
+      // remove all detached objects from the cache, since the transaction is
+      // being rolled back they are no longer relevant, and this prevents them
+      // from reattaching in future transactions
+      pm.evictAll();
     }
   }
 
@@ -1670,6 +1676,8 @@ public class ObjectStore implements RawStore, Configurable {
     } finally {
       if (!commited) {
         rollbackTransaction();
+      } else {
+        DMProfile.sflcreateR.incrementAndGet();
       }
     }
     if (r && mfloc != null && commited) {
@@ -2478,6 +2486,9 @@ public class ObjectStore implements RawStore, Configurable {
       old_params.put("db_name", dbName);
       old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, pm, mf, old_params));
+      if (newfile.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+        DMProfile.freplicateR.incrementAndGet();
+      }
     }
     if (repnr_changed) {
       // send the SFile state change message
@@ -2535,6 +2546,17 @@ public class ObjectStore implements RawStore, Configurable {
     }
 
     if (changed) {
+      switch (newsfl.getVisit_status()) {
+      case MetaStoreConst.MFileLocationVisitStatus.ONLINE:
+        DMProfile.sflonlineR.incrementAndGet();
+        break;
+      case MetaStoreConst.MFileLocationVisitStatus.OFFLINE:
+        DMProfile.sflofflineR.incrementAndGet();
+        break;
+      case MetaStoreConst.MFileLocationVisitStatus.SUSPECT:
+        DMProfile.sflsuspectR.incrementAndGet();
+        break;
+      }
       // send the SFL state change message
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", newsfl.getFid());
@@ -3145,6 +3167,10 @@ public class ObjectStore implements RawStore, Configurable {
         throw new InvalidObjectException("This file does not belong to any TABLE or table contains NONE file split keys, you should not set SplitValues!");
       }
       for (SplitValue sv : file.getValues()) {
+        // Bug-XXX: In XJ, we got Nullpointer Exception, so check here.
+        if (sv.getSplitKeyName() == null) {
+          throw new InvalidObjectException("Null SplitKeyName in SplitValue?!!");
+        }
         values.add(new MSplitValue(sv.getSplitKeyName().toLowerCase(), sv.getLevel(), sv.getValue(), sv.getVerison()));
         if (version == -1) {
           version = sv.getVerison();
@@ -4709,6 +4735,7 @@ public class ObjectStore implements RawStore, Configurable {
           ps.put("table_name", oldt.getTableName());
           LOG.info("---zy--in alterTable delCol,colname:"+omfs.getName());
           ps.put("column_name",omfs.getName());
+          ps.put("column_type", omfs.getType());
 //          MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL,db_id,-1, pm, oldt.getSd().getCD(),ps));
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL,db_id,-1, pm, newt.getSd().getCD(),ps));
         }
@@ -4784,7 +4811,8 @@ public class ObjectStore implements RawStore, Configurable {
     //MSG_ALT_TALBE_PARTITIONING
       HashMap<String, Object> altPartitioningParams = new HashMap<String, Object>();
       LOG.warn("---zy-- in alter table,old partition keys:"+oldt.getPartitionKeys()+",new partition keys"+newt.getPartitionKeys());
-      if(newt.getPartitionKeys().size() > oldt.getPartitionKeys().size())      //要传什么参数呢．．
+      if(newt.getPartitionKeys().size() > oldt.getPartitionKeys().size())
+//      if(newt.getPartitionKeys().size() > 0)
       {
         altPartitioningParams.put("table_name", oldt.getTableName());
         altPartitioningParams.put("db_name", oldt.getDatabase().getName());
@@ -6546,7 +6574,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mgp.getGrantor());
             params.put("grantor_type", mgp.getGrantorType());
-            params.put("principalName", mgp.getPrincipalName());
+            params.put("principal_name", mgp.getPrincipalName());
             params.put("principal_type", mgp.getPrincipalType());
             params.put("privilege", mgp.getPrivilege());
             params.put("create_time",mgp.getCreateTime());
@@ -6560,7 +6588,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mdbp.getGrantor());
             params.put("grantor_type", mdbp.getGrantorType());
-            params.put("principalName", mdbp.getPrincipalName());
+            params.put("principal_name", mdbp.getPrincipalName());
             params.put("principal_type", mdbp.getPrincipalType());
             params.put("privilege", mdbp.getPrivilege());
             params.put("create_time",mdbp.getCreateTime());
@@ -6576,7 +6604,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mtp.getGrantor());
             params.put("grantor_type", mtp.getGrantorType());
-            params.put("principalName", mtp.getPrincipalName());
+            params.put("principal_name", mtp.getPrincipalName());
             params.put("principal_type", mtp.getPrincipalType());
             params.put("privilege", mtp.getPrivilege());
             params.put("create_time",mtp.getCreateTime());
@@ -6592,7 +6620,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", msp.getGrantor());
             params.put("grantor_type", msp.getGrantorType());
-            params.put("principalName", msp.getPrincipalName());
+            params.put("principal_name", msp.getPrincipalName());
             params.put("principal_type", msp.getPrincipalType());
             params.put("privilege", msp.getPrivilege());
             params.put("create_time",msp.getCreateTime());
@@ -6606,7 +6634,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mpp.getGrantor());
             params.put("grantor_type", mpp.getGrantorType());
-            params.put("principalName", mpp.getPrincipalName());
+            params.put("principal_name", mpp.getPrincipalName());
             params.put("principal_type", mpp.getPrincipalType());
             params.put("privilege", mpp.getPrivilege());
             params.put("create_time",mpp.getCreateTime());
@@ -6623,7 +6651,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mpcp.getGrantor());
             params.put("grantor_type", mpcp.getGrantorType());
-            params.put("principalName", mpcp.getPrincipalName());
+            params.put("principal_name", mpcp.getPrincipalName());
             params.put("principal_type", mpcp.getPrincipalType());
             params.put("privilege", mpcp.getPrivilege());
             params.put("create_time",mpcp.getCreateTime());
@@ -6641,7 +6669,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mtcp.getGrantor());
             params.put("grantor_type", mtcp.getGrantorType());
-            params.put("principalName", mtcp.getPrincipalName());
+            params.put("principal_name", mtcp.getPrincipalName());
             params.put("principal_type", mtcp.getPrincipalType());
             params.put("privilege", mtcp.getPrivilege());
             params.put("create_time",mtcp.getCreateTime());
@@ -6840,15 +6868,9 @@ public MUser getMUser(String userName) {
           }
         }
       }
-
+      List<MSGFactory.DDLMsg> msgs = new ArrayList<MSGFactory.DDLMsg>();
       if (persistentObjs.size() > 0) {
-        pm.deletePersistentAll(persistentObjs);
-      }
-      committed = commitTransaction();
-
-    //add by zy for msg queue
-      if(committed)
-      {
+        //add by zy for msg queue
         for(Object obj : persistentObjs)
         {
           if(obj instanceof MGlobalPrivilege)
@@ -6857,13 +6879,13 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mgp.getGrantor());
             params.put("grantor_type", mgp.getGrantorType());
-            params.put("principalName", mgp.getPrincipalName());
+            params.put("principal_name", mgp.getPrincipalName());
             params.put("principal_type", mgp.getPrincipalType());
             params.put("privilege", mgp.getPrivilege());
             params.put("create_time",mgp.getCreateTime());
             params.put("grant_option",mgp.getGrantOption());
 
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_GLOBAL,-1l,-1l, pm, mgp,params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_GLOBAL,-1l,-1l, pm, mgp,params));
           }
           else if(obj instanceof MDBPrivilege)
           {
@@ -6871,14 +6893,14 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mdbp.getGrantor());
             params.put("grantor_type", mdbp.getGrantorType());
-            params.put("principalName", mdbp.getPrincipalName());
+            params.put("principal_name", mdbp.getPrincipalName());
             params.put("principal_type", mdbp.getPrincipalType());
             params.put("privilege", mdbp.getPrivilege());
             params.put("create_time",mdbp.getCreateTime());
             params.put("grant_option",mdbp.getGrantOption());
             params.put("db_name", mdbp.getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mdbp.getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_DB,db_id,-1l, pm, mdbp.getDatabase(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_DB,db_id,-1l, pm, mdbp.getDatabase(),params));
           }
 
           else if(obj instanceof MTablePrivilege)
@@ -6887,7 +6909,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mtp.getGrantor());
             params.put("grantor_type", mtp.getGrantorType());
-            params.put("principalName", mtp.getPrincipalName());
+            params.put("principal_name", mtp.getPrincipalName());
             params.put("principal_type", mtp.getPrincipalType());
             params.put("privilege", mtp.getPrivilege());
             params.put("create_time",mtp.getCreateTime());
@@ -6895,7 +6917,7 @@ public MUser getMUser(String userName) {
             params.put("table_name", mtp.getTable().getTableName());
             params.put("db_name", mtp.getTable().getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtp.getTable().getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE,db_id,-1l, pm, mtp.getTable(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE,db_id,-1l, pm, mtp.getTable(),params));
           }
           else if(obj instanceof MSchemaPrivilege)
           {
@@ -6903,13 +6925,13 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", msp.getGrantor());
             params.put("grantor_type", msp.getGrantorType());
-            params.put("principalName", msp.getPrincipalName());
+            params.put("principal_name", msp.getPrincipalName());
             params.put("principal_type", msp.getPrincipalType());
             params.put("privilege", msp.getPrivilege());
             params.put("create_time",msp.getCreateTime());
             params.put("grant_option",msp.getGrantOption());
             params.put("schema_name", msp.getSchema().getSchemaName());
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_SCHEMA,-1l,-1l, pm, msp.getSchema(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_SCHEMA,-1l,-1l, pm, msp.getSchema(),params));
           }
           else if(obj instanceof MPartitionPrivilege)
           {
@@ -6917,7 +6939,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mpp.getGrantor());
             params.put("grantor_type", mpp.getGrantorType());
-            params.put("principalName", mpp.getPrincipalName());
+            params.put("principal_name", mpp.getPrincipalName());
             params.put("principal_type", mpp.getPrincipalType());
             params.put("privilege", mpp.getPrivilege());
             params.put("create_time",mpp.getCreateTime());
@@ -6926,7 +6948,7 @@ public MUser getMUser(String userName) {
             params.put("table_name", mpp.getPartition().getTable().getTableName());
             params.put("db_name", mpp.getPartition().getTable().getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpp.getPartition().getTable().getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION,db_id,-1l, pm, mpp.getPartition(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION,db_id,-1l, pm, mpp.getPartition(),params));
           }
           else if(obj instanceof MPartitionColumnPrivilege)
           {
@@ -6934,7 +6956,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mpcp.getGrantor());
             params.put("grantor_type", mpcp.getGrantorType());
-            params.put("principalName", mpcp.getPrincipalName());
+            params.put("principal_name", mpcp.getPrincipalName());
             params.put("principal_type", mpcp.getPrincipalType());
             params.put("privilege", mpcp.getPrivilege());
             params.put("create_time",mpcp.getCreateTime());
@@ -6944,7 +6966,7 @@ public MUser getMUser(String userName) {
             params.put("table_name", mpcp.getPartition().getTable().getTableName());
             params.put("db_name", mpcp.getPartition().getTable().getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpcp.getPartition().getTable().getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION_COLUMN,db_id,-1l, pm, mpcp.getPartition().getTable().getSd().getCD(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION_COLUMN,db_id,-1l, pm, mpcp.getPartition().getTable().getSd().getCD(),params));
           }
           else if(obj instanceof MTableColumnPrivilege)
           {
@@ -6952,7 +6974,7 @@ public MUser getMUser(String userName) {
             HashMap<String,Object> params = new HashMap<String,Object>();
             params.put("grantor", mtcp.getGrantor());
             params.put("grantor_type", mtcp.getGrantorType());
-            params.put("principalName", mtcp.getPrincipalName());
+            params.put("principal_name", mtcp.getPrincipalName());
             params.put("principal_type", mtcp.getPrincipalType());
             params.put("privilege", mtcp.getPrivilege());
             params.put("create_time",mtcp.getCreateTime());
@@ -6961,8 +6983,17 @@ public MUser getMUser(String userName) {
             params.put("table_name", mtcp.getTable().getTableName());
             params.put("db_name", mtcp.getTable().getDatabase().getName());
             long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtcp.getTable().getDatabase()).toString()));
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE_COLUMN,db_id,-1l, pm, mtcp.getTable().getSd().getCD(),params));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE_COLUMN,db_id,-1l, pm, mtcp.getTable().getSd().getCD(),params));
           }
+        }
+        pm.deletePersistentAll(persistentObjs);
+      }
+      committed = commitTransaction();
+
+      if(committed)
+      {
+        for(MSGFactory.DDLMsg msg : msgs) {
+          MetaMsgServer.sendMsg(msg);
         }
       }
     } finally {
@@ -8928,6 +8959,8 @@ public MUser getMUser(String userName) {
     } finally {
       if (!success) {
         rollbackTransaction();
+      } else {
+        DMProfile.fdelR.incrementAndGet();
       }
     }
     return success;
@@ -8962,6 +8995,8 @@ public MUser getMUser(String userName) {
     } finally {
       if (!success) {
         rollbackTransaction();
+      } else {
+        DMProfile.sfldelR.incrementAndGet();
       }
     }
     return success;
@@ -10124,8 +10159,11 @@ public MUser getMUser(String userName) {
       pm.makePersistent(mng);
 //      pm.makePersistentAll(mng.getNodes());
       commited = commitTransaction();
+
       HashMap<String,Object> params = new HashMap<String,Object>();
       params.put("new_nodes", new_nodes.substring(0, new_nodes.length()-1));
+      params.put("nodegroup_name", mng.getNode_group_name());
+
       if(commited) {
         MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_ALTER_NODEGROUP,-1,-1,pm,mng,params));
       }

@@ -1071,6 +1071,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
       4:list<FieldSchema> part_keys,5:list<NodeGroup> ngs) throws (1:InvalidObjectException o1, 2:NoSuchObjectException o2, 3:MetaException o3)
   
   statfs statFileSystem(1:i64 begin_time, 2:i64 end_time) throws (1:MetaException o1)
+  
+  i64 getMaxFid() throws (1:MetaException o1)
 }
 
 // * Note about the DDL_TIME: When creating or altering a table or a partition,

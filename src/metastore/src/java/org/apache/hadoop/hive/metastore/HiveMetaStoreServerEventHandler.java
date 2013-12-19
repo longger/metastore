@@ -5,6 +5,7 @@ import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler.MSSessionState;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.server.ServerContext;
@@ -29,12 +30,14 @@ public class HiveMetaStoreServerEventHandler implements TServerEventHandler {
   public ServerContext createContext(TProtocol input, TProtocol output) {
     HiveMetaStoreServerContext sc = new HiveMetaStoreServerContext();
     sessions.put(sc.getSessionId(), sc);
+    DMProfile.newConn.incrementAndGet();
     LOG.debug("Receive a new connection, set its sessionId to " + sc.getSessionId());
     return sc;
   }
 
   @Override
   public void deleteContext(ServerContext serverContext, TProtocol input, TProtocol output) {
+    DMProfile.delConn.incrementAndGet();
     sessions.remove(serverContext);
   }
 
@@ -42,6 +45,7 @@ public class HiveMetaStoreServerEventHandler implements TServerEventHandler {
   public void processContext(ServerContext serverContext, TTransport inputTransport,
       TTransport outputTransport) {
     HiveMetaStoreServerContext sc = (HiveMetaStoreServerContext)serverContext;
+    DMProfile.query.incrementAndGet();
     // set the session ID to this thread?
     MSSessionState msss = new MSSessionState();
     msss.setSessionid(sc.getSessionId());
