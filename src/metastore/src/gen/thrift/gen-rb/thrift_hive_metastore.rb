@@ -2426,6 +2426,23 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_file_by_id failed: unknown result')
     end
 
+    def del_fileLocation(sfl)
+      send_del_fileLocation(sfl)
+      return recv_del_fileLocation()
+    end
+
+    def send_del_fileLocation(sfl)
+      send_message('del_fileLocation', Del_fileLocation_args, :sfl => sfl)
+    end
+
+    def recv_del_fileLocation()
+      result = receive_message(Del_fileLocation_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise result.o2 unless result.o2.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'del_fileLocation failed: unknown result')
+    end
+
     def get_file_by_name(node, devid, location)
       send_get_file_by_name(node, devid, location)
       return recv_get_file_by_name()
@@ -5036,6 +5053,19 @@ module ThriftHiveMetastore
         result.o2 = o2
       end
       write_result(result, oprot, 'get_file_by_id', seqid)
+    end
+
+    def process_del_fileLocation(seqid, iprot, oprot)
+      args = read_args(iprot, Del_fileLocation_args)
+      result = Del_fileLocation_result.new()
+      begin
+        result.success = @handler.del_fileLocation(args.sfl)
+      rescue ::FileOperationException => o1
+        result.o1 = o1
+      rescue ::MetaException => o2
+        result.o2 = o2
+      end
+      write_result(result, oprot, 'del_fileLocation', seqid)
     end
 
     def process_get_file_by_name(seqid, iprot, oprot)
@@ -11048,6 +11078,42 @@ module ThriftHiveMetastore
 
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::STRUCT, :name => 'success', :class => ::SFile},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::FileOperationException},
+      O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Del_fileLocation_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SFL = 1
+
+    FIELDS = {
+      SFL => {:type => ::Thrift::Types::STRUCT, :name => 'sfl', :class => ::SFileLocation}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Del_fileLocation_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+    O2 = 2
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::I32, :name => 'success'},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::FileOperationException},
       O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::MetaException}
     }

@@ -168,6 +168,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '  bool set_loadstatus_bad(i64 fid)'
   print '  bool toggle_safemode()'
   print '  SFile get_file_by_id(i64 fid)'
+  print '  i32 del_fileLocation(SFileLocation sfl)'
   print '  SFile get_file_by_name(string node, string devid, string location)'
   print '  i32 rm_file_logical(SFile file)'
   print '  i32 restore_file(SFile file)'
@@ -1137,6 +1138,12 @@ elif cmd == 'get_file_by_id':
     print 'get_file_by_id requires 1 args'
     sys.exit(1)
   pp.pprint(client.get_file_by_id(eval(args[0]),))
+
+elif cmd == 'del_fileLocation':
+  if len(args) != 1:
+    print 'del_fileLocation requires 1 args'
+    sys.exit(1)
+  pp.pprint(client.del_fileLocation(eval(args[0]),))
 
 elif cmd == 'get_file_by_name':
   if len(args) != 3:

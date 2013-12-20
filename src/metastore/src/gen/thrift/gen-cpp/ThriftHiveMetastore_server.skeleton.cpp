@@ -747,6 +747,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("get_file_by_id\n");
   }
 
+  int32_t del_fileLocation(const SFileLocation& sfl) {
+    // Your implementation goes here
+    printf("del_fileLocation\n");
+  }
+
   void get_file_by_name(SFile& _return, const std::string& node, const std::string& devid, const std::string& location) {
     // Your implementation goes here
     printf("get_file_by_name\n");

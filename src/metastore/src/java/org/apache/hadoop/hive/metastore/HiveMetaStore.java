@@ -4685,6 +4685,21 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     }
 
     @Override
+    public int del_fileLocation(SFileLocation sfl) throws FileOperationException, MetaException,
+        TException {
+      SFileLocation sflt = getMS().getSFileLocation(sfl.getDevid(), sfl.getLocation());
+      if (sflt == null) {
+        throw new FileOperationException("Can not find SFileLocation by Devid: " +
+            sfl.getDevid() + " Location: " + sfl.getLocation(), FOFailReason.INVALID_FILE);
+      }
+      if (sflt.getVisit_status() != MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+        throw new FileOperationException("FileLocation VisitStatus is not in ONLINE.", FOFailReason.INVALID_STATE);
+      }
+      getMS().delSFileLocation(sflt.getDevid(), sflt.getLocation());
+      return 0;
+    }
+
+    @Override
     public int rm_file_logical(SFile file) throws FileOperationException, MetaException, TException {
       DMProfile.frmlR.incrementAndGet();
       SFile saved = getMS().getSFile(file.getFid());
@@ -6976,6 +6991,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     public long getMaxFid() throws MetaException, TException {
       return getMS().getCurrentFID();
     }
+
+
+
 
   }
 

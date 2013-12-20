@@ -2349,4 +2349,10 @@ public boolean authentication(String user_name, String passwd)
   public long getMaxFid() throws MetaException, TException {
     return client.getMaxFid();
   }
+
+  @Override
+  public int del_fileLocation(SFileLocation sfl) throws FileOperationException, MetaException,
+      TException {
+    return client.del_fileLocation(sfl);
+  }
 }

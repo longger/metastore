@@ -1147,6 +1147,13 @@ class Iface(fb303.FacebookService.Iface):
     """
     pass
 
+  def del_fileLocation(self, sfl):
+    """
+    Parameters:
+     - sfl
+    """
+    pass
+
   def get_file_by_name(self, node, devid, location):
     """
     Parameters:
@@ -6617,6 +6624,40 @@ class Client(fb303.FacebookService.Client, Iface):
       raise result.o2
     raise TApplicationException(TApplicationException.MISSING_RESULT, "get_file_by_id failed: unknown result");
 
+  def del_fileLocation(self, sfl):
+    """
+    Parameters:
+     - sfl
+    """
+    self.send_del_fileLocation(sfl)
+    return self.recv_del_fileLocation()
+
+  def send_del_fileLocation(self, sfl):
+    self._oprot.writeMessageBegin('del_fileLocation', TMessageType.CALL, self._seqid)
+    args = del_fileLocation_args()
+    args.sfl = sfl
+    args.write(self._oprot)
+    self._oprot.writeMessageEnd()
+    self._oprot.trans.flush()
+
+  def recv_del_fileLocation(self, ):
+    (fname, mtype, rseqid) = self._iprot.readMessageBegin()
+    if mtype == TMessageType.EXCEPTION:
+      x = TApplicationException()
+      x.read(self._iprot)
+      self._iprot.readMessageEnd()
+      raise x
+    result = del_fileLocation_result()
+    result.read(self._iprot)
+    self._iprot.readMessageEnd()
+    if result.success is not None:
+      return result.success
+    if result.o1 is not None:
+      raise result.o1
+    if result.o2 is not None:
+      raise result.o2
+    raise TApplicationException(TApplicationException.MISSING_RESULT, "del_fileLocation failed: unknown result");
+
   def get_file_by_name(self, node, devid, location):
     """
     Parameters:
@@ -8436,6 +8477,7 @@ class Processor(fb303.FacebookService.Processor, Iface, TProcessor):
     self._processMap["set_loadstatus_bad"] = Processor.process_set_loadstatus_bad
     self._processMap["toggle_safemode"] = Processor.process_toggle_safemode
     self._processMap["get_file_by_id"] = Processor.process_get_file_by_id
+    self._processMap["del_fileLocation"] = Processor.process_del_fileLocation
     self._processMap["get_file_by_name"] = Processor.process_get_file_by_name
     self._processMap["rm_file_logical"] = Processor.process_rm_file_logical
     self._processMap["restore_file"] = Processor.process_restore_file
@@ -10751,6 +10793,22 @@ class Processor(fb303.FacebookService.Processor, Iface, TProcessor):
     except MetaException as o2:
       result.o2 = o2
     oprot.writeMessageBegin("get_file_by_id", TMessageType.REPLY, seqid)
+    result.write(oprot)
+    oprot.writeMessageEnd()
+    oprot.trans.flush()
+
+  def process_del_fileLocation(self, seqid, iprot, oprot):
+    args = del_fileLocation_args()
+    args.read(iprot)
+    iprot.readMessageEnd()
+    result = del_fileLocation_result()
+    try:
+      result.success = self._handler.del_fileLocation(args.sfl)
+    except FileOperationException as o1:
+      result.o1 = o1
+    except MetaException as o2:
+      result.o2 = o2
+    oprot.writeMessageBegin("del_fileLocation", TMessageType.REPLY, seqid)
     result.write(oprot)
     oprot.writeMessageEnd()
     oprot.trans.flush()
@@ -34326,6 +34384,152 @@ class get_file_by_id_result:
     if self.success is not None:
       oprot.writeFieldBegin('success', TType.STRUCT, 0)
       self.success.write(oprot)
+      oprot.writeFieldEnd()
+    if self.o1 is not None:
+      oprot.writeFieldBegin('o1', TType.STRUCT, 1)
+      self.o1.write(oprot)
+      oprot.writeFieldEnd()
+    if self.o2 is not None:
+      oprot.writeFieldBegin('o2', TType.STRUCT, 2)
+      self.o2.write(oprot)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class del_fileLocation_args:
+  """
+  Attributes:
+   - sfl
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.STRUCT, 'sfl', (SFileLocation, SFileLocation.thrift_spec), None, ), # 1
+  )
+
+  def __init__(self, sfl=None,):
+    self.sfl = sfl
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.STRUCT:
+          self.sfl = SFileLocation()
+          self.sfl.read(iprot)
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('del_fileLocation_args')
+    if self.sfl is not None:
+      oprot.writeFieldBegin('sfl', TType.STRUCT, 1)
+      self.sfl.write(oprot)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class del_fileLocation_result:
+  """
+  Attributes:
+   - success
+   - o1
+   - o2
+  """
+
+  thrift_spec = (
+    (0, TType.I32, 'success', None, None, ), # 0
+    (1, TType.STRUCT, 'o1', (FileOperationException, FileOperationException.thrift_spec), None, ), # 1
+    (2, TType.STRUCT, 'o2', (MetaException, MetaException.thrift_spec), None, ), # 2
+  )
+
+  def __init__(self, success=None, o1=None, o2=None,):
+    self.success = success
+    self.o1 = o1
+    self.o2 = o2
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 0:
+        if ftype == TType.I32:
+          self.success = iprot.readI32();
+        else:
+          iprot.skip(ftype)
+      elif fid == 1:
+        if ftype == TType.STRUCT:
+          self.o1 = FileOperationException()
+          self.o1.read(iprot)
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.STRUCT:
+          self.o2 = MetaException()
+          self.o2.read(iprot)
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('del_fileLocation_result')
+    if self.success is not None:
+      oprot.writeFieldBegin('success', TType.I32, 0)
+      oprot.writeI32(self.success)
       oprot.writeFieldEnd()
     if self.o1 is not None:
       oprot.writeFieldBegin('o1', TType.STRUCT, 1)

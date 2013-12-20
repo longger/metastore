@@ -1005,6 +1005,8 @@ public interface IMetaStoreClient {
 
   public SFile get_file_by_id(long fid) throws FileOperationException, MetaException, TException;
 
+  public int del_fileLocation(SFileLocation sfl) throws FileOperationException, MetaException, TException;
+
   public SFile get_file_by_name(String node, String devid, String location)
         throws FileOperationException, MetaException, TException;
 
