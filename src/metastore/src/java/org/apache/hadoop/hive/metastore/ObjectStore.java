@@ -2303,13 +2303,16 @@ public class ObjectStore implements RawStore, Configurable {
     return f;
   }
 
+  // FIXME: getSFileLocations use repeatable-read? QUICK or CORRECT, choose one, boy!
   public List<SFileLocation> getSFileLocations(long fid) throws MetaException {
     boolean commited = false;
     List<SFileLocation> sfl = new ArrayList<SFileLocation>();
     try {
       openTransaction();
+      currentTransaction.setIsolationLevel("repeatable-read");
       sfl = convertToSFileLocation(getMFileLocations(fid));
       commited = commitTransaction();
+      currentTransaction.setIsolationLevel("read-committed");
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -2859,7 +2862,7 @@ public class ObjectStore implements RawStore, Configurable {
     return mfl;
   }
 
-  private List<MFileLocation> getMFileLocations(long fid) {
+  private List<MFileLocation> getMFileLocations(long fid) throws MetaException {
     List<MFileLocation> mfl = new ArrayList<MFileLocation>();
     boolean commited = false;
 
@@ -2879,6 +2882,7 @@ public class ObjectStore implements RawStore, Configurable {
     } finally {
       if (!commited) {
         rollbackTransaction();
+        throw new MetaException("Rollbacked, please retry.");
       }
     }
     return mfl;
