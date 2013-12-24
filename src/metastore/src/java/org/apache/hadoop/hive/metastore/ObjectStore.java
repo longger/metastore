@@ -2461,6 +2461,7 @@ public class ObjectStore implements RawStore, Configurable {
       mf.setStore_status(newfile.getStore_status());
       mf.setLoad_status(newfile.getLoad_status());
       mf.setLength(newfile.getLength());
+      mf.setRef_files(newfile.getRef_files());
 
       tableName = newfile.getTableName();
       dbName = newfile.getDbName();
