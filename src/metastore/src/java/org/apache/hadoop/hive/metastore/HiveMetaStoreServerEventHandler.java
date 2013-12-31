@@ -1,7 +1,7 @@
 package org.apache.hadoop.hive.metastore;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -14,7 +14,7 @@ import org.apache.thrift.transport.TTransport;
 
 public class HiveMetaStoreServerEventHandler implements TServerEventHandler {
   public static final Log LOG = LogFactory.getLog(HiveMetaStoreServerEventHandler.class);
-  public static final Map<Long, HiveMetaStoreServerContext> sessions = new HashMap<Long, HiveMetaStoreServerContext>();
+  public static final Map<Long, HiveMetaStoreServerContext> sessions = new ConcurrentHashMap<Long, HiveMetaStoreServerContext>();
 
   public static HiveMetaStoreServerContext getServerContext(Long sessionId) {
     return sessions.get(sessionId);

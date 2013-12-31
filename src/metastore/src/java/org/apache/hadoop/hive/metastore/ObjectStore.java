@@ -2307,12 +2307,13 @@ public class ObjectStore implements RawStore, Configurable {
   public List<SFileLocation> getSFileLocations(long fid) throws MetaException {
     boolean commited = false;
     List<SFileLocation> sfl = new ArrayList<SFileLocation>();
+    // BUG-XXX can not alter transacction level here
     try {
       openTransaction();
-      currentTransaction.setIsolationLevel("repeatable-read");
+      //currentTransaction.setIsolationLevel("repeatable-read");
       sfl = convertToSFileLocation(getMFileLocations(fid));
       commited = commitTransaction();
-      currentTransaction.setIsolationLevel("read-committed");
+      //currentTransaction.setIsolationLevel("read-committed");
     } finally {
       if (!commited) {
         rollbackTransaction();

@@ -2623,7 +2623,8 @@ public class DiskManager {
                     if (nloc != null) {
                       getRS().delSFileLocation(nloc.getDevid(), nloc.getLocation());
                     }
-                    throw new IOException("Can not find Node '" + r.file.getLocations().get(master).getNode_name() + "' in nodemap now, is it offline?");
+                    throw new IOException("Can not find Node '" + r.file.getLocations().get(master).getNode_name() +
+                        "' in nodemap now, is it offline? fid(" + r.file.getFid() + ")");
                   }
                   j.put("node_name", r.file.getLocations().get(master).getNode_name());
                   j.put("devid", r.file.getLocations().get(master).getDevid());
@@ -2637,7 +2638,8 @@ public class DiskManager {
                     if (nloc != null) {
                       getRS().delSFileLocation(nloc.getDevid(), nloc.getLocation());
                     }
-                    throw new IOException("Can not find Node '" + nloc.getNode_name() + "' in nodemap now, is it offline?");
+                    throw new IOException("Can not find Node '" + nloc.getNode_name() + "' in nodemap now, is it offline? fid("
+                        + r.file.getFid() + ")");
                   }
                   j.put("node_name", nloc.getNode_name());
                   j.put("devid", nloc.getDevid());
@@ -2670,7 +2672,7 @@ public class DiskManager {
                   repQ.notify();
                 }
                 try {
-                  Thread.sleep(100);
+                  Thread.sleep(500);
                 } catch (InterruptedException e1) {
                 }
                 release_rep_limit();
@@ -2791,10 +2793,12 @@ public class DiskManager {
 
           int nr = 0;
           int nr_max = hiveConf.getIntVar(HiveConf.ConfVars.DM_APPEND_CMD_MAX);
-          StringBuffer sb = new StringBuffer();
-          sb.append("+OK\n");
+          StringBuffer sb;
 
           while (true) {
+            sb = new StringBuffer();
+            sb.append("+OK\n");
+
             if (toDelete != null) {
               synchronized (toDelete) {
                 Set<SFileLocation> ls = new TreeSet<SFileLocation>();
@@ -2858,7 +2862,7 @@ public class DiskManager {
               }
             }
             // check if we handles all the cmds
-            if (!(toRep.size() > 0 || toRep.size() > 0)) {
+            if (!(toRep.size() > 0 || toDelete.size() > 0)) {
               break;
             }
           }
