@@ -2197,7 +2197,8 @@ public class DiskManager {
             if (flp.devs != null) {
               excludeDevs.addAll(flp.devs);
             }
-            if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED) {
+            if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED ||
+                flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
               excludeDevs.addAll(findSharedDevs(dis));
             }
             if (!canFindDevices(ni, excludeDevs)) {
@@ -2299,6 +2300,31 @@ public class DiskManager {
       }
     }
 
+    private void __trim_dilist(List<DeviceInfo> dilist, int nr) {
+      if (dilist.size() <= nr) {
+        return;
+      }
+      List<DeviceInfo> newlist = new ArrayList<DeviceInfo>();
+      newlist.addAll(dilist);
+      dilist.clear();
+
+      for (int i = 0; i < nr; i++) {
+        long free = 0;
+        DeviceInfo toDel = null;
+
+        for (DeviceInfo di : newlist) {
+          if (di.free > free) {
+            free = di.free;
+            toDel = di;
+          }
+        }
+        if (toDel != null) {
+          newlist.remove(toDel);
+          dilist.add(toDel);
+        }
+      }
+    }
+
     public String findBestDevice(String node, FileLocatingPolicy flp) throws IOException {
       if (safeMode) {
         throw new IOException("Disk Manager is in Safe Mode, waiting for disk reports ...\n");
@@ -2335,11 +2361,12 @@ public class DiskManager {
             continue;
           }
         } else if (flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
-          // random select a device in specify dilist
+          // random select a device in specify dilist with at most 3 device?
           if (dilist == null) {
             return null;
           } else {
             Random r = new Random();
+            __trim_dilist(dilist, 3);
             return dilist.get(r.nextInt(dilist.size())).dev;
           }
         }

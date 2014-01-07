@@ -875,8 +875,10 @@ public class ObjectStore implements RawStore, Configurable {
   @Override
   public List<Long> listTableFiles(String dbName, String tableName, int begin, int end) throws MetaException {
     List<Long> rls = new ArrayList<Long>();
+    boolean commited = false;
 
     try {
+      openTransaction();
       Query q0 = pm.newQuery(MFile.class, "this.table.tableName == tableName && this.table.database.name == dbName");
       q0.setResult("count(fid)");
       q0.declareParameters("java.lang.String tableName, java.lang.String dbName");
@@ -893,11 +895,10 @@ public class ObjectStore implements RawStore, Configurable {
       if (end < begin) {
         end = begin;
       }
-      // FIXME: do NOT ordering on large data set!
-      if (fnr <= 1000) {
-        q.setOrdering("fid ascending");
-      }
+      // BUG-XXX: if unordering, we will got corrupt result, thus, do ordering
+      q.setOrdering("fid ascending");
       q.setRange(begin, end);
+      q.setIgnoreCache(true);
       q.declareParameters("java.lang.String tableName, java.lang.String dbName");
       Collection files = (Collection)q.execute(tableName, dbName);
       Iterator iter = files.iterator();
@@ -909,7 +910,11 @@ public class ObjectStore implements RawStore, Configurable {
         }
         rls.add(mf.getFid());
       }
+      commited = commitTransaction();
     } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
     }
 
     return rls;

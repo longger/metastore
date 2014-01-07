@@ -4456,7 +4456,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       FileLocatingPolicy flp;
 
       if (spec_node.size() > 0) {
-        flp = new FileLocatingPolicy(spec_node, excl_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+        flp = new FileLocatingPolicy(spec_node, excl_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
       } else {
         flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
       }
@@ -6858,7 +6858,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             }
             if (policy.getOperation() == CreateOperation.CREATE_NEW_RANDOM) {
               // TODO: Do we need random dev selection here?
-              flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.RANDOM_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+              flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.RANDOM_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
             } else {
               flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
             }
