@@ -4833,19 +4833,54 @@ public class ObjectStore implements RawStore, Configurable {
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,params));
       }
       //MSG_ALT_TALBE_DISTRIBUTE        似乎没有修改过..
+//      if(newt.getGroupDistribute() != null)
+      {
 
+        Set<MNodeGroup> oldng = new HashSet<MNodeGroup>();
+        Set<MNodeGroup> newng = new HashSet<MNodeGroup>();
+        if(oldt.getGroupDistribute() == null){
+          LOG.warn("---zy-- in alter table, oldt.getGroupDistribute() is null.");
+        } else {
+          oldng.addAll(oldt.getGroupDistribute());
+        }
+        if(newt.getGroupDistribute() != null) {
+          newng.addAll(newt.getGroupDistribute());
+        }
+
+        LOG.warn("---zy-- in alter table,oldt.getGroupDistribute():"+oldt.getGroupDistribute());
+        LOG.warn("---zy-- in alter table,newt.getGroupDistribute():"+newt.getGroupDistribute());
+        if(newt.getGroupDistribute() != null) {
+          oldng.removeAll(newt.getGroupDistribute());
+        }
+        if(oldt.getGroupDistribute() != null) {
+          newng.removeAll(oldt.getGroupDistribute());
+        }
+        for(MNodeGroup ng : oldng)
+        {
+          HashMap<String, Object> params = new HashMap<String, Object>();
+          params.put("action", "delng");
+          params.put("table_name", oldt.getTableName());
+          params.put("db_name", oldt.getDatabase().getName());
+          params.put("nodegroup_name", ng.getNode_group_name());
+          msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DISTRIBUTE,db_id,-1, pm, oldt,params));
+        }
+        for(MNodeGroup ng : newng)
+        {
+          HashMap<String, Object> params = new HashMap<String, Object>();
+          params.put("action", "addng");
+          params.put("table_name", oldt.getTableName());
+          params.put("db_name", oldt.getDatabase().getName());
+          params.put("nodegroup_name", ng.getNode_group_name());
+          msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DISTRIBUTE,db_id,-1, pm, oldt,params));
+        }
+
+      }
 
       // For now only alter name, owner, paramters, cols, bucketcols are allowed
       oldt.setTableName(newt.getTableName().toLowerCase());
       oldt.setParameters(newt.getParameters());
       oldt.setOwner(newt.getOwner());
-      if(null != newt.getGroupDistribute()){
-        LOG.info("##############null != newt.getGroupDistribute()");
-        for(MNodeGroup mng :newt.getGroupDistribute()){
-          LOG.info("##############ZQH#############OBJECTSTORE" + mng.getNode_group_name());
-        }
-        oldt.setGroupDistribute(newt.getGroupDistribute());
-      }
+      oldt.setGroupDistribute(newt.getGroupDistribute());
 
       // Fully copy over the contents of the new SD into the old SD,
       // so we don't create an extra SD in the metastore db that has no references.
