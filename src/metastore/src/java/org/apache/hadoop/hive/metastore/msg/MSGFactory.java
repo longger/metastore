@@ -394,16 +394,17 @@ public class MSGFactory {
         /**
          * 目前，表的分布方式有两种，全分布和全复制
          */
-          MTable alt_distribute_tbl = (MTable)msg.getEventObject();
-          params.put("db_name",alt_distribute_tbl.getDatabase().getName());
-          params.put("table_name",alt_distribute_tbl.getTableName());
-          if(msg.getOld_object_params().containsKey("table_distribute")){
-            params.put("table_distribute",msg.getOld_object_params().get("table_distribute"));
-          }
-          if(msg.getOld_object_params().containsKey("old_table_distribute")){
-            params.put("old_table_distribute",msg.getOld_object_params().get("old_table_distribute"));
-          }
-          break;
+//          MTable alt_distribute_tbl = (MTable)msg.getEventObject();
+//          params.put("db_name",alt_distribute_tbl.getDatabase().getName());
+//          params.put("table_name",alt_distribute_tbl.getTableName());
+//          if(msg.getOld_object_params().containsKey("table_distribute")){
+//            params.put("table_distribute",msg.getOld_object_params().get("table_distribute"));
+//          }
+//          if(msg.getOld_object_params().containsKey("old_table_distribute")){
+//            params.put("old_table_distribute",msg.getOld_object_params().get("old_table_distribute"));
+//          }
+        params.putAll(msg.getOld_object_params());
+        break;
       case MSGType.MSG_ALT_TALBE_PARTITIONING :
             //修改表分区方式
           MTable alt_partitioning_tbl = (MTable)msg.getEventObject();
