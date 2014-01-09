@@ -3416,11 +3416,13 @@ public class DiskManager {
               int nr_max = hiveConf.getIntVar(HiveConf.ConfVars.DM_APPEND_CMD_MAX);
               synchronized (ndmap) {
                 NodeInfo ni = ndmap.get(reportNode.getNode_name());
+                int nr_del_max = (ni.toRep.size() > 0 ? nr_max - 1 : nr_max);
+
                 if (ni != null && ni.toDelete.size() > 0) {
                   synchronized (ni.toDelete) {
                     Set<SFileLocation> ls = new TreeSet<SFileLocation>();
                     for (SFileLocation loc : ni.toDelete) {
-                      if (nr >= nr_max) {
+                      if (nr >= nr_del_max) {
                         break;
                       }
                       sendStr += "+DEL:" + loc.getNode_name() + ":" + loc.getDevid() + ":" +
