@@ -234,7 +234,7 @@ public class DiskManager {
 
     public static class DMReply {
       public enum DMReplyType {
-        DELETED, REPLICATED, FAILED_REP, FAILED_DEL,
+        DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY,
       }
       DMReplyType type;
       String args;
@@ -254,6 +254,9 @@ public class DiskManager {
           break;
         case FAILED_DEL:
           r += "FAILED_DEL";
+          break;
+        default:
+          r += "UNKNOWN";
           break;
         }
         r += ": {" + args + "}";
@@ -327,12 +330,14 @@ public class DiskManager {
       List<DeviceInfo> dis;
       Set<SFileLocation> toDelete;
       Set<JSONObject> toRep;
+      Set<String> toVerify;
       String lastReportStr;
       long totalReportNr = 0;
       long totalFileRep = 0;
       long totalFileDel = 0;
       long totalFailDel = 0;
       long totalFailRep = 0;
+      long totalVerify = 0;
       InetAddress address = null;
       int port = 0;
 
@@ -341,6 +346,7 @@ public class DiskManager {
         this.dis = dis;
         this.toDelete = Collections.synchronizedSet(new TreeSet<SFileLocation>());
         this.toRep = Collections.synchronizedSet(new TreeSet<JSONObject>());
+        this.toVerify = Collections.synchronizedSet(new TreeSet<String>());
       }
 
       public String getMP(String devid) {
@@ -998,7 +1004,7 @@ public class DiskManager {
         //30 closeRepLimit,fixRepLimit,
         //32 reqQlen,cleanQlen,backupQlen,
         //35 totalReportNr,totalFileRep,totalFileDel,toRepNr,toDeleteNr,avgReportTs,
-        //41 timestamp,
+        //41 timestamp,totalVerify,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -1029,12 +1035,13 @@ public class DiskManager {
             sb.append("-1,");
           }
         }
-        long totalReportNr = 0, totalFileRep = 0, totalFileDel = 0, toRepNr = 0, toDeleteNr = 0, avgReportTs = 0;
+        long totalReportNr = 0, totalFileRep = 0, totalFileDel = 0, toRepNr = 0, toDeleteNr = 0, avgReportTs = 0, totalVerify = 0;
         synchronized (ndmap) {
           for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
             totalReportNr += e.getValue().totalReportNr;
             totalFileRep += e.getValue().totalFileRep;
             totalFileDel += e.getValue().totalFailDel;
+            totalVerify += e.getValue().totalVerify;
             toRepNr += e.getValue().toRep.size();
             toDeleteNr += e.getValue().toDelete.size();
             avgReportTs += (System.currentTimeMillis() - e.getValue().lastRptTs)/1000;
@@ -1082,7 +1089,8 @@ public class DiskManager {
         sb.append(toRepNr + ",");
         sb.append(toDeleteNr + ",");
         sb.append(avgReportTs + ",");
-        sb.append(System.currentTimeMillis() / 1000);
+        sb.append((System.currentTimeMillis() / 1000) + ",");
+        sb.append(totalVerify);
         sb.append("\n");
 
         // generate report file
@@ -1566,6 +1574,7 @@ public class DiskManager {
           r += prefix + " " + e.getKey() + " -> " + "Rpt TNr: " + e.getValue().totalReportNr +
               ", TREP: " + e.getValue().totalFileRep +
               ", TDEL: " + e.getValue().totalFileDel +
+              ", TVYR: " + e.getValue().totalVerify +
               ", QREP: " + e.getValue().toRep.size() +
               ", QDEL: " + e.getValue().toDelete.size() +
               ", Last Rpt " + (System.currentTimeMillis() - e.getValue().lastRptTs)/1000 + "s ago, {\n";
@@ -1608,6 +1617,7 @@ public class DiskManager {
               case MetaStoreConst.MDeviceProp.SHARED:
               case MetaStoreConst.MDeviceProp.BACKUP_ALONE:
                 devnr[di.prop]++;
+              case -1:
                 break;
               }
             }
@@ -1624,7 +1634,9 @@ public class DiskManager {
 	      for (Map.Entry<String, DeviceInfo> e : admap.entrySet()) {
 	        free += e.getValue().free;
 	        used += e.getValue().used;
-	        adevnr[e.getValue().prop]++;
+	        if (e.getValue().prop >= 0) {
+            adevnr[e.getValue().prop]++;
+          }
 	      }
 	    }
 
@@ -2565,6 +2577,7 @@ public class DiskManager {
                 // this backup device has already been used, do not user any other backup device
                 spec_dev.clear();
               }
+              // FIXME: remove if this backup device is full
             }
             if (!master_marked) {
               LOG.error("No active master copy for file FID " + r.file.getFid() + ". BAD FAIL!");
@@ -3021,6 +3034,9 @@ public class DiskManager {
             LOG.error("RECV ERR: " + cmds[i]);
             dmr.type = DMReply.DMReplyType.FAILED_DEL;
             dmr.args = cmds[i].substring(10);
+          } else if (cmds[i].startsWith("+VERIFY:")) {
+            dmr.type = DMReply.DMReplyType.VERIFY;
+            dmr.args = cmds[i].substring(8);
           }
         }
 
@@ -3140,6 +3156,9 @@ public class DiskManager {
                   for (DMReply r : report.replies) {
                     String[] args = r.args.split(",");
                     switch (r.type) {
+                    case VERIFY:
+                      oni.totalVerify++;
+                      break;
                     case REPLICATED:
                       oni.totalFileRep++;
                       break;
@@ -3280,6 +3299,27 @@ public class DiskManager {
                         e.printStackTrace();
                       }
                     }
+                    break;
+                  case VERIFY:
+                    if (args.length < 4) {
+                      LOG.warn("Invalid VERIFY report: " + r.args);
+                    } else {
+                      LOG.debug("Verify SFL: " + r.args);
+                      synchronized (rs) {
+                        SFileLocation sfl = rs.getSFileLocation(args[1], args[2]);
+                        if (sfl != null) {
+                          // NOTE: if we can not find the specified SFL, this means there
+                          // is no metadata for this 'SFL'. Thus, we notify dservice to
+                          // delete this 'SFL' if needed. (Dservice delete it if these files
+                          // hadn't been touched for specified seconds.)
+                          synchronized (oni.toVerify) {
+                            oni.toVerify.add(args[1] + ":" + oni.getMP(args[1]) + ":" + args[2]);
+                            LOG.info("----> Add toVerify " + args[0] + " " + args[1] + "," + args[2]);
+                          }
+                        }
+                      }
+                    }
+
                     break;
                   default:
                     LOG.warn("Invalid DMReply type: " + r.type);
@@ -3450,6 +3490,23 @@ public class DiskManager {
                     }
                     for (JSONObject j : jos) {
                       ni.toRep.remove(j);
+                    }
+                  }
+                }
+
+                if (ni != null && ni.toVerify.size() > 0) {
+                  synchronized (ni.toVerify) {
+                    List<String> vs = new ArrayList<String>();
+                    for (String v : ni.toVerify) {
+                      if (nr >= nr_max) {
+                        break;
+                      }
+                      sendStr += "+VYR:" + v + "\n";
+                      vs.add(v);
+                      nr++;
+                    }
+                    for (String v : vs) {
+                      ni.toVerify.remove(v);
                     }
                   }
                 }
