@@ -696,6 +696,7 @@ public class MSGFactory {
             //新建列索引
           MIndex index = (MIndex)msg.getEventObject();
           params.put("db_name",index.getOrigTable().getDatabase().getName());
+          params.put("table_name", index.getOrigTable().getTableName());
           params.put("index_name",index.getIndexName());
 
           break;
@@ -703,20 +704,22 @@ public class MSGFactory {
             //修改列索引
           MIndex alt_index = (MIndex)msg.getEventObject();
           params.put("db_name",alt_index.getOrigTable().getDatabase().getName());
+          params.put("table_name", alt_index.getOrigTable().getTableName());
           params.put("index_name",alt_index.getIndexName());
+          break;
       case MSGType.MSG_ALT_INDEX_PARAM :
             //修改列索引属性
           MIndex alt_param_index = (MIndex)msg.getEventObject();
           params.put("db_name",alt_param_index.getOrigTable().getDatabase().getName());
+          params.put("table_name", alt_param_index.getOrigTable().getTableName());
           params.put("index_name",alt_param_index.getIndexName());
           if(msg.getOld_object_params().containsKey("param_name")){
             params.put("param_name",msg.getOld_object_params().get("param_name"));
           }
+          break;
       case MSGType.MSG_DEL_INDEX :
         //删除列索引
-        if(msg.getOld_object_params().containsKey("index_name")) {          //add by zy
-          params.put("index_name",msg.getOld_object_params().get("index_name"));
-        }
+        params.putAll(msg.getOld_object_params());
         break;
 
       case MSGType.MSG_NEW_PARTITION_INDEX :
@@ -726,6 +729,7 @@ public class MSGFactory {
           params.put("table_name",part_idx.getPartition().getTable().getTableName());
           params.put("partition_name",part_idx.getPartition().getPartitionName());
           params.put("index_name",part_idx.getIndex().getIndexName());
+          break;
       case MSGType.MSG_ALT_PARTITION_INDEX :
             //修改分区索引
           MPartitionIndex alt_part_idx = (MPartitionIndex)msg.getEventObject();
@@ -733,6 +737,7 @@ public class MSGFactory {
           params.put("table_name",alt_part_idx.getPartition().getTable().getTableName());
           params.put("partition_name",alt_part_idx.getPartition().getPartitionName());
           params.put("index_name",alt_part_idx.getIndex().getIndexName());
+          break;
       case MSGType.MSG_DEL_PARTITION_INDEX :
             // 删除分区索引
           MPartitionIndex del_part_idx = (MPartitionIndex)msg.getEventObject();
@@ -740,6 +745,7 @@ public class MSGFactory {
           params.put("table_name",del_part_idx.getPartition().getTable().getTableName());
           params.put("partition_name",del_part_idx.getPartition().getPartitionName());
           params.put("index_name",del_part_idx.getIndex().getIndexName());
+          break;
       case MSGType.MSG_NEW_PARTITION_INDEX_FILE :
             //增加分区索引文件
           MFile idx_file = (MFile)msg.getEventObject();
