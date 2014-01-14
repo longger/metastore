@@ -255,6 +255,9 @@ public class DiskManager {
         case FAILED_DEL:
           r += "FAILED_DEL";
           break;
+        case VERIFY:
+          r += "VERIFY";
+          break;
         default:
           r += "UNKNOWN";
           break;
@@ -1869,7 +1872,7 @@ public class DiskManager {
       NodeInfo ni = ndmap.get(node);
 
       if (ni.lastRptTs + dmtt.timeout < cts) {
-        if (ni.toDelete.size() == 0 && ni.toRep.size() == 0) {
+        if ((ni.toDelete.size() == 0 && ni.toRep.size() == 0) || (cts - ni.lastRptTs > 3600)) {
           ni = ndmap.remove(node);
           if (ni.toDelete.size() > 0 || ni.toRep.size() > 0) {
             LOG.error("Might miss entries here ... toDelete {" + ni.toDelete.toString() + "}, toRep {" + ni.toRep.toString() + "}");
@@ -2277,7 +2280,10 @@ public class DiskManager {
         List<DeviceInfo> dis = e.getValue().dis;
         if (dis != null) {
           for (DeviceInfo di : dis) {
-            // FIXME: do not touch DB to get Device
+            // Note: ignore almost full backup device here
+            if (di.free < 1024 * 1024) {
+              continue;
+            }
             if (di.prop == MetaStoreConst.MDeviceProp.BACKUP || di.prop == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
               dev.add(di.dev);
               node.add(e.getKey());
@@ -2577,7 +2583,11 @@ public class DiskManager {
                 // this backup device has already been used, do not user any other backup device
                 spec_dev.clear();
               }
-              // FIXME: remove if this backup device is full
+              // FIXME: remove if the node is not in spec_node
+              if (!spec_node.contains(r.file.getLocations().get(i).getNode_name())) {
+                // this file's node is not in any backup devices' active node set, so, do NOT use backup device
+                spec_dev.clear();
+              }
             }
             if (!master_marked) {
               LOG.error("No active master copy for file FID " + r.file.getFid() + ". BAD FAIL!");
@@ -3034,9 +3044,11 @@ public class DiskManager {
             LOG.error("RECV ERR: " + cmds[i]);
             dmr.type = DMReply.DMReplyType.FAILED_DEL;
             dmr.args = cmds[i].substring(10);
+            r.add(dmr);
           } else if (cmds[i].startsWith("+VERIFY:")) {
             dmr.type = DMReply.DMReplyType.VERIFY;
             dmr.args = cmds[i].substring(8);
+            r.add(dmr);
           }
         }
 
@@ -3307,7 +3319,7 @@ public class DiskManager {
                       LOG.debug("Verify SFL: " + r.args);
                       synchronized (rs) {
                         SFileLocation sfl = rs.getSFileLocation(args[1], args[2]);
-                        if (sfl != null) {
+                        if (sfl == null) {
                           // NOTE: if we can not find the specified SFL, this means there
                           // is no metadata for this 'SFL'. Thus, we notify dservice to
                           // delete this 'SFL' if needed. (Dservice delete it if these files
