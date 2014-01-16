@@ -1329,15 +1329,17 @@ public class DiskManager {
                     }
                   }
                   for (SFileLocation fl : sfl) {
-                    LOG.info("Change FileLocation " + fl.getDevid() + ":" + fl.getLocation() + " to SUSPECT state!");
-                    synchronized (trs) {
-                      fl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.SUSPECT);
-                      try {
-                        trs.updateSFileLocation(fl);
-                      } catch (MetaException e) {
-                        LOG.error(e, e);
-                        delete = false;
-                        continue;
+                    if (toReRep.containsKey(fl.getDevid())) {
+                      LOG.info("Change FileLocation " + fl.getDevid() + ":" + fl.getLocation() + " to SUSPECT state!");
+                      synchronized (trs) {
+                        fl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.SUSPECT);
+                        try {
+                          trs.updateSFileLocation(fl);
+                        } catch (MetaException e) {
+                          LOG.error(e, e);
+                          delete = false;
+                          continue;
+                        }
                       }
                     }
                   }
@@ -1872,7 +1874,7 @@ public class DiskManager {
       NodeInfo ni = ndmap.get(node);
 
       if (ni.lastRptTs + dmtt.timeout < cts) {
-        if ((ni.toDelete.size() == 0 && ni.toRep.size() == 0) || (cts - ni.lastRptTs > 3600)) {
+        if ((ni.toDelete.size() == 0 && ni.toRep.size() == 0) || (cts - ni.lastRptTs > 1800)) {
           ni = ndmap.remove(node);
           if (ni.toDelete.size() > 0 || ni.toRep.size() > 0) {
             LOG.error("Might miss entries here ... toDelete {" + ni.toDelete.toString() + "}, toRep {" + ni.toRep.toString() + "}");

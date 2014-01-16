@@ -2429,8 +2429,8 @@ public class ObjectStore implements RawStore, Configurable {
         if (toOffline.size() > 0) {
           for (MFileLocation y : toOffline) {
             HashMap<String, Object> params = new HashMap<String, Object>();
-            old_params.put("f_id", file.getFid());
-            old_params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+            params.put("f_id", file.getFid());
+            params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
             MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, pm, y, params));
           }
         }

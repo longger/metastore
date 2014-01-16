@@ -528,6 +528,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         savedUri = ldb.getParameters().get("service.metastore.uri");
       }
       if (HMSHandler.msUri != null && savedUri != null && !savedUri.equals(HMSHandler.msUri)) {
+        LOG.info("Update msUri: from " + savedUri + " TO " + HMSHandler.msUri);
         // update the msUri now
         ldb.putToParameters("service.metastore.uri", HMSHandler.msUri);
         try {
