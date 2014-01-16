@@ -5388,6 +5388,8 @@ public class ObjectStore implements RawStore, Configurable {
         long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(tmpOrigTable.getDatabase()).toString()));
         HashMap<String,Object> params = new HashMap<String,Object>();
         params.put("index_name", indexName);
+        params.put("db_name",index.getOrigTable().getDatabase().getName());
+        params.put("table_name", index.getOrigTable().getTableName());
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_DEL_INDEX, db_id, -1, pm, index, params));
       }
     } finally {
