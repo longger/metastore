@@ -680,6 +680,8 @@ public interface RawStore extends Configurable {
 
   public abstract long getCurrentFID();
 
+  public abstract long getMinFID() throws MetaException;
+
   public abstract List<Device> listDevice() throws MetaException;
 
   public abstract statfs statFileSystem(long from, long to) throws MetaException;

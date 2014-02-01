@@ -212,6 +212,31 @@ public class ObjectStore implements RawStore, Configurable {
     }
   }
 
+  public long getMinFID() throws MetaException {
+    boolean commited = false;
+    long r = 0;
+
+    try {
+      openTransaction();
+      Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT min(fid) FROM FILES");
+      List results = (List) query.execute();
+      BigDecimal minfid = (BigDecimal) results.iterator().next();
+      if (minfid != null) {
+        r = minfid.longValue();
+      }
+      commited = commitTransaction();
+    } catch (javax.jdo.JDODataStoreException e) {
+      LOG.info(e, e);
+    }catch (Exception e) {
+      LOG.info(e, e);
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    return r;
+  }
+
   public long getNextFID() {
     synchronized (g_fid_syncer) {
       return g_fid++;

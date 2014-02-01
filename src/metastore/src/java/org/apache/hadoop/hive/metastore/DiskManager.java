@@ -322,6 +322,22 @@ public class DiskManager {
       public long used;
       public long free;
 
+      public DeviceInfo() {
+        mp = null;
+        prop = -1;
+      }
+
+      public DeviceInfo(DeviceInfo old) {
+        dev = old.dev;
+        mp = old.mp;
+        prop = old.prop;
+        read_nr = old.read_nr;
+        write_nr = old.write_nr;
+        err_nr = old.err_nr;
+        used = old.used;
+        free = old.free;
+      }
+
       @Override
       public int compareTo(DeviceInfo o) {
         return this.dev.compareTo(o.dev);
@@ -861,7 +877,7 @@ public class DiskManager {
           return;
         }
 
-        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS, false);
+        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, false);
         flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
         flp_backup.origNode = f.getLocations().get(valid_idx).getNode_name();
 
@@ -984,6 +1000,37 @@ public class DiskManager {
         }
       }
 
+      public long getDMDiskStdev() {
+        List<Long> vals = new ArrayList<Long>();
+        double avg = 0, stdev = 0;
+        int nr = 0;
+
+        synchronized (ndmap) {
+          for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
+            synchronized (entry.getValue()) {
+              if (entry.getValue().dis != null) {
+                for (DeviceInfo di : entry.getValue().dis) {
+                  avg += di.free;
+                  nr++;
+                  vals.add(di.free);
+                }
+              }
+            }
+          }
+        }
+        if (nr == 0) {
+          return 0;
+        }
+        avg /= nr;
+        for (Long free : vals) {
+          stdev += (free - avg) * (free - avg);
+        }
+        stdev /= nr;
+        stdev = Math.sqrt(stdev);
+
+        return new Double(stdev).longValue();
+      }
+
       public boolean generateReport() {
         Date d = new Date(System.currentTimeMillis());
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
@@ -1007,7 +1054,7 @@ public class DiskManager {
         //30 closeRepLimit,fixRepLimit,
         //32 reqQlen,cleanQlen,backupQlen,
         //35 totalReportNr,totalFileRep,totalFileDel,toRepNr,toDeleteNr,avgReportTs,
-        //41 timestamp,totalVerify,
+        //41 timestamp,totalVerify,totalFailRep,totalFailDel,diskStdev
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -1038,7 +1085,7 @@ public class DiskManager {
             sb.append("-1,");
           }
         }
-        long totalReportNr = 0, totalFileRep = 0, totalFileDel = 0, toRepNr = 0, toDeleteNr = 0, avgReportTs = 0, totalVerify = 0;
+        long totalReportNr = 0, totalFileRep = 0, totalFileDel = 0, toRepNr = 0, toDeleteNr = 0, avgReportTs = 0, totalVerify = 0, totalFailRep = 0, totalFailDel = 0;
         synchronized (ndmap) {
           for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
             totalReportNr += e.getValue().totalReportNr;
@@ -1047,6 +1094,8 @@ public class DiskManager {
             totalVerify += e.getValue().totalVerify;
             toRepNr += e.getValue().toRep.size();
             toDeleteNr += e.getValue().toDelete.size();
+            totalFailRep += e.getValue().totalFailRep;
+            totalFailDel += e.getValue().totalFailDel;
             avgReportTs += (System.currentTimeMillis() - e.getValue().lastRptTs)/1000;
           }
           if (ndmap.size() > 0) {
@@ -1093,7 +1142,10 @@ public class DiskManager {
         sb.append(toDeleteNr + ",");
         sb.append(avgReportTs + ",");
         sb.append((System.currentTimeMillis() / 1000) + ",");
-        sb.append(totalVerify);
+        sb.append(totalVerify + ",");
+        sb.append(totalFailRep + ",");
+        sb.append(totalFailDel + ",");
+        sb.append(getDMDiskStdev());
         sb.append("\n");
 
         // generate report file
@@ -1613,17 +1665,19 @@ public class DiskManager {
       synchronized (ndmap) {
         for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
           r += " " + e.getKey() + " -> " + "[";
-          if (e.getValue().dis != null) {
-            for (DeviceInfo di : e.getValue().dis) {
-              r += di.prop + ":" + di.dev + ",";
-              switch (di.prop) {
-              case MetaStoreConst.MDeviceProp.ALONE:
-              case MetaStoreConst.MDeviceProp.BACKUP:
-              case MetaStoreConst.MDeviceProp.SHARED:
-              case MetaStoreConst.MDeviceProp.BACKUP_ALONE:
-                devnr[di.prop]++;
-              case -1:
-                break;
+          synchronized (e.getValue()) {
+            if (e.getValue().dis != null) {
+              for (DeviceInfo di : e.getValue().dis) {
+                r += di.prop + ":" + di.dev + ",";
+                switch (di.prop) {
+                case MetaStoreConst.MDeviceProp.ALONE:
+                case MetaStoreConst.MDeviceProp.BACKUP:
+                case MetaStoreConst.MDeviceProp.SHARED:
+                case MetaStoreConst.MDeviceProp.BACKUP_ALONE:
+                  devnr[di.prop]++;
+                case -1:
+                  break;
+                }
               }
             }
           }
@@ -1867,6 +1921,7 @@ public class DiskManager {
           LOG.error(e, e);
         }
       }
+
       return ni;
     }
 
@@ -1874,7 +1929,7 @@ public class DiskManager {
       NodeInfo ni = ndmap.get(node);
 
       if (ni.lastRptTs + dmtt.timeout < cts) {
-        if ((ni.toDelete.size() == 0 && ni.toRep.size() == 0) || (cts - ni.lastRptTs > 1800)) {
+        if ((ni.toDelete.size() == 0 && ni.toRep.size() == 0) || (cts - ni.lastRptTs > 1800000)) {
           ni = ndmap.remove(node);
           if (ni.toDelete.size() > 0 || ni.toRep.size() > 0) {
             LOG.error("Might miss entries here ... toDelete {" + ni.toDelete.toString() + "}, toRep {" + ni.toRep.toString() + "}");
@@ -2081,6 +2136,7 @@ public class DiskManager {
     }
 
     public String getMP(String node_name, String devid) throws MetaException {
+      String mp;
       if (node_name == null || node_name.equals("")) {
         node_name = getAnyNode(devid);
       }
@@ -2088,9 +2144,11 @@ public class DiskManager {
       if (ni == null) {
         throw new MetaException("Can't find Node '" + node_name + "' in ndmap.");
       }
-      String mp = ni.getMP(devid);
-      if (mp == null) {
-        throw new MetaException("Can't find DEV '" + devid + "' in Node '" + node_name + "'.");
+      synchronized (ni) {
+        mp = ni.getMP(devid);
+        if (mp == null) {
+          throw new MetaException("Can't find DEV '" + devid + "' in Node '" + node_name + "'.");
+        }
       }
       return mp;
     }
@@ -2103,6 +2161,7 @@ public class DiskManager {
       public static final int EXCLUDE_DEVS_SHARED = 4;
       public static final int RANDOM_NODES = 5;
       public static final int RANDOM_DEVS = 6;
+      public static final int EXCLUDE_DEVS_AND_RANDOM = 7;
 
       Set<String> nodes;
       Set<String> devs;
@@ -2320,12 +2379,19 @@ public class DiskManager {
       }
     }
 
-    private void __trim_dilist(List<DeviceInfo> dilist, int nr) {
+    private void __trim_dilist(List<DeviceInfo> dilist, int nr, Set<String> excl) {
       if (dilist.size() <= nr) {
         return;
       }
       List<DeviceInfo> newlist = new ArrayList<DeviceInfo>();
       newlist.addAll(dilist);
+      if (excl != null) {
+        for (DeviceInfo di : dilist) {
+          if (excl.contains(di.dev)) {
+            newlist.remove(di);
+          }
+        }
+      }
       dilist.clear();
 
       for (int i = 0; i < nr; i++) {
@@ -2353,7 +2419,10 @@ public class DiskManager {
       if (ni == null) {
         throw new IOException("Node '" + node + "' does not exist in NDMap, are you sure node '" + node + "' belongs to this MetaStore?" + hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION) + "\n");
       }
-      List<DeviceInfo> dilist = ni.dis;
+      List<DeviceInfo> dilist = new ArrayList<DeviceInfo>();
+      for (DeviceInfo di : ni.dis) {
+        dilist.add(new DeviceInfo(di));
+      }
       if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED ||
           flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
         synchronized (ni) {
@@ -2386,7 +2455,16 @@ public class DiskManager {
             return null;
           } else {
             Random r = new Random();
-            __trim_dilist(dilist, 3);
+            __trim_dilist(dilist, 3, null);
+            return dilist.get(r.nextInt(dilist.size())).dev;
+          }
+        } else if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM) {
+          // random select a device and exclude used devs
+          if (dilist == null) {
+            return null;
+          } else {
+            Random r = new Random();
+            __trim_dilist(dilist, 3, flp.devs);
             return dilist.get(r.nextInt(dilist.size())).dev;
           }
         }
@@ -2440,7 +2518,7 @@ public class DiskManager {
                 }
                 synchronized (ni.toDelete) {
                   ni.toDelete.add(loc);
-                  LOG.info("----> Add toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", " + r.file.getLocationsSize());
+                  LOG.info("----> Add to Node " + loc.getNode_name() + "'s toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", " + r.file.getLocationsSize());
                 }
               }
             }
@@ -2547,6 +2625,7 @@ public class DiskManager {
             release_rep_limit();
             continue;
           }
+          // BUG-XXX: we should wait a moment to passively update the state.
           if (r.op == DMRequest.DMROperation.REPLICATE) {
             FileLocatingPolicy flp, flp_default, flp_backup;
             Set<String> excludes = new TreeSet<String>();
@@ -2598,7 +2677,7 @@ public class DiskManager {
               continue;
             }
 
-            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS, true);
+            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, true);
             flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
             flp_backup.origNode = r.file.getLocations().get(master).getNode_name();
 
@@ -2670,6 +2749,7 @@ public class DiskManager {
                 try {
                   JSONObject j = new JSONObject();
                   NodeInfo ni = ndmap.get(r.file.getLocations().get(master).getNode_name());
+                  String fromMp, toMp;
 
                   if (ni == null) {
                     if (nloc != null) {
@@ -2678,9 +2758,14 @@ public class DiskManager {
                     throw new IOException("Can not find Node '" + r.file.getLocations().get(master).getNode_name() +
                         "' in nodemap now, is it offline? fid(" + r.file.getFid() + ")");
                   }
+                  fromMp = ni.getMP(r.file.getLocations().get(master).getDevid());
+                  if (fromMp == null) {
+                    throw new IOException("Can not find Device '" + r.file.getLocations().get(master).getDevid() +
+                        "' in NodeInfo '" + r.file.getLocations().get(master).getNode_name() + "', fid(" + r.file.getFid() + ")");
+                  }
                   j.put("node_name", r.file.getLocations().get(master).getNode_name());
                   j.put("devid", r.file.getLocations().get(master).getDevid());
-                  j.put("mp", ni.getMP(r.file.getLocations().get(master).getDevid()));
+                  j.put("mp", fromMp);
                   j.put("location", r.file.getLocations().get(master).getLocation());
                   jo.put("from", j);
 
@@ -2693,9 +2778,14 @@ public class DiskManager {
                     throw new IOException("Can not find Node '" + nloc.getNode_name() + "' in nodemap now, is it offline? fid("
                         + r.file.getFid() + ")");
                   }
+                  toMp = ni.getMP(nloc.getDevid());
+                  if (toMp == null) {
+                    throw new IOException("Can not find Device '" + nloc.getDevid() +
+                        "' in NodeInfo '" + nloc.getNode_name() + "', fid(" + r.file.getFid() + ")");
+                  }
                   j.put("node_name", nloc.getNode_name());
                   j.put("devid", nloc.getDevid());
-                  j.put("mp", ni.getMP(nloc.getDevid()));
+                  j.put("mp", toMp);
                   j.put("location", nloc.getLocation());
                   jo.put("to", j);
                 } catch (JSONException e) {
@@ -2993,13 +3083,16 @@ public class DiskManager {
             infos += "\t" + reply.toString() + "\n";
           }
           infos += "}";
+
           LOG.debug(infos);
         }
-        /*if (r.dil != null) {
+        if (r.dil != null) {
+          String infos = "----> node " + r.node + ", DEVINFO: {\n";
           for (DeviceInfo di : r.dil) {
             infos += "----DEVINFO------>" + di.dev + "," + di.mp + "," + di.used + "," + di.free + "\n";
           }
-        }*/
+          LOG.debug(infos);
+        }
 
         return r;
       }

@@ -1256,6 +1256,12 @@ public class DummyRawStoreForJdoConnection implements RawStore {
     return false;
   }
 
+  @Override
+  public long getMinFID() throws MetaException {
+    // TODO Auto-generated method stub
+    return 0;
+  }
+
 }
 
 
