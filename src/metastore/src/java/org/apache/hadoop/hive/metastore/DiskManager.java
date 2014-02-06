@@ -715,6 +715,16 @@ public class DiskManager {
 
     }
 
+    public class DMDiskStatis {
+      long stdev;
+      long avg;
+
+      public DMDiskStatis() {
+        stdev = 0;
+        avg = 0;
+      }
+    }
+
     public class DMTimerTask extends TimerTask {
       private RawStore trs;
       private int times = 0;
@@ -1000,7 +1010,8 @@ public class DiskManager {
         }
       }
 
-      public long getDMDiskStdev() {
+      public DMDiskStatis getDMDiskStdev() {
+        DMDiskStatis dds = new DMDiskStatis();
         List<Long> vals = new ArrayList<Long>();
         double avg = 0, stdev = 0;
         int nr = 0;
@@ -1019,7 +1030,7 @@ public class DiskManager {
           }
         }
         if (nr == 0) {
-          return 0;
+          return dds;
         }
         avg /= nr;
         for (Long free : vals) {
@@ -1028,7 +1039,10 @@ public class DiskManager {
         stdev /= nr;
         stdev = Math.sqrt(stdev);
 
-        return new Double(stdev).longValue();
+        dds.stdev = new Double(stdev).longValue();
+        dds.avg = new Double(avg).longValue();
+
+        return dds;
       }
 
       public boolean generateReport() {
@@ -1054,7 +1068,7 @@ public class DiskManager {
         //30 closeRepLimit,fixRepLimit,
         //32 reqQlen,cleanQlen,backupQlen,
         //35 totalReportNr,totalFileRep,totalFileDel,toRepNr,toDeleteNr,avgReportTs,
-        //41 timestamp,totalVerify,totalFailRep,totalFailDel,diskStdev
+        //41 timestamp,totalVerify,totalFailRep,totalFailDel,diskStdev,diskAvg,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -1145,7 +1159,9 @@ public class DiskManager {
         sb.append(totalVerify + ",");
         sb.append(totalFailRep + ",");
         sb.append(totalFailDel + ",");
-        sb.append(getDMDiskStdev());
+        DMDiskStatis dds = getDMDiskStdev();
+        sb.append(dds.stdev + ",");
+        sb.append(dds.avg);
         sb.append("\n");
 
         // generate report file
