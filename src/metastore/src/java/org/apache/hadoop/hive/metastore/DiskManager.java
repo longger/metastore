@@ -316,6 +316,7 @@ public class DiskManager {
       public String dev; // dev name
       public String mp = null; // mount point
       public int prop = -1;
+      public boolean isOffline = false;
       public long read_nr;
       public long write_nr;
       public long err_nr;
@@ -325,6 +326,7 @@ public class DiskManager {
       public DeviceInfo() {
         mp = null;
         prop = -1;
+        isOffline = false;
       }
 
       public DeviceInfo(DeviceInfo old) {
@@ -1192,7 +1194,7 @@ public class DiskManager {
           for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
             if (entry.getValue().lastRptTs + timeout < System.currentTimeMillis()) {
               // invalid this entry
-              LOG.info("TIMES[" + times + "] " + "Invalidate Entry '" + entry.getKey() + "' for timeout.");
+              LOG.info("TIMES[" + times + "] " + "Invalidate Entry '" + entry.getKey() + "' for timeout(" + timeout/1000 + ").");
               toInvalidate.add(entry.getKey());
             }
           }
@@ -1663,7 +1665,7 @@ public class DiskManager {
       String r = "";
       Long[] devnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
       Long[] adevnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
-      long free = 0, used = 0;
+      long free = 0, used = 0, offlinenr = 0;
 
       for (int i = 0; i < devnr.length; i++) {
         devnr[i] = new Long(0);
@@ -1712,6 +1714,9 @@ public class DiskManager {
 	        if (e.getValue().prop >= 0) {
             adevnr[e.getValue().prop]++;
           }
+	        if (e.getValue().isOffline) {
+	          offlinenr++;
+	        }
 	      }
 	    }
 
@@ -1725,7 +1730,8 @@ public class DiskManager {
         }
 	    }
       synchronized (rs) {
-        r += "Total devices " + rs.countDevice() + ", active {alone " +
+        r += "Total devices " + rs.countDevice() + ", active {offline " +
+            offlinenr + ", alone " +
             devnr[MetaStoreConst.MDeviceProp.ALONE] + ", backup " +
             devnr[MetaStoreConst.MDeviceProp.BACKUP] + " on " +
             adevnr[MetaStoreConst.MDeviceProp.BACKUP] + ", shared " +
@@ -1766,16 +1772,18 @@ public class DiskManager {
       }
       r += "}\n";
 
-      r += "repQ: {\n";
+      r += "repQ: ";
       synchronized (repQ) {
+        r += repQ.size() + "{\n";
         for (DMRequest req : repQ) {
           r += "\t" + req.toString() + "\n";
         }
       }
       r += "}\n";
 
-      r += "cleanQ: {\n";
+      r += "cleanQ: ";
       synchronized (cleanQ) {
+        r += cleanQ.size() + "{\n";
         for (DMRequest req : cleanQ) {
           r += "\t" + req.toString() + "\n";
         }
@@ -1839,6 +1847,9 @@ public class DiskManager {
               rs.createOrUpdateDevice(di, node, null);
               Device d = rs.getDevice(di.dev);
               di.prop = d.getProp();
+              if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE) {
+                di.isOffline = true;
+              }
             }
           } catch (InvalidObjectException e) {
             LOG.error(e, e);
@@ -2358,7 +2369,7 @@ public class DiskManager {
         if (dis != null) {
           for (DeviceInfo di : dis) {
             // Note: ignore almost full backup device here
-            if (di.free < 1024 * 1024) {
+            if (di.isOffline || di.free < 1024 * 1024) {
               continue;
             }
             if (di.prop == MetaStoreConst.MDeviceProp.BACKUP || di.prop == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
@@ -2375,6 +2386,9 @@ public class DiskManager {
       List<DeviceInfo> r = new ArrayList<DeviceInfo>();
 
       for (DeviceInfo di : orig) {
+        if (di.isOffline) {
+          continue;
+        }
         if (di.prop == MetaStoreConst.MDeviceProp.ALONE) {
           r.add(di);
         }
