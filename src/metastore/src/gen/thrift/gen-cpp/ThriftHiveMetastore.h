@@ -161,6 +161,7 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual bool set_loadstatus_bad(const int64_t fid) = 0;
   virtual bool toggle_safemode() = 0;
   virtual void get_file_by_id(SFile& _return, const int64_t fid) = 0;
+  virtual void get_files_by_ids(std::vector<SFile> & _return, const std::vector<int64_t> & fids) = 0;
   virtual void get_file_by_name(SFile& _return, const std::string& node, const std::string& devid, const std::string& location) = 0;
   virtual int32_t rm_file_logical(const SFile& file) = 0;
   virtual int32_t restore_file(const SFile& file) = 0;
@@ -731,6 +732,9 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
     return _return;
   }
   void get_file_by_id(SFile& /* _return */, const int64_t /* fid */) {
+    return;
+  }
+  void get_files_by_ids(std::vector<SFile> & /* _return */, const std::vector<int64_t> & /* fids */) {
     return;
   }
   void get_file_by_name(SFile& /* _return */, const std::string& /* node */, const std::string& /* devid */, const std::string& /* location */) {
@@ -20250,6 +20254,134 @@ class ThriftHiveMetastore_get_file_by_id_presult {
 
 };
 
+typedef struct _ThriftHiveMetastore_get_files_by_ids_args__isset {
+  _ThriftHiveMetastore_get_files_by_ids_args__isset() : fids(false) {}
+  bool fids;
+} _ThriftHiveMetastore_get_files_by_ids_args__isset;
+
+class ThriftHiveMetastore_get_files_by_ids_args {
+ public:
+
+  ThriftHiveMetastore_get_files_by_ids_args() {
+  }
+
+  virtual ~ThriftHiveMetastore_get_files_by_ids_args() throw() {}
+
+  std::vector<int64_t>  fids;
+
+  _ThriftHiveMetastore_get_files_by_ids_args__isset __isset;
+
+  void __set_fids(const std::vector<int64_t> & val) {
+    fids = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_get_files_by_ids_args & rhs) const
+  {
+    if (!(fids == rhs.fids))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_get_files_by_ids_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_get_files_by_ids_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_get_files_by_ids_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_get_files_by_ids_pargs() throw() {}
+
+  const std::vector<int64_t> * fids;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_get_files_by_ids_result__isset {
+  _ThriftHiveMetastore_get_files_by_ids_result__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_get_files_by_ids_result__isset;
+
+class ThriftHiveMetastore_get_files_by_ids_result {
+ public:
+
+  ThriftHiveMetastore_get_files_by_ids_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_get_files_by_ids_result() throw() {}
+
+  std::vector<SFile>  success;
+  FileOperationException o1;
+  MetaException o2;
+
+  _ThriftHiveMetastore_get_files_by_ids_result__isset __isset;
+
+  void __set_success(const std::vector<SFile> & val) {
+    success = val;
+  }
+
+  void __set_o1(const FileOperationException& val) {
+    o1 = val;
+  }
+
+  void __set_o2(const MetaException& val) {
+    o2 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_get_files_by_ids_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    if (!(o2 == rhs.o2))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_get_files_by_ids_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_get_files_by_ids_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_get_files_by_ids_presult__isset {
+  _ThriftHiveMetastore_get_files_by_ids_presult__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_get_files_by_ids_presult__isset;
+
+class ThriftHiveMetastore_get_files_by_ids_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_get_files_by_ids_presult() throw() {}
+
+  std::vector<SFile> * success;
+  FileOperationException o1;
+  MetaException o2;
+
+  _ThriftHiveMetastore_get_files_by_ids_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 typedef struct _ThriftHiveMetastore_get_file_by_name_args__isset {
   _ThriftHiveMetastore_get_file_by_name_args__isset() : node(false), devid(false), location(false) {}
   bool node;
@@ -27016,6 +27148,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   void get_file_by_id(SFile& _return, const int64_t fid);
   void send_get_file_by_id(const int64_t fid);
   void recv_get_file_by_id(SFile& _return);
+  void get_files_by_ids(std::vector<SFile> & _return, const std::vector<int64_t> & fids);
+  void send_get_files_by_ids(const std::vector<int64_t> & fids);
+  void recv_get_files_by_ids(std::vector<SFile> & _return);
   void get_file_by_name(SFile& _return, const std::string& node, const std::string& devid, const std::string& location);
   void send_get_file_by_name(const std::string& node, const std::string& devid, const std::string& location);
   void recv_get_file_by_name(SFile& _return);
@@ -27318,6 +27453,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_set_loadstatus_bad(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_toggle_safemode(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_get_file_by_id(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_get_files_by_ids(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_get_file_by_name(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_rm_file_logical(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_restore_file(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -27516,6 +27652,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["set_loadstatus_bad"] = &ThriftHiveMetastoreProcessor::process_set_loadstatus_bad;
     processMap_["toggle_safemode"] = &ThriftHiveMetastoreProcessor::process_toggle_safemode;
     processMap_["get_file_by_id"] = &ThriftHiveMetastoreProcessor::process_get_file_by_id;
+    processMap_["get_files_by_ids"] = &ThriftHiveMetastoreProcessor::process_get_files_by_ids;
     processMap_["get_file_by_name"] = &ThriftHiveMetastoreProcessor::process_get_file_by_name;
     processMap_["rm_file_logical"] = &ThriftHiveMetastoreProcessor::process_rm_file_logical;
     processMap_["restore_file"] = &ThriftHiveMetastoreProcessor::process_restore_file;
@@ -28965,6 +29102,16 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
       ifaces_[i]->get_file_by_id(_return, fid);
     }
     ifaces_[i]->get_file_by_id(_return, fid);
+    return;
+  }
+
+  void get_files_by_ids(std::vector<SFile> & _return, const std::vector<int64_t> & fids) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->get_files_by_ids(_return, fids);
+    }
+    ifaces_[i]->get_files_by_ids(_return, fids);
     return;
   }
 

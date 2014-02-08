@@ -6978,6 +6978,22 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       return getMS().getCurrentFID();
     }
 
+    @Override
+    public List<SFile> get_files_by_ids(List<Long> fids) throws FileOperationException,
+        MetaException, TException {
+      List<SFile> lsf = new ArrayList<SFile>();
+      if (fids.size() > 0) {
+        for (Long id : fids) {
+          // FIXME: ignore nonexist files.
+          try {
+            lsf.add(get_file_by_id(id));
+          } catch (FileOperationException e) {
+          }
+        }
+      }
+      return lsf;
+    }
+
   }
 
   public static IHMSHandler newHMSHandler(String name, HiveConf hiveConf) throws MetaException {

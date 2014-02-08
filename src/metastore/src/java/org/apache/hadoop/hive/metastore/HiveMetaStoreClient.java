@@ -91,6 +91,7 @@ import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
@@ -1691,18 +1692,7 @@ public boolean authentication(String user_name, String passwd)
   // ignore non exist files.
   public List<SFile> get_files_by_ids(List<Long> fids) throws FileOperationException,
       MetaException, TException {
-    List<SFile> lsf = new ArrayList<SFile>();
-    if (fids.size() > 0) {
-      for (Long id : fids) {
-        // FIXME: ignore nonexist files.
-        try {
-          lsf.add(client.get_file_by_id(id));
-        } catch (FileOperationException e) {
-        }
-      }
-    }
-
-    return lsf;
+    return client.get_files_by_ids(fids);
   }
 
   @Override
