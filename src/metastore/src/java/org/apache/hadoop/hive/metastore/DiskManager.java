@@ -1357,6 +1357,7 @@ public class DiskManager {
             for (SFileLocation fl : s) {
               synchronized (trs) {
                 try {
+                  // BUG-XXX: space leaking? we should trigger a delete to dservice; otherwise enable VERIFY to auto clean the dangling dirs.
                   trs.delSFileLocation(fl.getDevid(), fl.getLocation());
                 } catch (MetaException e) {
                   LOG.error(e, e);
@@ -1673,9 +1674,14 @@ public class DiskManager {
       }
 
       r += "Uptime " + ((System.currentTimeMillis() - startupTs) / 1000) + " s, ";
-      r += ", Timestamp " + System.currentTimeMillis() / 1000 + "\n";
+      r += "Timestamp " + System.currentTimeMillis() / 1000 + "\n";
       r += "MetaStore Server Disk Manager listening @ " + hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
       r += "\nSafeMode: " + safeMode + "\n";
+      r += "Per-IP-Connections: {\n";
+      for (Map.Entry<String, AtomicLong> e : HiveMetaStoreServerEventHandler.perIPConns.entrySet()) {
+        r += " " + e.getKey() + " -> " + e.getValue().get() + "\n";
+      }
+      r += "}\n";
       synchronized (rs) {
         r += "Total nodes " + rs.countNode() + ", active nodes " + ndmap.size() + "\n";
       }
