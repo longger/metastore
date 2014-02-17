@@ -720,10 +720,12 @@ public class DiskManager {
     public class DMDiskStatis {
       long stdev;
       long avg;
+      List<Long> frees;
 
       public DMDiskStatis() {
         stdev = 0;
         avg = 0;
+        frees = new ArrayList<Long>();
       }
     }
 
@@ -911,7 +913,7 @@ public class DiskManager {
             }
             // if the valid location is a shared device, try to use local shortcut
             try {
-              if (isSharedDevice(f.getLocations().get(valid_idx).getDevid())) {
+              if (isSharedDevice(f.getLocations().get(valid_idx).getDevid()) && isSDOnNode(f.getLocations().get(valid_idx).getDevid(), node_name)) {
                 // ok, reset the from loc' node name
                 f.getLocations().get(valid_idx).setNode_name(node_name);
               }
@@ -1018,16 +1020,14 @@ public class DiskManager {
         double avg = 0, stdev = 0;
         int nr = 0;
 
-        synchronized (ndmap) {
-          for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
-            synchronized (entry.getValue()) {
-              if (entry.getValue().dis != null) {
-                for (DeviceInfo di : entry.getValue().dis) {
-                  avg += di.free;
-                  nr++;
-                  vals.add(di.free);
-                }
-              }
+        synchronized (admap) {
+          for (Map.Entry<String, DeviceInfo> entry : admap.entrySet()) {
+            // Note: only calculate the alone device stdev
+            if (entry.getValue().prop == MetaStoreConst.MDeviceProp.ALONE) {
+              avg += entry.getValue().free;
+              nr++;
+              vals.add(entry.getValue().free);
+
             }
           }
         }
@@ -1043,6 +1043,7 @@ public class DiskManager {
 
         dds.stdev = new Double(stdev).longValue();
         dds.avg = new Double(avg).longValue();
+        dds.frees.addAll(vals);
 
         return dds;
       }
@@ -1070,7 +1071,8 @@ public class DiskManager {
         //30 closeRepLimit,fixRepLimit,
         //32 reqQlen,cleanQlen,backupQlen,
         //35 totalReportNr,totalFileRep,totalFileDel,toRepNr,toDeleteNr,avgReportTs,
-        //41 timestamp,totalVerify,totalFailRep,totalFailDel,diskStdev,diskAvg,
+        //41 timestamp,totalVerify,totalFailRep,totalFailDel,alonediskStdev,alonediskAvg
+        //47 alonediskFrees,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -1163,7 +1165,10 @@ public class DiskManager {
         sb.append(totalFailDel + ",");
         DMDiskStatis dds = getDMDiskStdev();
         sb.append(dds.stdev + ",");
-        sb.append(dds.avg);
+        sb.append(dds.avg + ",");
+        for (Long fnr : dds.frees) {
+          sb.append(fnr + ";");
+        }
         sb.append("\n");
 
         // generate report file
@@ -1692,7 +1697,7 @@ public class DiskManager {
           synchronized (e.getValue()) {
             if (e.getValue().dis != null) {
               for (DeviceInfo di : e.getValue().dis) {
-                r += di.prop + ":" + di.dev + ",";
+                r += (di.isOffline ? "OF" : "ON") + ":" + di.prop + ":" + di.dev + ",";
                 switch (di.prop) {
                 case MetaStoreConst.MDeviceProp.ALONE:
                 case MetaStoreConst.MDeviceProp.BACKUP:
@@ -2005,6 +2010,20 @@ public class DiskManager {
       } catch (MetaException e) {
         LOG.error(e,e);
       }
+    }
+
+    public boolean isSDOnNode(String devid, String nodeName) {
+      NodeInfo ni = ndmap.get(nodeName);
+      if (ni != null) {
+        synchronized (ni) {
+          for (DeviceInfo di : ni.dis) {
+            if (di.dev.equalsIgnoreCase(devid)) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
     }
 
     public boolean isSharedDevice(String devid) throws MetaException, NoSuchObjectException {
@@ -2387,7 +2406,22 @@ public class DiskManager {
       }
     }
 
-    // filter backup device either
+    // filter offline device either
+    private List<DeviceInfo> filterOfflineDevice(String node_name, List<DeviceInfo> orig) {
+      List<DeviceInfo> r = new ArrayList<DeviceInfo>();
+
+      for (DeviceInfo di : orig) {
+        if (di.isOffline) {
+          continue;
+        } else {
+          r.add(di);
+        }
+      }
+
+      return r;
+    }
+
+    // filter backup device and offline device both
     private List<DeviceInfo> filterSharedDevice(String node_name, List<DeviceInfo> orig) {
       List<DeviceInfo> r = new ArrayList<DeviceInfo>();
 
@@ -2461,9 +2495,13 @@ public class DiskManager {
       }
       if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED ||
           flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
+        // this two mode only used in selecting primary replica!
         synchronized (ni) {
           dilist = filterSharedDevice(node, ni.dis);
         }
+      } else {
+        // ignore offline device
+        dilist = filterOfflineDevice(node, ni.dis);
       }
       String bestDev = null;
       long free = 0;
@@ -2752,6 +2790,14 @@ public class DiskManager {
                   break;
                 }
                 excl_dev.add(devid);
+                // if we are selecting a shared device, try to use local shortcut
+                try {
+                  if (isSharedDevice(devid) && isSDOnNode(devid, r.file.getLocations().get(master).getNode_name())) {
+                    node_name = r.file.getLocations().get(master).getNode_name();
+                  }
+                } catch (NoSuchObjectException e1) {
+                  LOG.error(e1, e1);
+                }
 
                 String location;
                 Random rand = new Random();
