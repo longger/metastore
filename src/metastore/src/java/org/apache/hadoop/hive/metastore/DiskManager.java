@@ -850,7 +850,17 @@ public class DiskManager {
 
         // find the valid entry
         for (int i = 0; i < init_size; i++) {
-          excludes.add(f.getLocations().get(i).getNode_name());
+          try {
+            if (!isSharedDevice(f.getLocations().get(i).getDevid())) {
+              excludes.add(f.getLocations().get(i).getNode_name());
+            }
+          } catch (MetaException e1) {
+            LOG.error(e1, e1);
+            excludes.add(f.getLocations().get(i).getNode_name());
+          } catch (NoSuchObjectException e1) {
+            LOG.error(e1, e1);
+            excludes.add(f.getLocations().get(i).getNode_name());
+          }
           excl_dev.add(f.getLocations().get(i).getDevid());
           if (spec_dev.remove(f.getLocations().get(i).getDevid())) {
             // this backup device has already used, do not use any other backup device
@@ -2716,7 +2726,17 @@ public class DiskManager {
 
             // exclude old file locations
             for (int i = 0; i < r.begin_idx; i++) {
-              excludes.add(r.file.getLocations().get(i).getNode_name());
+              try {
+                if (!isSharedDevice(r.file.getLocations().get(i).getDevid())) {
+                  excludes.add(r.file.getLocations().get(i).getNode_name());
+                }
+              } catch (MetaException e1) {
+                LOG.error(e1, e1);
+                excludes.add(r.file.getLocations().get(i).getNode_name());
+              } catch (NoSuchObjectException e1) {
+                LOG.error(e1, e1);
+                excludes.add(r.file.getLocations().get(i).getNode_name());
+              }
               excl_dev.add(r.file.getLocations().get(i).getDevid());
 
               // mark master copy id

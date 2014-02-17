@@ -983,6 +983,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   bool offline_filelocation(1:SFileLocation sfl) throws (1:MetaException o1)
   
+  bool del_filelocation(1:SFileLocation slf) throws (1:MetaException o1)
+  
   bool set_loadstatus_bad(1:i64 fid) throws (1:MetaException o1)
   
   bool toggle_safemode() throws (1:MetaException o1)

@@ -2377,6 +2377,22 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'offline_filelocation failed: unknown result')
     end
 
+    def del_filelocation(slf)
+      send_del_filelocation(slf)
+      return recv_del_filelocation()
+    end
+
+    def send_del_filelocation(slf)
+      send_message('del_filelocation', Del_filelocation_args, :slf => slf)
+    end
+
+    def recv_del_filelocation()
+      result = receive_message(Del_filelocation_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'del_filelocation failed: unknown result')
+    end
+
     def set_loadstatus_bad(fid)
       send_set_loadstatus_bad(fid)
       return recv_set_loadstatus_bad()
@@ -5018,6 +5034,17 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'offline_filelocation', seqid)
+    end
+
+    def process_del_filelocation(seqid, iprot, oprot)
+      args = read_args(iprot, Del_filelocation_args)
+      result = Del_filelocation_result.new()
+      begin
+        result.success = @handler.del_filelocation(args.slf)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'del_filelocation', seqid)
     end
 
     def process_set_loadstatus_bad(seqid, iprot, oprot)
@@ -10970,6 +10997,40 @@ module ThriftHiveMetastore
   end
 
   class Offline_filelocation_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Del_filelocation_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SLF = 1
+
+    FIELDS = {
+      SLF => {:type => ::Thrift::Types::STRUCT, :name => 'slf', :class => ::SFileLocation}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Del_filelocation_result
     include ::Thrift::Struct, ::Thrift::Struct_Union
     SUCCESS = 0
     O1 = 1

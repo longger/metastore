@@ -732,6 +732,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("offline_filelocation\n");
   }
 
+  bool del_filelocation(const SFileLocation& slf) {
+    // Your implementation goes here
+    printf("del_filelocation\n");
+  }
+
   bool set_loadstatus_bad(const int64_t fid) {
     // Your implementation goes here
     printf("set_loadstatus_bad\n");

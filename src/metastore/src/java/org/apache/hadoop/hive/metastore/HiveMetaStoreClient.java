@@ -2339,4 +2339,15 @@ public boolean authentication(String user_name, String passwd)
   public long getMaxFid() throws MetaException, TException {
     return client.getMaxFid();
   }
+
+  @Override
+  public boolean del_filelocation(String devid, String location) throws MetaException, TException {
+    SFileLocation sfl = new SFileLocation();
+    assert devid != null;
+    assert location != null;
+
+    sfl.setDevid(devid);
+    sfl.setLocation(location);
+    return client.del_filelocation(sfl);
+  }
 }

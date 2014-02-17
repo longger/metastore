@@ -997,6 +997,8 @@ public interface IMetaStoreClient {
 
   public int close_file(SFile file) throws FileOperationException, TException;
 
+  public boolean del_filelocation(String devid, String location) throws MetaException, TException;
+
   public boolean online_filelocation(SFile file) throws MetaException, TException;
 
   public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException;

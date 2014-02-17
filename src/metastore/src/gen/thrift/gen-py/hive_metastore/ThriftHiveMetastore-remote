@@ -165,6 +165,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '  i32 close_file(SFile file)'
   print '  bool online_filelocation(SFile file)'
   print '  bool offline_filelocation(SFileLocation sfl)'
+  print '  bool del_filelocation(SFileLocation slf)'
   print '  bool set_loadstatus_bad(i64 fid)'
   print '  bool toggle_safemode()'
   print '  SFile get_file_by_id(i64 fid)'
@@ -1120,6 +1121,12 @@ elif cmd == 'offline_filelocation':
     print 'offline_filelocation requires 1 args'
     sys.exit(1)
   pp.pprint(client.offline_filelocation(eval(args[0]),))
+
+elif cmd == 'del_filelocation':
+  if len(args) != 1:
+    print 'del_filelocation requires 1 args'
+    sys.exit(1)
+  pp.pprint(client.del_filelocation(eval(args[0]),))
 
 elif cmd == 'set_loadstatus_bad':
   if len(args) != 1:

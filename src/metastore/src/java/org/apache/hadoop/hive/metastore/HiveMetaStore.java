@@ -6994,6 +6994,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       return lsf;
     }
 
+    @Override
+    public boolean del_filelocation(SFileLocation sfl) throws MetaException, TException {
+      boolean r = false;
+      SFileLocation saved = getMS().getSFileLocation(sfl.getDevid(), sfl.getLocation());
+
+      if (saved != null) {
+        startFunction("del_filelocation", ": FID " + saved.getFid() + " dev " + saved.getDevid() + " loc " + saved.getLocation());
+        r = getMS().delSFileLocation(saved.getDevid(), saved.getLocation());
+      }
+      return r;
+    }
+
   }
 
   public static IHMSHandler newHMSHandler(String name, HiveConf hiveConf) throws MetaException {
