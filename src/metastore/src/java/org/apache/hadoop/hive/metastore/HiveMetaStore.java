@@ -4608,14 +4608,20 @@ public class HiveMetaStore extends ThriftHiveMetastore {
                 FOFailReason.INVALID_FILE);
           }
           // finally, do it
+          List<SFileLocation> sflToDel = new ArrayList<SFileLocation>();
           for (SFileLocation sfl : file.getLocations()) {
             if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
               sfl.setRep_id(0);
               sfl.setDigest(file.getDigest());
               getMS().updateSFileLocation(sfl);
             } else {
+              sflToDel.add(sfl);
               dm.asyncDelSFL(sfl);
             }
+          }
+          // BUG-XXX: trunc offline sfls
+          if (sflToDel.size() > 0) {
+            file.getLocations().removeAll(sflToDel);
           }
         } else {
           LOG.error("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]");
