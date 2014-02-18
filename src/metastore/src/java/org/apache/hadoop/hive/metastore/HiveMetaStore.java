@@ -7002,6 +7002,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       if (saved != null) {
         startFunction("del_filelocation", ": FID " + saved.getFid() + " dev " + saved.getDevid() + " loc " + saved.getLocation());
         r = getMS().delSFileLocation(saved.getDevid(), saved.getLocation());
+        if (r) {
+          dm.asyncDelSFL(saved);
+        }
       }
       return r;
     }
