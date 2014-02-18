@@ -2401,12 +2401,14 @@ public class ObjectStore implements RawStore, Configurable {
   public boolean reopenSFile(SFile file) throws MetaException {
     boolean commited = false;
     MFile mf = null;
-    SFile f = null;
     boolean changed = false;
 
     try {
       List<MFileLocation> toOffline = new ArrayList<MFileLocation>();
 
+      // TODO: FIXME: there might be one bug: on recv file rep report, dm change sfl vstatus
+      // to online if file's storestatus is NOT in INCREATE. thus, we should commit
+      // INCREATE change firstly.
       openTransaction();
       mf = getMFile(file.getFid());
       if (mf.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
