@@ -901,7 +901,7 @@ public class DiskManager {
           return;
         }
 
-        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, false);
+        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, false);
         flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
         flp_backup.origNode = f.getLocations().get(valid_idx).getNode_name();
 
@@ -1032,8 +1032,8 @@ public class DiskManager {
 
         synchronized (admap) {
           for (Map.Entry<String, DeviceInfo> entry : admap.entrySet()) {
-            // Note: only calculate the alone device stdev
-            if (entry.getValue().prop == MetaStoreConst.MDeviceProp.ALONE) {
+            // Note: only calculate the alone and non-offline device stdev
+            if (entry.getValue().prop == MetaStoreConst.MDeviceProp.ALONE && !entry.getValue().isOffline) {
               avg += entry.getValue().free;
               nr++;
               vals.add(entry.getValue().free);
@@ -2224,6 +2224,7 @@ public class DiskManager {
       public static final int RANDOM_NODES = 5;
       public static final int RANDOM_DEVS = 6;
       public static final int EXCLUDE_DEVS_AND_RANDOM = 7;
+      public static final int EXCLUDE_NODES_AND_RANDOM = 8;
 
       Set<String> nodes;
       Set<String> devs;
@@ -2313,7 +2314,22 @@ public class DiskManager {
         } else {
           Random r = new Random();
           String[] a = flp.nodes.toArray(new String[0]);
-          return a[r.nextInt(flp.nodes.size())];
+          if (flp.nodes.size() > 0) {
+            return a[r.nextInt(flp.nodes.size())];
+          } else {
+            return null;
+          }
+        }
+      case FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM:
+        // random select one node from largest node set
+        Random r = new Random();
+        List<String> nodes = new ArrayList<String>();
+        __select_some_nodes(nodes, Math.min(ndmap.size() / 5 + 1, 3), flp.nodes);
+        LOG.debug("Random select in nodes: " + nodes);
+        if (nodes.size() > 0) {
+          return nodes.get(r.nextInt(nodes.size()));
+        } else {
+          return null;
         }
       }
 
@@ -2459,6 +2475,43 @@ public class DiskManager {
       }
     }
 
+    private void __select_some_nodes(List<String> nodes, int nr, Set<String> excl) {
+      if (nr <= 0) {
+        return;
+      }
+      TreeMap<Long, String> m = new TreeMap<Long, String>();
+
+      for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
+        if (excl != null && excl.contains(entry.getKey())) {
+          continue;
+        }
+
+        NodeInfo ni = entry.getValue();
+        synchronized (ni) {
+          List<DeviceInfo> dis = filterSharedDevice(entry.getKey(), ni.dis);
+          long thisfree = 0;
+
+          if (dis == null) {
+            continue;
+          }
+          for (DeviceInfo di : dis) {
+            thisfree += di.free;
+          }
+          if (thisfree > 0) {
+            m.put(thisfree, entry.getKey());
+          }
+        }
+      }
+      int i = 0;
+      for (Long key : m.descendingKeySet()) {
+        if (i >= nr) {
+          break;
+        }
+        nodes.add(m.get(key));
+        i++;
+      }
+    }
+
     private void __trim_dilist(List<DeviceInfo> dilist, int nr, Set<String> excl) {
       if (dilist.size() <= nr) {
         return;
@@ -2540,7 +2593,11 @@ public class DiskManager {
           } else {
             Random r = new Random();
             __trim_dilist(dilist, 3, null);
-            return dilist.get(r.nextInt(dilist.size())).dev;
+            if (dilist.size() > 0) {
+              return dilist.get(r.nextInt(dilist.size())).dev;
+            } else {
+              return null;
+            }
           }
         } else if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM) {
           // random select a device and exclude used devs
@@ -2549,7 +2606,11 @@ public class DiskManager {
           } else {
             Random r = new Random();
             __trim_dilist(dilist, 3, flp.devs);
-            return dilist.get(r.nextInt(dilist.size())).dev;
+            if (dilist.size() > 0) {
+              return dilist.get(r.nextInt(dilist.size())).dev;
+            } else {
+              return null;
+            }
           }
         }
         if (!ignore && di.free > free) {
@@ -2771,7 +2832,7 @@ public class DiskManager {
               continue;
             }
 
-            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, true);
+            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, true);
             flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
             flp_backup.origNode = r.file.getLocations().get(master).getNode_name();
 
@@ -3470,12 +3531,18 @@ public class DiskManager {
                               LOG.info("----> MIGRATE to " + args[0] + ":" + args[1] + "/" + args[2] + " DONE.");
                               break;
                             }
+                            SFileLocation t1 = new SFileLocation();
+                            t1.setNode_name(args[0]);
+                            t1.setDevid(args[1]);
+                            t1.setLocation(args[2]);
+                            asyncDelSFL(t1);
                             throw new MetaException("Can not find SFileLocation " + args[0] + "," + args[1] + "," + args[2]);
                           }
                           SFile file = rs.getSFile(newsfl.getFid());
                           if (file != null) {
                             if (file.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
-                              LOG.warn("Somebody reopen the file and we do replicate on it, so ignore this replicate:(");
+                              LOG.warn("Somebody reopen the file and we do replicate on it, so ignore this replicate and delete it:(");
+                              asyncDelSFL(newsfl);
                             } else {
                               toCheckRep.add(file);
                               newsfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
@@ -3495,7 +3562,7 @@ public class DiskManager {
                       LOG.warn("Invalid DEL report: " + r.args);
                     } else {
                       try {
-                        LOG.warn("Begin delete FLoc " + args[0] + "," + args[1] + "," + args[2]);
+                        LOG.warn("Begin delete FLoc MD " + args[0] + "," + args[1] + "," + args[2]);
                         synchronized (rs) {
                           SFileLocation sfl = rs.getSFileLocation(args[1], args[2]);
                           if (sfl != null) {
