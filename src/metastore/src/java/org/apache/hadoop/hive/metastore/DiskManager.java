@@ -234,7 +234,7 @@ public class DiskManager {
 
     public static class DMReply {
       public enum DMReplyType {
-        DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY,
+        DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY, INFO,
       }
       DMReplyType type;
       String args;
@@ -257,6 +257,9 @@ public class DiskManager {
           break;
         case VERIFY:
           r += "VERIFY";
+          break;
+        case INFO:
+          r += "INFO";
           break;
         default:
           r += "UNKNOWN";
@@ -361,6 +364,17 @@ public class DiskManager {
       long totalVerify = 0;
       InetAddress address = null;
       int port = 0;
+
+      long qrep = 0;
+      long hrep = 0;
+      long drep = 0;
+      long qdel = 0;
+      long hdel = 0;
+      long ddel = 0;
+      long tver = 0;
+      long tvyr = 0;
+      long uptime = 0;
+      double load1 = 0.0;
 
       public NodeInfo(List<DeviceInfo> dis) {
         this.lastRptTs = System.currentTimeMillis();
@@ -1081,8 +1095,10 @@ public class DiskManager {
         //30 closeRepLimit,fixRepLimit,
         //32 reqQlen,cleanQlen,backupQlen,
         //35 totalReportNr,totalFileRep,totalFileDel,toRepNr,toDeleteNr,avgReportTs,
-        //41 timestamp,totalVerify,totalFailRep,totalFailDel,alonediskStdev,alonediskAvg
-        //47 alonediskFrees,
+        //41 timestamp,totalVerify,totalFailRep,totalFailDel,alonediskStdev,alonediskAvg,
+        //47 [alonediskFrees],
+        //48 ds.qrep,ds.hrep,ds.drep,ds.qdel,ds.hdel,ds.ddel,ds.tver,ds.tvyr,
+        //56 [ds.uptime],[ds.load1],
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -1114,6 +1130,9 @@ public class DiskManager {
           }
         }
         long totalReportNr = 0, totalFileRep = 0, totalFileDel = 0, toRepNr = 0, toDeleteNr = 0, avgReportTs = 0, totalVerify = 0, totalFailRep = 0, totalFailDel = 0;
+        long qrep = 0, hrep = 0, drep = 0, qdel = 0, hdel = 0, ddel = 0, tver = 0, tvyr = 0;
+        List<Long> uptimes = new ArrayList<Long>();
+        List<Double> load1 = new ArrayList<Double>();
         synchronized (ndmap) {
           for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
             totalReportNr += e.getValue().totalReportNr;
@@ -1125,6 +1144,16 @@ public class DiskManager {
             totalFailRep += e.getValue().totalFailRep;
             totalFailDel += e.getValue().totalFailDel;
             avgReportTs += (System.currentTimeMillis() - e.getValue().lastRptTs)/1000;
+            qrep += e.getValue().qrep;
+            hrep += e.getValue().hrep;
+            drep += e.getValue().drep;
+            qdel += e.getValue().qdel;
+            hdel += e.getValue().hdel;
+            ddel += e.getValue().ddel;
+            tver += e.getValue().tver;
+            tvyr += e.getValue().tvyr;
+            uptimes.add(e.getValue().uptime);
+            load1.add(e.getValue().load1);
           }
           if (ndmap.size() > 0) {
             avgReportTs /= ndmap.size();
@@ -1179,6 +1208,23 @@ public class DiskManager {
         for (Long fnr : dds.frees) {
           sb.append(fnr + ";");
         }
+        sb.append(",");
+        sb.append(qrep + ",");
+        sb.append(hrep + ",");
+        sb.append(drep + ",");
+        sb.append(qdel + ",");
+        sb.append(hdel + ",");
+        sb.append(ddel + ",");
+        sb.append(tver + ",");
+        sb.append(tvyr + ",");
+        for (Long uptime : uptimes) {
+          sb.append(uptime + ";");
+        }
+        sb.append(",");
+        for (Double l : load1) {
+          sb.append(l + ";");
+        }
+        sb.append(",");
         sb.append("\n");
 
         // generate report file
@@ -2695,6 +2741,8 @@ public class DiskManager {
             ni.toDelete.add(sfl);
             LOG.info("----> Add toDelete " + sfl.getLocation() + ", qs " + cleanQ.size());
           }
+        } else {
+          LOG.warn("SFL " + sfl.getDevid() + ":" + sfl.getLocation() + " delete leak on node " + sfl.getNode_name());
         }
       }
     }
@@ -3267,7 +3315,11 @@ public class DiskManager {
         for (int i = 0; i < cmds.length; i++) {
           DMReply dmr = new DMReply();
 
-          if (cmds[i].startsWith("+REP:")) {
+          if (cmds[i].startsWith("+INFO:")) {
+            dmr.type = DMReply.DMReplyType.INFO;
+            dmr.args = cmds[i].substring(6);
+            r.add(dmr);
+          } else if (cmds[i].startsWith("+REP:")) {
             dmr.type = DMReply.DMReplyType.REPLICATED;
             dmr.args = cmds[i].substring(5);
             r.add(dmr);
@@ -3426,6 +3478,24 @@ public class DiskManager {
                   for (DMReply r : report.replies) {
                     String[] args = r.args.split(",");
                     switch (r.type) {
+                    case INFO:
+                      try {
+                        oni.qrep = Long.parseLong(args[0]);
+                        oni.hrep = Long.parseLong(args[1]);
+                        oni.drep = Long.parseLong(args[2]);
+                        oni.qdel = Long.parseLong(args[3]);
+                        oni.hdel = Long.parseLong(args[4]);
+                        oni.ddel = Long.parseLong(args[5]);
+                        oni.tver = Long.parseLong(args[6]);
+                        oni.tvyr = Long.parseLong(args[7]);
+                        oni.uptime = Long.parseLong(args[8]);
+                        oni.load1 = Double.parseDouble(args[9]);
+                      } catch (NumberFormatException e1) {
+                        LOG.error(e1, e1);
+                      } catch (IndexOutOfBoundsException e1) {
+                        LOG.error(e1, e1);
+                      }
+                      break;
                     case VERIFY:
                       oni.totalVerify++;
                       break;
@@ -3590,12 +3660,16 @@ public class DiskManager {
                           // hadn't been touched for specified seconds.)
                           synchronized (oni.toVerify) {
                             oni.toVerify.add(args[1] + ":" + oni.getMP(args[1]) + ":" + args[2]);
-                            LOG.info("----> Add toVerify " + args[0] + " " + args[1] + "," + args[2]);
+                            LOG.info("----> Add toVerify " + args[0] + " " + args[1] + "," + args[2] + ", qs " + oni.toVerify.size());
                           }
                         }
                       }
                     }
 
+                    break;
+                  case INFO:
+                  case FAILED_REP:
+                  case FAILED_DEL:
                     break;
                   default:
                     LOG.warn("Invalid DMReply type: " + r.type);
