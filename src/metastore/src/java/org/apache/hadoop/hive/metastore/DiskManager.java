@@ -362,6 +362,7 @@ public class DiskManager {
       long totalFailDel = 0;
       long totalFailRep = 0;
       long totalVerify = 0;
+      long totalVYR = 0;
       InetAddress address = null;
       int port = 0;
 
@@ -819,8 +820,7 @@ public class DiskManager {
             synchronized (ni.toDelete) {
               ni.toDelete.add(loc);
               i++;
-              LOG.info("----> Add toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", "
-                  + f.getLocationsSize());
+              LOG.info("----> Add to Node " + loc.getNode_name() + "'s toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", " + f.getLocationsSize());
             }
           }
         }
@@ -1051,7 +1051,6 @@ public class DiskManager {
               avg += entry.getValue().free;
               nr++;
               vals.add(entry.getValue().free);
-
             }
           }
         }
@@ -1098,10 +1097,11 @@ public class DiskManager {
         //41 timestamp,totalVerify,totalFailRep,totalFailDel,alonediskStdev,alonediskAvg,
         //47 [alonediskFrees],
         //48 ds.qrep,ds.hrep,ds.drep,ds.qdel,ds.hdel,ds.ddel,ds.tver,ds.tvyr,
-        //56 [ds.uptime],[ds.load1],
+        //56 [ds.uptime],[ds.load1],truetotal,truefree,offlinefree,sharedfree,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
+        long truetotal = 0, truefree = 0, offlinefree = 0, sharedfree = 0;
 
         sb.append((System.currentTimeMillis() - startupTs) / 1000);
         sb.append("," + safeMode + ",");
@@ -1109,6 +1109,16 @@ public class DiskManager {
   	      for (Map.Entry<String, DeviceInfo> e : admap.entrySet()) {
   	        free += e.getValue().free;
   	        used += e.getValue().used;
+  	        if (e.getValue().isOffline) {
+  	          offlinefree += e.getValue().free;
+  	        } else {
+  	          truefree += e.getValue().free;
+  	          truetotal += (e.getValue().free + e.getValue().used);
+  	        }
+  	        if (e.getValue().prop == MetaStoreConst.MDeviceProp.SHARED ||
+  	            e.getValue().prop == MetaStoreConst.MDeviceProp.BACKUP) {
+  	          sharedfree += e.getValue().free;
+  	        }
   	      }
         }
         sb.append((used + free) + ",");
@@ -1225,6 +1235,10 @@ public class DiskManager {
           sb.append(l + ";");
         }
         sb.append(",");
+        sb.append(truetotal + ",");
+        sb.append(truefree + ",");
+        sb.append(offlinefree + ",");
+        sb.append(sharedfree + ",");
         sb.append("\n");
 
         // generate report file
@@ -1711,7 +1725,8 @@ public class DiskManager {
           r += prefix + " " + e.getKey() + " -> " + "Rpt TNr: " + e.getValue().totalReportNr +
               ", TREP: " + e.getValue().totalFileRep +
               ", TDEL: " + e.getValue().totalFileDel +
-              ", TVYR: " + e.getValue().totalVerify +
+              ", TVER: " + e.getValue().totalVerify +
+              ", TVYR: " + e.getValue().totalVYR +
               ", QREP: " + e.getValue().toRep.size() +
               ", QDEL: " + e.getValue().toDelete.size() +
               ", Last Rpt " + (System.currentTimeMillis() - e.getValue().lastRptTs)/1000 + "s ago, {\n";
@@ -1727,7 +1742,8 @@ public class DiskManager {
       String r = "";
       Long[] devnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
       Long[] adevnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
-      long free = 0, used = 0, offlinenr = 0;
+      long free = 0, used = 0, offlinenr = 0, truetotal = 0, truefree = 0;
+      Set<String> offlinedevs = new TreeSet<String>();
 
       for (int i = 0; i < devnr.length; i++) {
         devnr[i] = new Long(0);
@@ -1783,17 +1799,25 @@ public class DiskManager {
           }
 	        if (e.getValue().isOffline) {
 	          offlinenr++;
-	        }
+	          offlinedevs.add(e.getValue().dev);
+	        } else {
+            truefree += e.getValue().free;
+            truetotal += (e.getValue().free + e.getValue().used);
+          }
 	      }
 	    }
 
 	    if (used + free > 0) {
-        if (((double)free / (used + free)) < 0.2) {
+        if (((double)truefree / (truetotal)) < 0.2) {
           r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
               "G, free " + ANSI_RED + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + " \n";
+          r += "True  space " + ((truetotal) / 1000000000) + "G, used " + ((truetotal - truefree) / 1000000000) +
+              "G, free " + ANSI_RED + (truefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)truefree / (truetotal)) + " \n";
         } else {
           r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
               "G, free " + ANSI_GREEN + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + "\n";
+          r += "True  space " + ((truetotal) / 1000000000) + "G, used " + ((truetotal - truefree) / 1000000000) +
+              "G, free " + ANSI_GREEN + (truefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)truefree / (truetotal)) + "\n";
         }
 	    }
       synchronized (rs) {
@@ -1814,6 +1838,11 @@ public class DiskManager {
             r += "\t" + n.getNode_name() + ", " + n.getIps().toString() + "\n";
           }
         }
+      }
+      r += "}\n";
+      r += "Offline Device list: {\n";
+      for (String dev : offlinedevs) {
+        r += dev + ",";
       }
       r += "}\n";
       r += "toReRep Device list: {\n";
@@ -3504,6 +3533,7 @@ public class DiskManager {
                       break;
                     case DELETED:
                       oni.totalFileDel++;
+                      break;
                     case FAILED_DEL:
                       oni.totalFailDel++;
                       // it is ok ignore any del failure
@@ -3661,6 +3691,7 @@ public class DiskManager {
                           synchronized (oni.toVerify) {
                             oni.toVerify.add(args[1] + ":" + oni.getMP(args[1]) + ":" + args[2]);
                             LOG.info("----> Add toVerify " + args[0] + " " + args[1] + "," + args[2] + ", qs " + oni.toVerify.size());
+                            oni.totalVYR++;
                           }
                         }
                       }
