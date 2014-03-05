@@ -1,0 +1,1430 @@
+package org.apache.hadoop.hive.metastore.newms;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
+import org.apache.hadoop.hive.metastore.RawStore;
+import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
+import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
+import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
+import org.apache.hadoop.hive.metastore.api.Busitype;
+import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
+import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.Device;
+import org.apache.hadoop.hive.metastore.api.EquipRoom;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.metastore.api.GeoLocation;
+import org.apache.hadoop.hive.metastore.api.GlobalSchema;
+import org.apache.hadoop.hive.metastore.api.Index;
+import org.apache.hadoop.hive.metastore.api.InvalidInputException;
+import org.apache.hadoop.hive.metastore.api.InvalidObjectException;
+import org.apache.hadoop.hive.metastore.api.InvalidPartitionException;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
+import org.apache.hadoop.hive.metastore.api.Node;
+import org.apache.hadoop.hive.metastore.api.NodeGroup;
+import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.PartitionEventType;
+import org.apache.hadoop.hive.metastore.api.PrincipalPrivilegeSet;
+import org.apache.hadoop.hive.metastore.api.PrincipalType;
+import org.apache.hadoop.hive.metastore.api.PrivilegeBag;
+import org.apache.hadoop.hive.metastore.api.Role;
+import org.apache.hadoop.hive.metastore.api.SFile;
+import org.apache.hadoop.hive.metastore.api.SFileLocation;
+import org.apache.hadoop.hive.metastore.api.SFileRef;
+import org.apache.hadoop.hive.metastore.api.SplitValue;
+import org.apache.hadoop.hive.metastore.api.Subpartition;
+import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.metastore.api.Type;
+import org.apache.hadoop.hive.metastore.api.UnknownDBException;
+import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
+import org.apache.hadoop.hive.metastore.api.UnknownTableException;
+import org.apache.hadoop.hive.metastore.api.User;
+import org.apache.hadoop.hive.metastore.api.statfs;
+import org.apache.hadoop.hive.metastore.model.MDBPrivilege;
+import org.apache.hadoop.hive.metastore.model.MGlobalPrivilege;
+import org.apache.hadoop.hive.metastore.model.MPartitionColumnPrivilege;
+import org.apache.hadoop.hive.metastore.model.MPartitionPrivilege;
+import org.apache.hadoop.hive.metastore.model.MRoleMap;
+import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
+import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
+import org.apache.hadoop.hive.metastore.model.MUser;
+import org.apache.thrift.TException;
+
+import redis.clients.jedis.exceptions.JedisConnectionException;
+
+public class RawStoreImp implements RawStore {
+
+	private NewMSConf conf;
+	private CacheStore cs;
+
+	public RawStoreImp(NewMSConf conf) {
+		this.conf = conf;
+		cs = new CacheStore(conf);
+	}
+
+	public CacheStore getCs()
+	{
+		return cs;
+	}
+	@Override
+	public Configuration getConf() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void setConf(Configuration arg0) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void shutdown() {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public boolean openTransaction() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean commitTransaction() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void rollbackTransaction() {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void createDatabase(Database db) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public Database getDatabase(String name) throws NoSuchObjectException {
+		try {
+			Database d = (Database) cs.readObject(ObjectType.DATABASE, name);
+			if(d == null)
+				throw new NoSuchObjectException("There is no database named "+name);
+			return d;
+			//到底是抛出去，还是自己捕获呢。。
+		} catch (JedisConnectionException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	@Override
+	public boolean dropDatabase(String dbname) throws NoSuchObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean alterDatabase(String dbname, Database db)
+			throws NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<String> getDatabases(String pattern) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<String> getAllDatabases() throws MetaException {
+		List<String> dbs = new ArrayList<String>();
+		dbs.addAll(CacheStore.getDatabaseHm().keySet());
+		return dbs;
+	}
+
+	@Override
+	public boolean createType(Type type) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public Type getType(String typeName) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean dropType(String typeName) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void createTable(Table tbl) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public Device modifyDevice(Device dev, Node node) throws MetaException,
+			NoSuchObjectException, InvalidObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void offlineDevice(String devid) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void createNode(Node node) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public boolean updateNode(Node node) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean delNode(String node_name) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public Node getNode(String node_name) throws MetaException {
+		try {
+			Node n = (Node) cs.readObject(ObjectType.NODE, node_name);
+			return n;
+		} catch (JedisConnectionException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	@Override
+	public List<Node> getAllNodes() throws MetaException {
+		List<Node> ns = new ArrayList<Node>();
+		ns.addAll(CacheStore.getNodeHm().values());
+		return ns;
+	}
+
+	@Override
+	public long countNode() throws MetaException {
+		
+		return CacheStore.getNodeHm().size();
+	}
+
+	@Override
+	public SFile createFile(SFile file) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public SFile getSFile(long fid) throws MetaException {
+		try {
+			SFile f = (SFile)cs.readObject(ObjectType.SFILE, fid+"");
+			return f;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
+	}
+
+	@Override
+	public SFile getSFile(String devid, String location) throws MetaException {
+		try{
+			SFileLocation sfl = getSFileLocation(devid, location);
+			return getSFile(sfl.getFid());
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
+	}
+
+	@Override
+	public boolean delSFile(long fid) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public SFile updateSFile(SFile newfile) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean createFileLocation(SFileLocation location)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<SFileLocation> getSFileLocations(long fid) throws MetaException {
+		SFile f = getSFile(fid);
+		if(f != null)
+			return f.getLocations();
+		return null;
+	}
+
+	@Override
+	public List<SFileLocation> getSFileLocations(int status)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<SFileLocation> getSFileLocations(String devid, long curts,
+			long timeout) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public SFileLocation getSFileLocation(String devid, String location)
+			throws MetaException {
+		String sflkey = SFileImage.generateSflkey(location, devid);
+		try {
+			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
+			return sfl;
+		}catch(Exception e){
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
+	}
+
+	@Override
+	public SFileLocation updateSFileLocation(SFileLocation newsfl)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean delSFileLocation(String devid, String location)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean dropTable(String dbName, String tableName)
+			throws MetaException, NoSuchObjectException,
+			InvalidObjectException, InvalidInputException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public Table getTable(String dbName, String tableName) throws MetaException {
+		try {
+			Table t = (Table) cs.readObject(ObjectType.TABLE, dbName+"."+tableName);
+			return t;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
+	}
+
+	@Override
+	public Table getTableByID(long id) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public long getTableOID(String dbName, String tableName)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public boolean addPartition(Partition part) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public Partition getPartition(String dbName, String tableName,
+			String partName) throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Subpartition getSubpartition(String dbName, String tableName,
+			String partName) throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Partition getPartition(String db_name, String tbl_name,
+			List<String> part_vals) throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void updatePartition(Partition newPart)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void updateSubpartition(Subpartition newPart)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public boolean dropPartition(String dbName, String tableName,
+			List<String> part_vals) throws MetaException,
+			NoSuchObjectException, InvalidObjectException,
+			InvalidInputException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean dropPartition(String dbName, String tableName,
+			String part_name) throws MetaException, NoSuchObjectException,
+			InvalidObjectException, InvalidInputException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<Partition> getPartitions(String dbName, String tableName,
+			int max) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void alterTable(String dbname, String name, Table newTable)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public List<String> getTables(String dbName, String pattern)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<Table> getTableObjectsByName(String dbname,
+			List<String> tableNames) throws MetaException, UnknownDBException {
+		if(!CacheStore.getDatabaseHm().containsKey(dbname))
+			throw new UnknownDBException("Can not find database: "+dbname);
+		Set<String> noDupNames = new HashSet<String>();
+  	noDupNames.addAll(tableNames);
+		List<Table> ts = new ArrayList<Table>();
+		for(String tblname : noDupNames)
+		{
+			try {
+				Table t = (Table) cs.readObject(ObjectType.TABLE, dbname+"."+tblname);
+				if(t != null)
+					ts.add(t);
+			} catch (Exception e) {
+				e.printStackTrace();
+//				throw new MetaException(e.getMessage());
+			} 
+		}
+		return ts;
+	}
+
+	@Override
+	public List<String> getAllTables(String dbName) throws MetaException {
+		List<String> ts = new ArrayList<String>();
+		for(String s : CacheStore.getTableHm().keySet())
+		{
+			if(s.startsWith(dbName+"."))
+				ts.add(s);
+		}
+		return ts;
+	}
+
+	@Override
+	public List<String> listTableNamesByFilter(String dbName, String filter,
+			short max_tables) throws MetaException, UnknownDBException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<String> listPartitionNames(String db_name, String tbl_name,
+			short max_parts) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<String> listPartitionNamesByFilter(String db_name,
+			String tbl_name, String filter, short max_parts)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void alterPartition(String db_name, String tbl_name,
+			String partName, List<String> part_vals, Partition new_part)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void alterPartitions(String db_name, String tbl_name,
+			List<String> partNames, List<List<String>> part_vals_list,
+			List<Partition> new_parts) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public boolean addIndex(Index index) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public Index getIndex(String dbName, String origTableName, String indexName)
+			throws MetaException {
+		try {
+			Index in = (Index) cs.readObject(ObjectType.INDEX, dbName+"."+origTableName+"."+indexName);
+			return in;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
+	}
+
+	@Override
+	public boolean dropIndex(String dbName, String origTableName,
+			String indexName) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	//objectstore 中的实现没管max
+	public List<Index> getIndexes(String dbName, String origTableName, int max)
+			throws MetaException {
+		List<Index> ins = new ArrayList<Index>();
+		for(Map.Entry<String, Index> en : CacheStore.getIndexHm().entrySet())
+		{
+			if(en.getKey().startsWith(dbName+"."+origTableName+"."))
+				ins.add(en.getValue());
+				
+		}
+		return ins;
+	}
+
+	@Override
+	public List<String> listIndexNames(String dbName, String origTableName,
+			short max) throws MetaException {
+		List<String> ins = new ArrayList<String>();
+		for(Map.Entry<String, Index> en : CacheStore.getIndexHm().entrySet())
+		{
+			if(en.getKey().startsWith(dbName+"."+origTableName+"."))
+				ins.add(en.getValue().getIndexName());
+				
+		}
+		return ins;
+	}
+
+	@Override
+	public void alterIndex(String dbname, String baseTblName, String name,
+			Index newIndex) throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public List<Partition> getPartitionsByFilter(String dbName, String tblName,
+			String filter, short maxParts) throws MetaException,
+			NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<Partition> getPartitionsByNames(String dbName, String tblName,
+			List<String> partNames) throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Table markPartitionForEvent(String dbName, String tblName,
+			Map<String, String> partVals, PartitionEventType evtType)
+			throws MetaException, UnknownTableException,
+			InvalidPartitionException, UnknownPartitionException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean isPartitionMarkedForEvent(String dbName, String tblName,
+			Map<String, String> partName, PartitionEventType evtType)
+			throws MetaException, UnknownTableException,
+			InvalidPartitionException, UnknownPartitionException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean addRole(String rowName, String ownerName)
+			throws InvalidObjectException, MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean removeRole(String roleName) throws MetaException,
+			NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean grantRole(Role role, String userName,
+			PrincipalType principalType, String grantor,
+			PrincipalType grantorType, boolean grantOption)
+			throws MetaException, NoSuchObjectException, InvalidObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean revokeRole(Role role, String userName,
+			PrincipalType principalType) throws MetaException,
+			NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public PrincipalPrivilegeSet getUserPrivilegeSet(String userName,
+			List<String> groupNames) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public PrincipalPrivilegeSet getDBPrivilegeSet(String dbName,
+			String userName, List<String> groupNames)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public PrincipalPrivilegeSet getTablePrivilegeSet(String dbName,
+			String tableName, String userName, List<String> groupNames)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public PrincipalPrivilegeSet getPartitionPrivilegeSet(String dbName,
+			String tableName, String partition, String userName,
+			List<String> groupNames) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public PrincipalPrivilegeSet getColumnPrivilegeSet(String dbName,
+			String tableName, String partitionName, String columnName,
+			String userName, List<String> groupNames)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<MGlobalPrivilege> listPrincipalGlobalGrants(
+			String principalName, PrincipalType principalType) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<MDBPrivilege> listPrincipalDBGrants(String principalName,
+			PrincipalType principalType, String dbName) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<MTablePrivilege> listAllTableGrants(String principalName,
+			PrincipalType principalType, String dbName, String tableName) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<MPartitionPrivilege> listPrincipalPartitionGrants(
+			String principalName, PrincipalType principalType, String dbName,
+			String tableName, String partName) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<MTableColumnPrivilege> listPrincipalTableColumnGrants(
+			String principalName, PrincipalType principalType, String dbName,
+			String tableName, String columnName) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<MPartitionColumnPrivilege> listPrincipalPartitionColumnGrants(
+			String principalName, PrincipalType principalType, String dbName,
+			String tableName, String partName, String columnName) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean grantPrivileges(PrivilegeBag privileges)
+			throws InvalidObjectException, MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean revokePrivileges(PrivilegeBag privileges)
+			throws InvalidObjectException, MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public Role getRole(String roleName) throws NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<String> listRoleNames() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<MRoleMap> listRoles(String principalName,
+			PrincipalType principalType) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Partition getPartitionWithAuth(String dbName, String tblName,
+			List<String> partVals, String user_name, List<String> group_names)
+			throws MetaException, NoSuchObjectException, InvalidObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<Partition> getPartitionsWithAuth(String dbName, String tblName,
+			short maxParts, String userName, List<String> groupNames)
+			throws MetaException, NoSuchObjectException, InvalidObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<String> listPartitionNamesPs(String db_name, String tbl_name,
+			List<String> part_vals, short max_parts) throws MetaException,
+			NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<Partition> listPartitionsPsWithAuth(String db_name,
+			String tbl_name, List<String> part_vals, short max_parts,
+			String userName, List<String> groupNames) throws MetaException,
+			InvalidObjectException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean updateTableColumnStatistics(ColumnStatistics colStats)
+			throws NoSuchObjectException, MetaException,
+			InvalidObjectException, InvalidInputException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean updatePartitionColumnStatistics(ColumnStatistics statsObj,
+			List<String> partVals) throws NoSuchObjectException, MetaException,
+			InvalidObjectException, InvalidInputException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public ColumnStatistics getTableColumnStatistics(String dbName,
+			String tableName, String colName) throws MetaException,
+			NoSuchObjectException, InvalidInputException,
+			InvalidObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public ColumnStatistics getPartitionColumnStatistics(String dbName,
+			String tableName, String partName, List<String> partVals,
+			String colName) throws MetaException, NoSuchObjectException,
+			InvalidInputException, InvalidObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean deletePartitionColumnStatistics(String dbName,
+			String tableName, String partName, List<String> partVals,
+			String colName) throws NoSuchObjectException, MetaException,
+			InvalidObjectException, InvalidInputException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteTableColumnStatistics(String dbName, String tableName,
+			String colName) throws NoSuchObjectException, MetaException,
+			InvalidObjectException, InvalidInputException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public long cleanupEvents() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public Node findNode(String ip) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean addUser(String userName, String passwd, String ownerName)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean removeUser(String userName) throws MetaException,
+			NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<String> listUsersNames() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean authentication(String userName, String passwd)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public MUser getMUser(String user) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<SFile> findUnderReplicatedFiles() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<SFile> findOverReplicatedFiles() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<SFile> findLingeringFiles(long node_nr) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void findFiles(List<SFile> underReplicated,
+			List<SFile> overReplicated, List<SFile> lingering, long from,
+			long to) throws MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void findVoidFiles(List<SFile> voidFiles) throws MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void createPartitionIndex(Index index, Partition part)
+			throws InvalidObjectException, MetaException,
+			AlreadyExistsException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void createPartitionIndex(Index index, Subpartition part)
+			throws InvalidObjectException, MetaException,
+			AlreadyExistsException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public boolean dropPartitionIndex(Index index, Partition part)
+			throws InvalidObjectException, NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean dropPartitionIndex(Index index, Subpartition part)
+			throws InvalidObjectException, NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void createPartitionIndexStores(Index index, Partition part,
+			List<SFile> store, List<Long> originFid)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void createPartitionIndexStores(Index index, Subpartition part,
+			List<SFile> store, List<Long> originFid)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public boolean dropPartitionIndexStores(Index index, Partition part,
+			List<SFile> store) throws InvalidObjectException,
+			NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean dropPartitionIndexStores(Index index, Subpartition part,
+			List<SFile> store) throws InvalidObjectException,
+			NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<SFileRef> getPartitionIndexFiles(Index index, Partition part)
+			throws InvalidObjectException, NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean add_datawarehouse_sql(int dwNum, String sql)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<SFileRef> getSubpartitionIndexFiles(Index index,
+			Subpartition subpart) throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<Subpartition> getSubpartitions(String dbname, String tbl_name,
+			Partition part) throws InvalidObjectException,
+			NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<BusiTypeColumn> getAllBusiTypeCols() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Partition getParentPartition(String dbName, String tableName,
+			String subpart_name) throws NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<BusiTypeDatacenter> get_all_busi_type_datacenters()
+			throws MetaException, TException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void append_busi_type_datacenter(
+			BusiTypeDatacenter busiTypeDatacenter)
+			throws InvalidObjectException, MetaException, TException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public List<Busitype> showBusitypes() throws MetaException, TException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public int createBusitype(Busitype busitype) throws InvalidObjectException,
+			MetaException, TException {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public Device getDevice(String devid) throws MetaException,
+			NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean delDevice(String devid) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean modifyUser(User user) throws MetaException,
+			NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean addEquipRoom(EquipRoom er) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean modifyEquipRoom(EquipRoom er) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteEquipRoom(EquipRoom er) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<EquipRoom> listEquipRoom() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean addGeoLocation(GeoLocation gl) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean modifyGeoLocation(GeoLocation gl) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteGeoLocation(GeoLocation gl) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<GeoLocation> listGeoLocation() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<String> listUsersNames(String dbName) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public GlobalSchema getSchema(String schema_name)
+			throws NoSuchObjectException, MetaException {
+		try {
+			GlobalSchema gs = (GlobalSchema) cs.readObject(ObjectType.GLOBALSCHEMA, schema_name);
+			if(gs == null)
+				throw new NoSuchObjectException("Can not find globalschema :"+schema_name);
+			return gs;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
+	}
+
+	@Override
+	public boolean modifySchema(String schemaName, GlobalSchema schema)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteSchema(String schemaName)
+			throws InvalidObjectException, InvalidInputException,
+			NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<GlobalSchema> listSchemas() throws MetaException {
+		List<GlobalSchema> gl = new ArrayList<GlobalSchema>();
+		gl.addAll(CacheStore.getGlobalSchemaHm().values());
+		return gl;
+	}
+
+	@Override
+	public boolean addNodeGroup(NodeGroup ng) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean alterNodeGroup(NodeGroup ng) throws InvalidObjectException,
+			MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean modifyNodeGroup(String ngName, NodeGroup ng)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteNodeGroup(NodeGroup ng) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<NodeGroup> listNodeGroups() throws MetaException {
+		List<NodeGroup> ngl = new ArrayList<NodeGroup>();
+		ngl.addAll(CacheStore.getNodeGroupHm().values());
+		return ngl;
+	}
+
+	@Override
+	public List<NodeGroup> listDBNodeGroups(String dbName) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean addTableNodeDist(String db, String tab, List<String> ng)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteTableNodeDist(String db, String tab, List<String> ng)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<NodeGroup> listTableNodeDists(String dbName, String tabName)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public void createSchema(GlobalSchema schema)
+			throws InvalidObjectException, MetaException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public List<Long> listTableFiles(String dbName, String tableName,
+			int begin, int end) throws MetaException {
+		return cs.listTableFiles(dbName,tableName,begin,end);
+	}
+
+	@Override
+	public List<Long> findSpecificDigestFiles(String digest)
+			throws MetaException {
+		
+		return cs.listFilesByDegist(digest);
+	}
+
+	@Override
+	public List<SFile> filterTableFiles(String dbName, String tableName,
+			List<SplitValue> values) throws MetaException {
+		return cs.filterTableFiles(dbName, tableName, values);
+	}
+
+	@Override
+	public boolean assiginSchematoDB(String dbName, String schemaName,
+			List<FieldSchema> fileSplitKeys, List<FieldSchema> part_keys,
+			List<NodeGroup> ngs) throws InvalidObjectException,
+			NoSuchObjectException, MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<NodeGroup> listNodeGroupByNames(List<String> ngNames)
+			throws MetaException {
+		List<NodeGroup> ngs = new ArrayList<NodeGroup>();
+		for(String name : ngNames)
+		{
+			try {
+				NodeGroup ng = (NodeGroup) cs.readObject(ObjectType.NODEGROUP, name);
+				if(ng != null)
+					ngs.add(ng);
+			} catch (Exception e) {
+				e.printStackTrace();
+				throw new MetaException(e.getMessage());
+			}
+		}
+		return ngs;
+	}
+
+	@Override
+	public GeoLocation getGeoLocationByName(String geoLocName)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<GeoLocation> getGeoLocationByNames(List<String> geoLocNames)
+			throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean addNodeAssignment(String nodename, String dbname)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteNodeAssignment(String nodeName, String dbName)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<Node> listNodes() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean addUserAssignment(String userName, String dbName)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteUserAssignment(String userName, String dbName)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<User> listUsers() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean addRoleAssignment(String roleName, String dbName)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteRoleAssignment(String roleName, String dbName)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public List<Role> listRoles() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean addNodeGroupAssignment(NodeGroup ng, String dbName)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean deleteNodeGroupAssignment(NodeGroup ng, String dbName)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public void truncTableFiles(String dbName, String tableName)
+			throws MetaException, NoSuchObjectException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public boolean reopenSFile(SFile file) throws MetaException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public long getCurrentFID() {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public List<Device> listDevice() throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public statfs statFileSystem(long from, long to) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public long countDevice() throws MetaException {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	@Override
+	public long getMinFID() throws MetaException {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+}
