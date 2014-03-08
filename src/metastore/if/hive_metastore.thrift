@@ -1077,6 +1077,10 @@ service ThriftHiveMetastore extends fb303.FacebookService
   statfs statFileSystem(1:i64 begin_time, 2:i64 end_time) throws (1:MetaException o1)
   
   i64 getMaxFid() throws (1:MetaException o1)
+  
+  bool offlineDevicePhysically(1:string devid) throws (1:MetaException o1)
+  
+  bool flSelectorWatch(1:string table, 2:i32 op) throws (1:MetaException o1)
 }
 
 // * Note about the DDL_TIME: When creating or altering a table or a partition,

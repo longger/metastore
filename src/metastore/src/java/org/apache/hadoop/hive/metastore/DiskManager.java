@@ -87,6 +87,160 @@ public class DiskManager {
     public Long closeRepLimit = 0L;
     public Long fixRepLimit = 0L;
 
+    public static long dmsnr = 0;
+    public static FLSelector flselector = new FLSelector();
+
+    public static class FLEntry {
+      // single entry for one table
+      public String table;
+      public long l1Key;
+      public long l2KeyMax;
+      public TreeMap<Long, String> distribution;
+      public TreeMap<String, Long> statis;
+
+      public FLEntry(String table, long l1Key, long l2KeyMax) {
+        this.table = table;
+        this.l1Key = l1Key;
+        this.l2KeyMax = l2KeyMax;
+        distribution = new TreeMap<Long, String>();
+        statis = new TreeMap<String, Long>();
+      }
+
+      public void updateStatis(String node) {
+        synchronized (statis) {
+          if (statis.containsKey(node)) {
+            statis.put(node, statis.get(node) + 1);
+          } else {
+            statis.put(node, 1L);
+          }
+        }
+      }
+
+      public Set<String> filterNodes(Set<String> in) {
+        Set<String> r = new HashSet<String>();
+        if (in != null) {
+          r.addAll(in);
+          r.removeAll(statis.keySet());
+        }
+        if (r.size() == 0) {
+          // this means we have used all available nodes, then we use REF to calculate available nodes
+          long level = Long.MAX_VALUE;
+          for (Map.Entry<String, Long> e : statis.entrySet()) {
+            if (e.getValue() < level) {
+              r.clear();
+              r.add(e.getKey());
+            } else if (e.getValue() == level) {
+              r.add(e.getKey());
+            }
+          }
+        }
+        return r;
+      }
+    }
+
+    public static class FLSelector {
+      // considering node load and tables' first file locations
+      // Note that the following table should be REGULAR table name as DB.TABLE
+      public final Set<String> tableWatched = Collections.synchronizedSet(new HashSet<String>());
+      public final Map<String, FLEntry> context = new ConcurrentHashMap<String, FLEntry>();
+
+      public boolean watched(String table) {
+        return tableWatched.add(table);
+      }
+
+      public boolean unWatched(String table) {
+        return tableWatched.remove(table);
+      }
+
+      public boolean flushWatched(String table) {
+        FLEntry fle = context.get(table);
+        if (fle != null) {
+          synchronized (fle) {
+            fle.distribution.clear();
+            fle.statis.clear();
+          }
+          return true;
+        }
+        return false;
+      }
+
+      public String printWatched() {
+        String r = "";
+
+        r += "Table FLSelector Watched: {";
+        for (String tbl : tableWatched) {
+          r += tbl + ",";
+        }
+        r += "}\n";
+
+        for (Map.Entry<String, FLEntry> e : context.entrySet()) {
+          r += "Table '" + e.getKey() + "' -> {\n";
+          r += "\tl1Key=" + e.getValue().l1Key + ", l2KeyMax=" + e.getValue().l2KeyMax + "\n";
+          r += "\t" + e.getValue().distribution + "\n";
+          r += "\t" + e.getValue().statis + "\n";
+          r += "}\n";
+        }
+        return r;
+      }
+
+      // PLEASE USE REGULAR TABLE NAME HERE
+      public String findBestNode(DiskManager dm, FileLocatingPolicy flp, String table,
+          long l1Key, long l2Key) throws IOException {
+        String targetNode = null;
+
+        if (!tableWatched.contains(table)) {
+          return dm.findBestNode(flp);
+        }
+
+        FLEntry dist = context.get(table);
+        if (dist == null) {
+          targetNode = dm.findBestNode(flp);
+          if (targetNode != null) {
+            dist = new FLEntry(table, l1Key, l2Key);
+            dist.distribution.put(l2Key, targetNode);
+            dist.updateStatis(targetNode);
+            synchronized (context) {
+              if (!context.containsKey(table)) {
+                context.put(table, dist);
+              } else {
+                dist = context.get(table);
+                if (!dist.distribution.containsKey(l2Key)) {
+                  dist.distribution.put(l2Key, targetNode);
+                }
+                dist.updateStatis(targetNode);
+              }
+            }
+          }
+        } else {
+          synchronized (dist) {
+            boolean doUpdate = true;
+
+            if (l1Key > dist.l1Key) {
+              // drop all old infos
+              dist.l1Key = l1Key;
+              dist.distribution.clear();
+              dist.statis.clear();
+            } else if (l1Key == dist.l1Key) {
+              // ok, do filter
+              flp.nodes = dist.filterNodes(flp.nodes);
+            } else {
+              // ignore this key
+              doUpdate = false;
+            }
+            // do find now
+            targetNode = dm.findBestNode(flp);
+            if (targetNode != null && doUpdate) {
+              if (!dist.distribution.containsKey(l2Key)) {
+                dist.distribution.put(l2Key, targetNode);
+              }
+              dist.updateStatis(targetNode);
+            }
+          }
+        }
+        return targetNode;
+      }
+    }
+
     public static class DMProfile {
       public static AtomicLong fcreate1R = new AtomicLong(0);
       public static AtomicLong fcreate1SuccR = new AtomicLong(0);
@@ -1147,7 +1301,7 @@ public class DiskManager {
           for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
             totalReportNr += e.getValue().totalReportNr;
             totalFileRep += e.getValue().totalFileRep;
-            totalFileDel += e.getValue().totalFailDel;
+            totalFileDel += e.getValue().totalFileDel;
             totalVerify += e.getValue().totalVerify;
             toRepNr += e.getValue().toRep.size();
             toDeleteNr += e.getValue().toDelete.size();
@@ -1502,6 +1656,7 @@ public class DiskManager {
           if (last_unspcTs + repDelCheck < System.currentTimeMillis()) {
             // Step 1: generate the SUSPECT file list
             List<SFileLocation> sfl;
+            Set<String> hitDevs = new TreeSet<String>();
 
             LOG.info("Check SUSPECT SFileLocations [" + times + "]");
             synchronized (trs) {
@@ -1510,7 +1665,8 @@ public class DiskManager {
                 // Step 2: TODO: try to probe the target file
                 for (SFileLocation fl : sfl) {
                   // check if this device is back
-                  if (toUnspc.containsKey(fl.getDevid())) {
+                  if (toUnspc.containsKey(fl.getDevid()) || admap.containsKey(fl.getDevid())) {
+                    hitDevs.add(fl.getDevid());
                     fl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
                     try {
                       trs.updateSFileLocation(fl);
@@ -1518,6 +1674,11 @@ public class DiskManager {
                       LOG.error(e, e);
                       continue;
                     }
+                  }
+                }
+                if (hitDevs.size() > 0) {
+                  for (String dev : hitDevs) {
+                    toUnspc.remove(dev);
                   }
                 }
               } catch (MetaException e) {
@@ -1792,6 +1953,20 @@ public class DiskManager {
 
 	    synchronized (admap) {
 	      for (Map.Entry<String, DeviceInfo> e : admap.entrySet()) {
+	        if (dmsnr % 15 == 0) {
+	          synchronized (rs) {
+	            Device d;
+	            try {
+	              d = rs.getDevice(e.getKey());
+	              e.getValue().prop = d.getProp();
+	              if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE) {
+	                e.getValue().isOffline = true;
+	              }
+	            } catch (NoSuchObjectException e1) {
+	              LOG.error(e1, e1);
+	            }
+	          }
+	        }
 	        free += e.getValue().free;
 	        used += e.getValue().used;
 	        if (e.getValue().prop >= 0) {
@@ -1842,7 +2017,7 @@ public class DiskManager {
       r += "}\n";
       r += "Offline Device list: {\n";
       for (String dev : offlinedevs) {
-        r += dev + ",";
+        r += dev + "\n";
       }
       r += "}\n";
       r += "toReRep Device list: {\n";
@@ -1893,8 +2068,10 @@ public class DiskManager {
         }
       }
       r += "}\n";
+      r += flselector.printWatched();
       r += "Rep Limit: closeRepLimit " + closeRepLimit + ", fixRepLimit " + fixRepLimit + "\n";
 
+      dmsnr++;
       return r;
     }
 
@@ -2006,6 +2183,7 @@ public class DiskManager {
           synchronized (toReRep) {
             if (!toReRep.containsKey(di.dev)) {
               toReRep.put(di.dev, System.currentTimeMillis());
+              admap.remove(di.dev);
               toUnspc.remove(di.dev);
             }
           }

@@ -4491,12 +4491,21 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throws FileOperationException, TException {
       String table_path = null;
 
+      if (dm == null) {
+        return null;
+      }
       if (node_name == null) {
         // this means we should select Best Available Node and Best Available Device;
+        // FIXME: add FLSelector here, filter already used nodes, update will used nodes;
         try {
           node_name = dm.findBestNode(flp);
           if (node_name == null) {
             throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
+          }
+          if (db_name != null && table_name != null && values.size() == 3) {
+            LOG.info(DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
+                Long.parseLong(values.get(0).getValue()),
+                Long.parseLong(values.get(2).getValue())));
           }
         } catch (IOException e) {
           LOG.error(e, e);
@@ -4507,9 +4516,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       SFile cfile = null;
 
       // Step 1: find best device to put a file
-      if (dm == null) {
-        return null;
-      }
       try {
         if (flp == null) {
           flp = new FileLocatingPolicy(null, null, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, true);
@@ -7013,6 +7019,33 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
       }
       return r;
+    }
+
+    @Override
+    public boolean offlineDevicePhysically(String devid) throws MetaException, TException {
+      List<SFileLocation> sfls = getMS().getSFileLocations(devid, System.currentTimeMillis(), 0);
+      LOG.info("Offline Device " + devid + " physically, hit " + sfls.size() + " SFLs.");
+      for (SFileLocation f : sfls) {
+        boolean r = getMS().delSFileLocation(devid, f.getLocation());
+        if (r) {
+          dm.asyncDelSFL(f);
+        }
+      }
+      return true;
+    }
+
+    @Override
+    public boolean flSelectorWatch(String table, int op) throws MetaException, TException {
+      switch (op) {
+      case 0:
+        return DiskManager.flselector.watched(table);
+      case 1:
+        return DiskManager.flselector.unWatched(table);
+      case 2:
+        return DiskManager.flselector.flushWatched(table);
+      default:
+        return false;
+      }
     }
 
   }
