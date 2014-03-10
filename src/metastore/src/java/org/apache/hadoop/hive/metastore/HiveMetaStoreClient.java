@@ -2350,4 +2350,16 @@ public boolean authentication(String user_name, String passwd)
     sfl.setLocation(location);
     return client.del_filelocation(sfl);
   }
+
+  @Override
+  public boolean offlineDevicePhysically(String devid) throws MetaException, TException {
+    assert devid != null;
+    return client.offlineDevicePhysically(devid);
+  }
+
+  @Override
+  public boolean flSelectorWatch(String table, int op) throws MetaException, TException {
+    assert table != null;
+    return client.flSelectorWatch(table, op);
+  }
 }
