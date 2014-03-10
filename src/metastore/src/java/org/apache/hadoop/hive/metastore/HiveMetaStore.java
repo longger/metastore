@@ -4503,9 +4503,19 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
           }
           if (db_name != null && table_name != null && values.size() == 3) {
-            LOG.info("FLSelector will choose " + DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
-                Long.parseLong(values.get(0).getValue()),
-                Long.parseLong(values.get(2).getValue())) + " for " + db_name + "." + table_name + " " + values.get(0).getValue());
+            try {
+              String l2keys[] = values.get(2).getValue().split("-");
+              if (l2keys.length == 2) {
+                LOG.info("FLSelector will choose " + DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
+                    Long.parseLong(values.get(0).getValue()),
+                    Long.parseLong(l2keys[1])) + " for " + db_name + "." + table_name +
+                    " L1Key=" + values.get(0).getValue() +
+                    " L2Key=" + l2keys[1]);
+              }
+            }
+            catch (NumberFormatException nfe) {
+              LOG.error(nfe, nfe);
+            }
           }
         } catch (IOException e) {
           LOG.error(e, e);

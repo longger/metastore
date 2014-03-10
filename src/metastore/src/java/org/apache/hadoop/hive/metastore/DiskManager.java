@@ -149,7 +149,9 @@ public class DiskManager {
       }
 
       public boolean unWatched(String table) {
-        return tableWatched.remove(table);
+        boolean r = tableWatched.remove(table);
+        context.remove(table);
+        return r;
       }
 
       public boolean flushWatched(String table) {
