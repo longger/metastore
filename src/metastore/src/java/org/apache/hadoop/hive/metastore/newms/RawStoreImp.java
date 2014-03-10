@@ -120,8 +120,9 @@ public class RawStoreImp implements RawStore {
 	public Database getDatabase(String name) throws NoSuchObjectException {
 		try {
 			Database d = (Database) cs.readObject(ObjectType.DATABASE, name);
-			if(d == null)
-				throw new NoSuchObjectException("There is no database named "+name);
+			if(d == null) {
+        throw new NoSuchObjectException("There is no database named "+name);
+      }
 			return d;
 			//到底是抛出去，还是自己捕获呢。。
 		} catch (JedisConnectionException e) {
@@ -250,7 +251,7 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public long countNode() throws MetaException {
-		
+
 		return CacheStore.getNodeHm().size();
 	}
 
@@ -305,8 +306,9 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<SFileLocation> getSFileLocations(long fid) throws MetaException {
 		SFile f = getSFile(fid);
-		if(f != null)
-			return f.getLocations();
+		if(f != null) {
+      return f.getLocations();
+    }
 		return null;
 	}
 
@@ -466,8 +468,9 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<Table> getTableObjectsByName(String dbname,
 			List<String> tableNames) throws MetaException, UnknownDBException {
-		if(!CacheStore.getDatabaseHm().containsKey(dbname))
-			throw new UnknownDBException("Can not find database: "+dbname);
+		if(!CacheStore.getDatabaseHm().containsKey(dbname)) {
+      throw new UnknownDBException("Can not find database: "+dbname);
+    }
 		Set<String> noDupNames = new HashSet<String>();
   	noDupNames.addAll(tableNames);
 		List<Table> ts = new ArrayList<Table>();
@@ -475,12 +478,13 @@ public class RawStoreImp implements RawStore {
 		{
 			try {
 				Table t = (Table) cs.readObject(ObjectType.TABLE, dbname+"."+tblname);
-				if(t != null)
-					ts.add(t);
+				if(t != null) {
+          ts.add(t);
+        }
 			} catch (Exception e) {
 				e.printStackTrace();
 //				throw new MetaException(e.getMessage());
-			} 
+			}
 		}
 		return ts;
 	}
@@ -490,8 +494,9 @@ public class RawStoreImp implements RawStore {
 		List<String> ts = new ArrayList<String>();
 		for(String s : CacheStore.getTableHm().keySet())
 		{
-			if(s.startsWith(dbName+"."))
-				ts.add(s);
+			if(s.startsWith(dbName+".")) {
+        ts.add(s);
+      }
 		}
 		return ts;
 	}
@@ -568,9 +573,10 @@ public class RawStoreImp implements RawStore {
 		List<Index> ins = new ArrayList<Index>();
 		for(Map.Entry<String, Index> en : CacheStore.getIndexHm().entrySet())
 		{
-			if(en.getKey().startsWith(dbName+"."+origTableName+"."))
-				ins.add(en.getValue());
-				
+			if(en.getKey().startsWith(dbName+"."+origTableName+".")) {
+        ins.add(en.getValue());
+      }
+
 		}
 		return ins;
 	}
@@ -581,9 +587,10 @@ public class RawStoreImp implements RawStore {
 		List<String> ins = new ArrayList<String>();
 		for(Map.Entry<String, Index> en : CacheStore.getIndexHm().entrySet())
 		{
-			if(en.getKey().startsWith(dbName+"."+origTableName+"."))
-				ins.add(en.getValue().getIndexName());
-				
+			if(en.getKey().startsWith(dbName+"."+origTableName+".")) {
+        ins.add(en.getValue().getIndexName());
+      }
+
 		}
 		return ins;
 	}
@@ -1151,8 +1158,9 @@ public class RawStoreImp implements RawStore {
 			throws NoSuchObjectException, MetaException {
 		try {
 			GlobalSchema gs = (GlobalSchema) cs.readObject(ObjectType.GLOBALSCHEMA, schema_name);
-			if(gs == null)
-				throw new NoSuchObjectException("Can not find globalschema :"+schema_name);
+			if(gs == null) {
+        throw new NoSuchObjectException("Can not find globalschema :"+schema_name);
+      }
 			return gs;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -1259,7 +1267,7 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<Long> findSpecificDigestFiles(String digest)
 			throws MetaException {
-		
+
 		return cs.listFilesByDegist(digest);
 	}
 
@@ -1286,8 +1294,9 @@ public class RawStoreImp implements RawStore {
 		{
 			try {
 				NodeGroup ng = (NodeGroup) cs.readObject(ObjectType.NODEGROUP, name);
-				if(ng != null)
-					ngs.add(ng);
+				if(ng != null) {
+          ngs.add(ng);
+        }
 			} catch (Exception e) {
 				e.printStackTrace();
 				throw new MetaException(e.getMessage());
