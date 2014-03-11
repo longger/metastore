@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
 import org.apache.hadoop.hive.metastore.api.Index;
 import org.apache.hadoop.hive.metastore.api.Node;
@@ -42,6 +43,7 @@ public class CacheStore {
   private static ConcurrentHashMap<String, GlobalSchema> globalSchemaHm = new ConcurrentHashMap<String, GlobalSchema>();
   private static ConcurrentHashMap<String, Table> tableHm = new ConcurrentHashMap<String, Table>();
   private static ConcurrentHashMap<String, Index> indexHm = new ConcurrentHashMap<String, Index>();
+  private static ConcurrentHashMap<String, Device> deviceHm = new ConcurrentHashMap<String, Device>();
   private static TimeLimitedCacheMap sFileHm = new TimeLimitedCacheMap(270, 60, 300, TimeUnit.SECONDS);
   private static TimeLimitedCacheMap sflHm = new TimeLimitedCacheMap(270, 60, 300, TimeUnit.SECONDS);
 
@@ -79,6 +81,7 @@ public class CacheStore {
           readAll(ObjectType.PARTITION);
           readAll(ObjectType.PRIVILEGE);
           readAll(ObjectType.TABLE);
+          readAll(ObjectType.DEVICE);
           readAll(ObjectType.SFILE);
           readAll(ObjectType.SFILELOCATION);
           long end = System.currentTimeMillis();
@@ -162,6 +165,9 @@ public class CacheStore {
       else if(key.equals(ObjectType.PARTITION)) {
         partitionHm.put(field, (Partition)o);
       }
+      else if(key.equals(ObjectType.DEVICE)) {
+      	deviceHm.put(field, (Device)o);
+      }
     }catch(JedisConnectionException e){
       RedisFactory.putBrokenInstance(jedis);
       jedis = null;
@@ -203,7 +209,9 @@ public class CacheStore {
     else if(key.equals(ObjectType.PARTITION)) {
       o = partitionHm.get(field);
     }
-
+    else if(key.equals(ObjectType.DEVICE)) {
+      o = deviceHm.get(field);
+    }
     if(o != null)
     {
       System.out.println("in function readObject: read "+key.getName()+":"+field+" from cache.");
@@ -296,7 +304,9 @@ public class CacheStore {
       else if(key.equals(ObjectType.PARTITION)) {
         partitionHm.put(field, (Partition)o);
       }
-
+      else if(key.equals(ObjectType.DEVICE)) {
+        deviceHm.put(field, (Device)o);
+      }
       System.out.println("in function readObject: read "+key.getName()+":"+field+" from redis.");
 
 
@@ -310,12 +320,12 @@ public class CacheStore {
     return o;
   }
 
-  public void removeObject(ObjectType.TypeDesc key, String field)
+  public void removeObject(ObjectType.TypeDesc key, String field) throws JedisConnectionException, IOException, ClassNotFoundException
   {
     //删除一个sfile时要把预先建立的一些信息也删掉
     if(key.equals(ObjectType.SFILE))
     {
-      try {
+     
         SFile sf = (SFile) readObject(key, field);
         if(sf != null)
         {
@@ -336,26 +346,30 @@ public class CacheStore {
             RedisFactory.putInstance(jedis);
           }
         }
-      } catch (JedisConnectionException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-      } catch (IOException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-      } catch (ClassNotFoundException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
+      
+    }else
+    {
+    	Jedis jedis = null;
+      try{
+        jedis = rf.getDefaultInstance();
+        jedis.hdel(key.getName(), field);
+      }catch(JedisConnectionException e){
+        RedisFactory.putBrokenInstance(jedis);
+        jedis = null;
+        throw e;
+      }finally{
+        RedisFactory.putInstance(jedis);
       }
     }
 
+    if(key.equals(ObjectType.SFILE)){
+    	sFileHm.remove(field);
+    }
     else if(key.equals(ObjectType.DATABASE)) {
       databaseHm.remove(field);
     }
     else if(key.equals(ObjectType.TABLE)) {
       tableHm.remove(field);
-    }
-    else if(key.equals(ObjectType.SFILE)) {
-      sFileHm.remove(field);
     }
     else if(key.equals(ObjectType.SFILELOCATION)) {
       sflHm.remove(field);
@@ -377,6 +391,9 @@ public class CacheStore {
     }
     else if(key.equals(ObjectType.PARTITION)) {
       partitionHm.remove(field);
+    }
+    else if(key.equals(ObjectType.DEVICE)) {
+      deviceHm.remove(field);
     }
 
   }
@@ -589,6 +606,9 @@ public class CacheStore {
 	}
 	public static TimeLimitedCacheMap getSflHm() {
 		return sflHm;
+	}
+	public static ConcurrentHashMap<String, Device> getDeviceHm() {
+		return deviceHm;
 	}
 
 

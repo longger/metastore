@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.FileOperationException;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
 import org.apache.hadoop.hive.metastore.api.Index;
@@ -18,8 +19,8 @@ import org.apache.hadoop.hive.metastore.api.NodeGroup;
 import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hadoop.hive.metastore.msg.MSGType;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
+import org.apache.hadoop.hive.metastore.msg.MSGType;
 import org.apache.thrift.TException;
 
 import redis.clients.jedis.exceptions.JedisConnectionException;
@@ -42,6 +43,12 @@ public class MsgProcessing {
       {
         cs.writeObject(ObjectType.DATABASE, db.getName(), db);
       }
+      
+      List<Device> dl = msClient.client.listDevice();
+      for(Device de : dl)
+      	cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+      long fid = msClient.client.getMaxFid();
+      RawStoreImp.setFID(fid);
 		} catch (MetaException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
