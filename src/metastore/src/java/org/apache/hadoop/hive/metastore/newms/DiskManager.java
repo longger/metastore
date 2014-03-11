@@ -63,8 +63,7 @@ import org.apache.thrift.TException;
 
 public class DiskManager {
     public static long startupTs = System.currentTimeMillis();
-    public RawStoreImp rsi;
-    public RawStore rs;
+    public RawStore rs = new RawStoreImp();
     public Log LOG;
     private final HiveConf hiveConf;
     public final int bsize = 64 * 1024;
@@ -359,31 +358,31 @@ public class DiskManager {
 
     public class NodeInfo {
       public long lastRptTs;
-      List<DeviceInfo> dis;
-      Set<SFileLocation> toDelete;
-      Set<JSONObject> toRep;
-      Set<String> toVerify;
-      String lastReportStr;
-      long totalReportNr = 0;
-      long totalFileRep = 0;
-      long totalFileDel = 0;
-      long totalFailDel = 0;
-      long totalFailRep = 0;
-      long totalVerify = 0;
-      long totalVYR = 0;
-      InetAddress address = null;
-      int port = 0;
+      public List<DeviceInfo> dis;
+      public Set<SFileLocation> toDelete;
+      public Set<JSONObject> toRep;
+      public Set<String> toVerify;
+      public String lastReportStr;
+      public long totalReportNr = 0;
+      public long totalFileRep = 0;
+      public long totalFileDel = 0;
+      public long totalFailDel = 0;
+      public long totalFailRep = 0;
+      public long totalVerify = 0;
+      public long totalVYR = 0;
+      public InetAddress address = null;
+      public int port = 0;
 
-      long qrep = 0;
-      long hrep = 0;
-      long drep = 0;
-      long qdel = 0;
-      long hdel = 0;
-      long ddel = 0;
-      long tver = 0;
-      long tvyr = 0;
-      long uptime = 0;
-      double load1 = 0.0;
+      public long qrep = 0;
+      public long hrep = 0;
+      public long drep = 0;
+      public long qdel = 0;
+      public long hdel = 0;
+      public long ddel = 0;
+      public long tver = 0;
+      public long tvyr = 0;
+      public long uptime = 0;
+      public double load1 = 0.0;
 
       public NodeInfo(List<DeviceInfo> dis) {
         this.lastRptTs = System.currentTimeMillis();
@@ -428,10 +427,10 @@ public class DiskManager {
         Set<Table> tables = new TreeSet<Table>();
         Map<String, Table> partToTbl = new HashMap<String, Table>();
         for (Partition p : parts) {
-          synchronized (rsi) {
+          synchronized (rs) {
             Table t;
             try {
-              t = rsi.getTable(p.getDbName(), p.getTableName());
+              t = rs.getTable(p.getDbName(), p.getTableName());
               tables.add(t);
               partToTbl.put(p.getPartitionName(), t);
             } catch (MetaException e) {
@@ -441,10 +440,10 @@ public class DiskManager {
           }
         }
         for (Subpartition p : subparts) {
-          synchronized (rsi) {
+          synchronized (rs) {
             Table t;
             try {
-              t = rsi.getTable(p.getDbName(), p.getTableName());
+              t = rs.getTable(p.getDbName(), p.getTableName());
               tables.add(t);
               partToTbl.put(p.getPartitionName(), t);
             } catch (MetaException e) {
@@ -632,11 +631,11 @@ public class DiskManager {
               // refresh to check if the file is closed and has the proper length
               for (SFile f : be.files) {
                 SFile nf;
-                synchronized (rsi) {
+                synchronized (rs) {
                   try {
-                    nf = rsi.getSFile(f.getFid());
+                    nf = rs.getSFile(f.getFid());
                     if (nf != null) {
-                      nf.setLocations(rsi.getSFileLocations(f.getFid()));
+                      nf.setLocations(rs.getSFileLocations(f.getFid()));
                     } else {
                       LOG.error("Invalid SFile fid " + f.getFid() + ", not found.");
                       continue;
@@ -680,11 +679,11 @@ public class DiskManager {
               // refresh to check if the file is closed and has the proper length
               for (SFile f : be.files) {
                 SFile nf;
-                synchronized (rsi) {
+                synchronized (rs) {
                   try {
-                    nf = rsi.getSFile(f.getFid());
+                    nf = rs.getSFile(f.getFid());
                     if (nf != null) {
-                      nf.setLocations(rsi.getSFileLocations(f.getFid()));
+                      nf.setLocations(rs.getSFileLocations(f.getFid()));
                     } else {
                       LOG.error("Invalid SFile fid " + f.getFid() + ", not found.");
                       continue;
@@ -754,7 +753,6 @@ public class DiskManager {
 
     public class DMTimerTask extends TimerTask {
       private RawStore trs;
-      private RawStoreImp trsp;
       private int times = 0;
       private boolean isRunning = false;
       private final Long syncIsRunning = new Long(0);
@@ -967,8 +965,8 @@ public class DiskManager {
             do {
               location = "/data/";
               if (f.getDbName() != null && f.getTableName() != null) {
-                synchronized (trsp) {
-                  Table t = trsp.getTable(f.getDbName(), f.getTableName());
+                synchronized (trs) {
+                  Table t = trs.getTable(f.getDbName(), f.getTableName());
                   location += t.getDbName() + "/" + t.getTableName() + "/"
                       + rand.nextInt(Integer.MAX_VALUE);
                 }
@@ -1133,9 +1131,9 @@ public class DiskManager {
         sb.append((used + free) + ",");
         sb.append(used + ",");
         sb.append(free + ",");
-        synchronized (trsp) {
+        synchronized (trs) {
           try {
-            sb.append(trsp.countNode() + ",");
+            sb.append(trs.countNode() + ",");
           } catch (MetaException e) {
             sb.append("-1,");
           }
@@ -1380,12 +1378,12 @@ public class DiskManager {
               do_delete(entry.getKey(), entry.getValue().intValue());
               // double check the file status, if it is CLOSED, change it to REPLICATED
               if (entry.getKey().getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
-                synchronized (trsp) {
+                synchronized (trs) {
                   try {
-                    SFile saved = trsp.getSFile(entry.getKey().getFid());
+                    SFile saved = trs.getSFile(entry.getKey().getFid());
                     if (saved.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
                       saved.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
-                      trsp.updateSFile(saved);
+                      trs.updateSFile(saved);
                     }
                   } catch (MetaException e) {
                     LOG.error(e, e);
@@ -1407,7 +1405,7 @@ public class DiskManager {
 
               if (f.getDbName() != null && f.getTableName() != null) {
                 try {
-                  Table tbl = trsp.getTable(f.getDbName(), f.getTableName());
+                  Table tbl = trs.getTable(f.getDbName(), f.getTableName());
                   long ngsize = 0;
 
                   if (tbl.getNodeGroupsSize() > 0) {
@@ -1475,9 +1473,9 @@ public class DiskManager {
                 if (!ignore) {
                   List<SFileLocation> sfl;
 
-                  synchronized (trsp) {
+                  synchronized (trs) {
                     try {
-                      sfl = trsp.getSFileLocations(entry.getKey(), System.currentTimeMillis(), 0);
+                      sfl = trs.getSFileLocations(entry.getKey(), System.currentTimeMillis(), 0);
                     } catch (MetaException e) {
                       LOG.error(e, e);
                       continue;
@@ -1513,16 +1511,16 @@ public class DiskManager {
             List<SFileLocation> sfl;
 
             LOG.info("Check SUSPECT SFileLocations [" + times + "]");
-            synchronized (trsp) {
+            synchronized (trs) {
               try {
-                sfl = trsp.getSFileLocations(MetaStoreConst.MFileLocationVisitStatus.SUSPECT);
+                sfl = trs.getSFileLocations(MetaStoreConst.MFileLocationVisitStatus.SUSPECT);
                 // Step 2: TODO: try to probe the target file
                 for (SFileLocation fl : sfl) {
                   // check if this device is back
                   if (toUnspc.containsKey(fl.getDevid())) {
                     fl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
                     try {
-                      trsp.updateSFileLocation(fl);
+                      trs.updateSFileLocation(fl);
                     } catch (MetaException e) {
                       LOG.error(e, e);
                       continue;
@@ -1565,11 +1563,11 @@ public class DiskManager {
 
               if (isVoid) {
                 // ok, mark the file as deleted
-                synchronized (trsp) {
+                synchronized (trs) {
                   // double get the file now
                   SFile nf;
                   try {
-                    nf = trsp.getSFile(f.getFid());
+                    nf = trs.getSFile(f.getFid());
                     if (nf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                       continue;
                     }
@@ -1588,7 +1586,7 @@ public class DiskManager {
 
                     LOG.info("Mark file (fid " + nf.getFid() + ") as void file to physically delete.");
                     nf.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);
-                    trsp.updateSFile(nf);
+                    trs.updateSFile(nf);
 
                   } catch (MetaException e1) {
                     LOG.error(e1, e1);
@@ -1768,8 +1766,8 @@ public class DiskManager {
         r += " " + e.getKey() + " -> " + e.getValue().get() + "\n";
       }
       r += "}\n";
-      synchronized (rsi) {
-        r += "Total nodes " + rsi.countNode() + ", active nodes " + ndmap.size() + "\n";
+      synchronized (rs) {
+        r += "Total nodes " + rs.countNode() + ", active nodes " + ndmap.size() + "\n";
       }
       r += "Active Node-Device map: {\n";
       synchronized (ndmap) {
@@ -1840,8 +1838,8 @@ public class DiskManager {
             devnr[MetaStoreConst.MDeviceProp.BACKUP_ALONE] + "}.\n";
       }
       r += "Inactive nodes list: {\n";
-      synchronized (rsi) {
-        List<Node> lns = rsi.getAllNodes();
+      synchronized (rs) {
+        List<Node> lns = rs.getAllNodes();
         for (Node n : lns) {
           if (!ndmap.containsKey(n.getNode_name())) {
             r += "\t" + n.getNode_name() + ", " + n.getIps().toString() + "\n";
@@ -1948,8 +1946,8 @@ public class DiskManager {
       if (ndi != null) {
         for (DeviceInfo di : ndi) {
           try {
-            synchronized (rsi) {
-              rsi.createOrUpdateDevice(di, node, null);
+            synchronized (rs) {
+              rs.createOrUpdateDevice(di, node, null);
               Device d = rs.getDevice(di.dev);
               di.prop = d.getProp();
               if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE) {
@@ -2039,8 +2037,8 @@ public class DiskManager {
       if (safeMode) {
         try {
           long cn;
-          synchronized (rsi) {
-            cn = rsi.countNode();
+          synchronized (rs) {
+            cn = rs.countNode();
           }
           if (safeMode && ((double) ndmap.size() / (double) cn > 0)) {
 
@@ -2068,10 +2066,10 @@ public class DiskManager {
           }
           // update Node status here
           try {
-            synchronized (rsi) {
-              Node saved = rsi.getNode(node);
+            synchronized (rs) {
+              Node saved = rs.getNode(node);
               saved.setStatus(MetaStoreConst.MNodeStatus.SUSPECT);
-              rsi.updateNode(saved);
+              rs.updateNode(saved);
             }
           } catch (MetaException e) {
             LOG.error(e, e);
@@ -2081,8 +2079,8 @@ public class DiskManager {
         }
       }
       try {
-        synchronized (rsi) {
-          if ((double)ndmap.size() / (double)rsi.countNode() <= 0.5) {
+        synchronized (rs) {
+          if ((double)ndmap.size() / (double)rs.countNode() <= 0.5) {
             safeMode = true;
             LOG.info("Lost too many Nodes, enter into SafeMode now.");
           }
@@ -2095,8 +2093,8 @@ public class DiskManager {
 
     public void SafeModeStateChange() {
       try {
-        synchronized (rsi) {
-          if ((double)ndmap.size() / (double)rsi.countNode() <= 0.5) {
+        synchronized (rs) {
+          if ((double)ndmap.size() / (double)rs.countNode() <= 0.5) {
             safeMode = true;
             LOG.info("Lost too many Nodes, enter into SafeMode now.");
           }
@@ -2168,9 +2166,9 @@ public class DiskManager {
         if (i >= nr) {
           break;
         }
-        synchronized (rsi) {
+        synchronized (rs) {
           try {
-            Node n = rsi.getNode(entry.getValue());
+            Node n = rs.getNode(entry.getValue());
             if (n != null) {
               r.add(n);
               i++;
@@ -2217,9 +2215,9 @@ public class DiskManager {
         if (i >= nr) {
           break;
         }
-        synchronized (rsi) {
+        synchronized (rs) {
           try {
-            Node n = rsi.getNode(entry.getValue());
+            Node n = rs.getNode(entry.getValue());
             if (n != null) {
               r.add(n);
               i++;
@@ -2265,9 +2263,9 @@ public class DiskManager {
         if (i >= nr) {
           break;
         }
-        synchronized (rsi) {
+        synchronized (rs) {
           try {
-            Node n = rsi.getNode(entry.getValue());
+            Node n = rs.getNode(entry.getValue());
             if (n != null && !rset.contains(n.getNode_name())) {
               r.add(n);
               rset.add(n.getNode_name());
@@ -2787,7 +2785,6 @@ public class DiskManager {
 
     public class DMRepThread implements Runnable {
       private RawStore rrs = null;
-      private final RawStoreImp rrsp = null;
       Thread runner;
 
       public RawStore getRS() {
@@ -3488,8 +3485,8 @@ public class DiskManager {
               }
             } else {
               try {
-                synchronized (rsi) {
-                  reportNode = rsi.getNode(report.node);
+                synchronized (rs) {
+                  reportNode = rs.getNode(report.node);
                 }
               } catch (MetaException e) {
                 LOG.error(e, e);
@@ -3554,13 +3551,13 @@ public class DiskManager {
                       SFileLocation sfl;
 
                       try {
-                        synchronized (rsi) {
-                          sfl = rsi.getSFileLocation(args[1], args[2]);
+                        synchronized (rs) {
+                          sfl = rs.getSFileLocation(args[1], args[2]);
                           if (sfl != null) {
                             // delete this SFL right now
                             if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
                               LOG.info("Failed Replication for file " + sfl.getFid() + " dev " + sfl.getDevid() + " loc " + sfl.getLocation() + ", delete it now.");
-                              rsi.delSFileLocation(args[1], args[2]);
+                              rs.delSFileLocation(args[1], args[2]);
                             }
                           }
                         }
@@ -3631,8 +3628,8 @@ public class DiskManager {
                       try {
                         SFileLocation newsfl;
 
-                        synchronized (rsi) {
-                          newsfl = rsi.getSFileLocation(args[1], args[2]);
+                        synchronized (rs) {
+                          newsfl = rs.getSFileLocation(args[1], args[2]);
                           if (newsfl == null) {
                             SFLTriple t = new SFLTriple(args[0], args[1], args[2]);
                             if (rrmap.containsKey(t.toString())) {
@@ -3648,7 +3645,7 @@ public class DiskManager {
                             asyncDelSFL(t1);
                             throw new MetaException("Can not find SFileLocation " + args[0] + "," + args[1] + "," + args[2]);
                           }
-                          SFile file = rsi.getSFile(newsfl.getFid());
+                          SFile file = rs.getSFile(newsfl.getFid());
                           if (file != null) {
                             if (file.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                               LOG.warn("Somebody reopen the file and we do replicate on it, so ignore this replicate and delete it:(");
@@ -3658,7 +3655,7 @@ public class DiskManager {
                               newsfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
                               // We should check the digest here, and compare it with file.getDigest().
                               newsfl.setDigest(args[3]);
-                              rsi.updateSFileLocation(newsfl);
+                              rs.updateSFileLocation(newsfl);
                             }
                           }
                         }
@@ -3673,12 +3670,12 @@ public class DiskManager {
                     } else {
                       try {
                         LOG.warn("Begin delete FLoc MD " + args[0] + "," + args[1] + "," + args[2]);
-                        synchronized (rsi) {
-                          SFileLocation sfl = rsi.getSFileLocation(args[1], args[2]);
+                        synchronized (rs) {
+                          SFileLocation sfl = rs.getSFileLocation(args[1], args[2]);
                           if (sfl != null) {
-                            SFile file = rsi.getSFile(sfl.getFid());
+                            SFile file = rs.getSFile(sfl.getFid());
                             toCheckDel.add(file);
-                            rsi.delSFileLocation(args[1], args[2]);
+                            rs.delSFileLocation(args[1], args[2]);
                           }
                         }
                       } catch (MetaException e) {
@@ -3691,8 +3688,8 @@ public class DiskManager {
                       LOG.warn("Invalid VERIFY report: " + r.args);
                     } else {
                       LOG.debug("Verify SFL: " + r.args);
-                      synchronized (rsi) {
-                        SFileLocation sfl = rsi.getSFileLocation(args[1], args[2]);
+                      synchronized (rs) {
+                        SFileLocation sfl = rs.getSFileLocation(args[1], args[2]);
                         if (sfl == null) {
                           // NOTE: if we can not find the specified SFL, this means there
                           // is no metadata for this 'SFL'. Thus, we notify dservice to
@@ -3720,8 +3717,8 @@ public class DiskManager {
               if (!toCheckRep.isEmpty()) {
                 for (SFile f : toCheckRep) {
                   try {
-                    synchronized (rsi) {
-                      List<SFileLocation> sfl = rsi.getSFileLocations(f.getFid());
+                    synchronized (rs) {
+                      List<SFileLocation> sfl = rs.getSFileLocations(f.getFid());
                       int repnr = 0;
                       for (SFileLocation fl : sfl) {
                         if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
@@ -3730,7 +3727,7 @@ public class DiskManager {
                       }
                       if (f.getRep_nr() == repnr && f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
                         f.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
-                        rsi.updateSFile(f);
+                        rs.updateSFile(f);
                       }
                     }
                   } catch (MetaException e) {
@@ -3742,15 +3739,15 @@ public class DiskManager {
               if (!toCheckDel.isEmpty()) {
                 for (SFile f : toCheckDel) {
                   try {
-                    synchronized (rsi) {
-                      List<SFileLocation> sfl = rsi.getSFileLocations(f.getFid());
+                    synchronized (rs) {
+                      List<SFileLocation> sfl = rs.getSFileLocations(f.getFid());
                       if (sfl.size() == 0) {
                         // delete this file: if it's in INCREATE state, ignore it; if it's in !INCREAT && !RM_PHYSICAL state, warning it.
                         if (f.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
                           if (f.getStore_status() != MetaStoreConst.MFileStoreStatus.RM_PHYSICAL) {
                             LOG.warn("FID " + f.getFid() + " will be deleted(reason: no valid locations), however it's status is " + f.getStore_status());
                           }
-                          rsi.delSFile(f.getFid());
+                          rs.delSFile(f.getFid());
                         }
                       }
                     }

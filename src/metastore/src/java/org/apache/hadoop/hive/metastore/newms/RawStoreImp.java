@@ -69,7 +69,11 @@ public class RawStoreImp implements RawStore {
 		cs = new CacheStore(conf);
 	}
 
-	public CacheStore getCs()
+	public RawStoreImp() {
+    // TODO Auto-generated constructor stub
+  }
+
+  public CacheStore getCs()
 	{
 		return cs;
 	}

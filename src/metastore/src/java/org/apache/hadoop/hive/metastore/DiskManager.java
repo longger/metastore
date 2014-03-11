@@ -351,31 +351,31 @@ public class DiskManager {
 
     public class NodeInfo {
       public long lastRptTs;
-      List<DeviceInfo> dis;
-      Set<SFileLocation> toDelete;
-      Set<JSONObject> toRep;
-      Set<String> toVerify;
-      String lastReportStr;
-      long totalReportNr = 0;
-      long totalFileRep = 0;
-      long totalFileDel = 0;
-      long totalFailDel = 0;
-      long totalFailRep = 0;
-      long totalVerify = 0;
-      long totalVYR = 0;
-      InetAddress address = null;
-      int port = 0;
+      public List<DeviceInfo> dis;
+      public Set<SFileLocation> toDelete;
+      public Set<JSONObject> toRep;
+      public Set<String> toVerify;
+      public String lastReportStr;
+      public long totalReportNr = 0;
+      public long totalFileRep = 0;
+      public long totalFileDel = 0;
+      public long totalFailDel = 0;
+      public long totalFailRep = 0;
+      public long totalVerify = 0;
+      public long totalVYR = 0;
+      public InetAddress address = null;
+      public int port = 0;
 
-      long qrep = 0;
-      long hrep = 0;
-      long drep = 0;
-      long qdel = 0;
-      long hdel = 0;
-      long ddel = 0;
-      long tver = 0;
-      long tvyr = 0;
-      long uptime = 0;
-      double load1 = 0.0;
+      public long qrep = 0;
+      public long hrep = 0;
+      public long drep = 0;
+      public long qdel = 0;
+      public long hdel = 0;
+      public long ddel = 0;
+      public long tver = 0;
+      public long tvyr = 0;
+      public long uptime = 0;
+      public double load1 = 0.0;
 
       public NodeInfo(List<DeviceInfo> dis) {
         this.lastRptTs = System.currentTimeMillis();
