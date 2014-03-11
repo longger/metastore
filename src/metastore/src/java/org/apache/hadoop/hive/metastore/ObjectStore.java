@@ -1998,6 +1998,45 @@ public class ObjectStore implements RawStore, Configurable {
       }
     }
   }
+  private void deleteBusiTypeCol(MBusiTypeColumn mbc) 
+  {
+  	boolean commited = false;
+  	MTable mtbl = mbc.getTable();
+    try {
+      openTransaction();
+      Query query = pm.newQuery(MBusiTypeColumn.class, "table.tableName == tabName && table.database.name == dbName && column == column");
+      query.declareParameters("java.lang.String tabName, java.lang.String dbName, java.lang.String column");
+      Collection cols = (Collection)query.execute(mtbl.getTableName(), mtbl.getDatabase().getName(), mbc.getColumn());
+      Iterator iter = cols.iterator();
+      while (iter.hasNext()) {
+        MBusiTypeColumn col = (MBusiTypeColumn)iter.next();
+        LOG.debug("---zy--  DEL BusiType " + col.getBusiType() + " on col " + col.getColumn() + " for db " +
+            mtbl.getDatabase().getName() + " table " + mtbl.getTableName());
+        pm.deletePersistent(col);
+      }
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+  }
+  private void insertBusiTypeCol(MBusiTypeColumn mbc) 
+  {
+  	boolean commited = false;
+  	MTable mtbl = mbc.getTable();
+    try {
+      openTransaction();
+      LOG.debug("---zy-- insert BusiType " + mbc.getBusiType() + " on col " + mbc.getColumn() + " for db " +
+          mtbl.getDatabase().getName() + " table " + mtbl.getTableName());
+      pm.makePersistent(mbc);
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+  }
 
   /**
    * Convert PrivilegeGrantInfo from privMap to MTablePrivilege, and add all of
@@ -4846,6 +4885,159 @@ public class ObjectStore implements RawStore, Configurable {
 
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+      }
+      
+      //alter comment
+      {
+      	 List<MFieldSchema> oldCols = new ArrayList<MFieldSchema>();
+         oldCols.addAll( oldt.getSd().getCD().getCols());
+         List<MFieldSchema> newCols = new ArrayList<MFieldSchema>();
+         newCols.addAll( newt.getSd().getCD().getCols());
+
+         oldCols.removeAll(newCols);
+         for(MFieldSchema mf : oldCols)		//del col, delete busitype
+         {
+        	 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        	 {
+        		 if(mf.getComment() != null && mf.getComment().indexOf(bt) != -1)
+        		 {
+        			 HashMap<String, Object> params = new HashMap<String, Object>();
+        			 params.put("db_name", oldt.getDatabase().getName());
+               params.put("table_name", oldt.getTableName());
+        			 params.put("column_name", mf.getName());
+        			 params.put("action", "del");
+        			 params.put("comment", mf.getComment());
+        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+							 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, mf.getName()));
+        			 
+        		 }
+        	 }
+         }
+         oldCols.clear();
+         oldCols.addAll( oldt.getSd().getCD().getCols());
+         
+         newCols.removeAll(oldCols);
+         for(MFieldSchema mf : newCols)		//add col, insert busitype
+         {
+        	 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        	 {
+        		 if(mf.getComment() != null && mf.getComment().indexOf(bt) != -1)
+        		 {
+        			 HashMap<String, Object> params = new HashMap<String, Object>();
+        			 params.put("db_name", oldt.getDatabase().getName());
+               params.put("table_name", oldt.getTableName());
+        			 params.put("column_name", mf.getName());
+        			 params.put("action", "add");
+        			 params.put("comment", mf.getComment());
+        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+							 this.insertBusiTypeCol(new MBusiTypeColumn(bt, oldt, mf.getName()));
+							 try {
+									this.append_busi_type_datacenter(new BusiTypeDatacenter(bt, convertToDatabase(oldt.getDatabase())));
+								} catch (TException e) {
+									LOG.error(e,e);
+								}
+        		 }
+        	 }
+         }
+         newCols.clear();
+         newCols.addAll(newt.getSd().getCD().getCols());
+        
+         
+         oldCols.retainAll(newCols);			//留下的是两者的交集
+         newCols.retainAll(oldCols);
+         for(MFieldSchema omf : oldCols)
+         {
+        	 for(MFieldSchema nmf : newCols)
+        	 { 
+        		 if(omf.equals(nmf))
+        		 {
+        			 if(nmf.getComment() == null && omf.getComment() == null)
+        			 {
+        				 //nothing to do
+        			 }
+        			 else if(omf.getComment() == null)
+        			 {
+        				 for(String bt : MetaStoreUtils.BUSI_TYPES)			//insert busitype
+              	 {
+              		 if(nmf.getComment() != null && nmf.getComment().indexOf(bt) != -1)
+              		 {
+              			 HashMap<String, Object> params = new HashMap<String, Object>();
+              			 params.put("db_name", oldt.getDatabase().getName());
+                     params.put("table_name", oldt.getTableName());
+              			 params.put("column_name", nmf.getName());
+              			 params.put("action", "add");
+              			 params.put("comment", nmf.getComment());
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+              			 this.insertBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
+              			 try {
+ 											this.append_busi_type_datacenter(new BusiTypeDatacenter(bt, convertToDatabase(oldt.getDatabase())));
+ 										} catch (TException e) {
+ 											LOG.error(e,e);
+ 										}
+              		 }
+              	 }
+        			 }
+        			 else if(nmf.getComment() == null)			//del busitype
+        			 {
+        				 for(String bt : MetaStoreUtils.BUSI_TYPES)
+              	 {
+              		 if(nmf.getComment() != null && nmf.getComment().indexOf(bt) != -1)
+              		 {
+              			 HashMap<String, Object> params = new HashMap<String, Object>();
+              			 params.put("db_name", oldt.getDatabase().getName());
+                     params.put("table_name", oldt.getTableName());
+              			 params.put("column_name", nmf.getName());
+              			 params.put("action", "del");
+              			 params.put("comment", nmf.getComment());
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+										 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
+              			 
+              		 }
+              	 }
+        			 }
+        			 else if(!nmf.getComment().equals(omf.getComment()))
+        			 {
+        				 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        				 {
+        					 if(nmf.getComment().indexOf(bt) != -1){			//insert busitype
+        						 HashMap<String, Object> params = new HashMap<String, Object>();
+              			 params.put("db_name", oldt.getDatabase().getName());
+                     params.put("table_name", oldt.getTableName());
+              			 params.put("column_name", nmf.getName());
+              			 params.put("action", "add");
+              			 params.put("comment", nmf.getComment());
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+										 this.insertBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
+              			 try {
+											this.append_busi_type_datacenter(new BusiTypeDatacenter(bt, convertToDatabase(oldt.getDatabase())));
+										} catch (TException e) {
+											LOG.error(e,e);
+										}
+        					 }
+        					 if(omf.getComment().indexOf(bt) != -1){			//del busitype
+	    	        			 HashMap<String, Object> params = new HashMap<String, Object>();
+	    	        			 params.put("db_name", oldt.getDatabase().getName());
+	    	               params.put("table_name", oldt.getTableName());
+	    	        			 params.put("column_name", omf.getName());
+	    	        			 params.put("action", "del");
+	    	        			 params.put("comment", omf.getComment());
+	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+											 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, omf.getName()));
+      	        	 
+        					 }
+        				 }
+        			 }
+        			 
+        		 }
+        	 }
+        	 
+         }
       }
     //MSG_ALT_TALBE_PARTITIONING
       HashMap<String, Object> altPartitioningParams = new HashMap<String, Object>();

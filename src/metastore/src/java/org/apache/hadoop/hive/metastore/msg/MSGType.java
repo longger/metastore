@@ -73,6 +73,10 @@ public class MSGType {
    */
   public static final int MSG_DROP_TABLE = 1207;        //删除表
   /**
+   * 表语义属性变化
+   */
+  public static final int MSG_TABLE_BUSITYPE_CHANGED = 1208;
+  /**
    * 新建分区
    */
   public static final int MSG_NEW_PARTITION =  1301;

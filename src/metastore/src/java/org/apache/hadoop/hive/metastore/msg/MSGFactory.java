@@ -483,6 +483,9 @@ public class MSGFactory {
         if (msg.getOld_object_params().containsKey("tbl_param_keys")) {
           params.put("tbl_param_keys", msg.getOld_object_params().get("tbl_param_keys"));
         }
+        if (msg.getOld_object_params().containsKey("column_name")) {
+          params.put("column_name", msg.getOld_object_params().get("column_name"));
+        }
         break;
       case MSGType.MSG_DROP_TABLE:
         // 删除表
@@ -995,7 +998,11 @@ public class MSGFactory {
       case MSGType.MSG_REVOKE_SCHEMA:
       case MSGType.MSG_REVOKE_PARTITION_COLUMN:
       case MSGType.MSG_REVOKE_TABLE_COLUMN:
-        params.putAll(msg.getOld_object_params());
+      	params.putAll(msg.getOld_object_params());
+      	break;
+      default:      	
+      	params.putAll(msg.getOld_object_params());
+      	
         break;
     }//end of switch
 
