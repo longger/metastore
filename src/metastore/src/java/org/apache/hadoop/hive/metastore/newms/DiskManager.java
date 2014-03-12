@@ -1,4 +1,4 @@
-package org.apache.hadoop.hive.metastore;
+package org.apache.hadoop.hive.metastore.newms;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -35,7 +35,14 @@ import net.sf.json.JSONObject;
 
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
+import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.MetaStoreUtils;
+import org.apache.hadoop.hive.metastore.RawStore;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
@@ -56,7 +63,7 @@ import org.apache.thrift.TException;
 
 public class DiskManager {
     public static long startupTs = System.currentTimeMillis();
-    public RawStore rs;
+    public RawStore rs = new RawStoreImp();
     public Log LOG;
     private final HiveConf hiveConf;
     public final int bsize = 64 * 1024;
@@ -315,39 +322,39 @@ public class DiskManager {
       }
     }
 
-    public static class DeviceInfo implements Comparable<DeviceInfo> {
-      public String dev; // dev name
-      public String mp = null; // mount point
-      public int prop = -1;
-      public boolean isOffline = false;
-      public long read_nr;
-      public long write_nr;
-      public long err_nr;
-      public long used;
-      public long free;
-
-      public DeviceInfo() {
-        mp = null;
-        prop = -1;
-        isOffline = false;
-      }
-
-      public DeviceInfo(DeviceInfo old) {
-        dev = old.dev;
-        mp = old.mp;
-        prop = old.prop;
-        read_nr = old.read_nr;
-        write_nr = old.write_nr;
-        err_nr = old.err_nr;
-        used = old.used;
-        free = old.free;
-      }
-
-      @Override
-      public int compareTo(DeviceInfo o) {
-        return this.dev.compareTo(o.dev);
-      }
-    }
+//    public static class DeviceInfo implements Comparable<DeviceInfo> {
+//      public String dev; // dev name
+//      public String mp = null; // mount point
+//      public int prop = -1;
+//      public boolean isOffline = false;
+//      public long read_nr;
+//      public long write_nr;
+//      public long err_nr;
+//      public long used;
+//      public long free;
+//
+//      public DeviceInfo() {
+//        mp = null;
+//        prop = -1;
+//        isOffline = false;
+//      }
+//
+//      public DeviceInfo(DeviceInfo old) {
+//        dev = old.dev;
+//        mp = old.mp;
+//        prop = old.prop;
+//        read_nr = old.read_nr;
+//        write_nr = old.write_nr;
+//        err_nr = old.err_nr;
+//        used = old.used;
+//        free = old.free;
+//      }
+//
+//      @Override
+//      public int compareTo(DeviceInfo o) {
+//        return this.dev.compareTo(o.dev);
+//      }
+//    }
 
     public class NodeInfo {
       public long lastRptTs;
