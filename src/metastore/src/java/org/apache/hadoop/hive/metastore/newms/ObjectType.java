@@ -11,6 +11,7 @@ public class ObjectType {
 	public static final TypeDesc NODEGROUP = new TypeDesc(8,"nodegroup");
 	public static final TypeDesc PRIVILEGE = new TypeDesc(9,"privilegebag");
 	public static final TypeDesc SFILELOCATION = new TypeDesc(10,"sfilelocation");
+	public static final TypeDesc DEVICE = new TypeDesc(11,"device");
 	
 	public static class TypeDesc
 	{

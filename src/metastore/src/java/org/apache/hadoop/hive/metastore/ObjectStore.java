@@ -9594,16 +9594,29 @@ public MUser getMUser(String userName) {
         LOG.warn("No database:"+busiTypeDatacenter.getDb().getName());
       }
       MBusiTypeDatacenter mtdc = null;
-      if(mdb !=null){
-        mtdc = new MBusiTypeDatacenter(busiTypeDatacenter.getBusiType(), mdb);
-        pm.makePersistent(mtdc);
-      }else{
-        mtdc = new MBusiTypeDatacenter(busiTypeDatacenter.getBusiType(),
-            convertToMDatabase(busiTypeDatacenter.getDb()));
-        pm.makePersistent(mtdc);
+      Query query = pm.newQuery(MBusiTypeDatacenter.class, "db.name == dbName && busiType == bt ");
+      query.declareParameters("java.lang.String dbName, java.lang.String bt");
+//      LOG.debug("---zy-- busitype:"+busiTypeDatacenter.getBusiType());
+    	Collection cols = (Collection)query.execute(busiTypeDatacenter.getDb().getName(), busiTypeDatacenter.getBusiType());
+      Iterator iter = cols.iterator();
+      if (iter.hasNext()) {
+      	MBusiTypeDatacenter m = (MBusiTypeDatacenter)iter.next();
+        LOG.debug("---zy-- BusiTypeDatacenter busitype:" + m.getBusiType() + " dbname: "+
+            m.getDb().getName() + " exists ."+cols.size());
+      }
+      else
+      {
+	      if(mdb !=null){
+	        mtdc = new MBusiTypeDatacenter(busiTypeDatacenter.getBusiType(), mdb);
+	        pm.makePersistent(mtdc);
+	      }else{
+	        mtdc = new MBusiTypeDatacenter(busiTypeDatacenter.getBusiType(),
+	            convertToMDatabase(busiTypeDatacenter.getDb()));
+	        pm.makePersistent(mtdc);
+	      }
       }
       success = commitTransaction();
-    } finally {
+    }finally {
       if (!success) {
         rollbackTransaction();
       }

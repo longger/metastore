@@ -61,6 +61,8 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 
 public class RawStoreImp implements RawStore {
 
+	private static final Long g_fid_syncer = new Long(0);
+  private static long g_fid = 0;
 	private NewMSConf conf;
 	private CacheStore cs;
 
@@ -77,6 +79,16 @@ public class RawStoreImp implements RawStore {
 	{
 		return cs;
 	}
+	
+	private long getNextFID() {
+    synchronized (g_fid_syncer) {
+      return g_fid++;
+    }
+  }
+	public static void setFID(long fid){
+		g_fid = fid;
+	}
+	
 	@Override
 	public Configuration getConf() {
 		// TODO Auto-generated method stub
@@ -260,10 +272,23 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public SFile createFile(SFile file) throws InvalidObjectException,
-			MetaException {
-		// TODO Auto-generated method stub
-		return null;
+	public SFile createFile(SFile file) throws InvalidObjectException,MetaException {
+		do {
+      file.setFid(getNextFID());
+      // query on this fid to check if it is a valid fid
+      SFile oldf = this.getSFile(file.getFid());
+      if (oldf != null) {
+        continue;
+      }
+      break;
+    } while (true);
+		try {
+			cs.writeObject(ObjectType.SFILE, file.getFid()+"", file);
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
+		return file;
 	}
 
 	@Override
@@ -290,8 +315,14 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public boolean delSFile(long fid) throws MetaException {
-		// TODO Auto-generated method stub
-		return false;
+		try{
+			cs.removeObject(ObjectType.SFILE, fid+"");
+			
+		}catch(Exception e){
+			e.printStackTrace();
+			return false;
+		}
+		return true;
 	}
 
 	@Override
@@ -301,10 +332,14 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public boolean createFileLocation(SFileLocation location)
-			throws InvalidObjectException, MetaException {
-		// TODO Auto-generated method stub
-		return false;
+	public boolean createFileLocation(SFileLocation location)	throws InvalidObjectException, MetaException {
+		try {
+			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(location.getLocation(), location.getDevid()), location);
+			return true;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -351,10 +386,15 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public boolean delSFileLocation(String devid, String location)
-			throws MetaException {
-		// TODO Auto-generated method stub
-		return false;
+	public boolean delSFileLocation(String devid, String location) throws MetaException {
+		String sflkey = SFileImage.generateSflkey(location, devid);
+		try {
+			cs.removeObject(ObjectType.SFILELOCATION, sflkey);
+			return true;
+		}catch(Exception e){
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -938,8 +978,7 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public void findFiles(List<SFile> underReplicated,
-			List<SFile> overReplicated, List<SFile> lingering, long from,
+	public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering, long from,
 			long to) throws MetaException {
 		// TODO Auto-generated method stub
 
@@ -1084,10 +1123,16 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public Device getDevice(String devid) throws MetaException,
-			NoSuchObjectException {
-		// TODO Auto-generated method stub
-		return null;
+	public Device getDevice(String devid) throws MetaException,	NoSuchObjectException {
+		try {
+			Device de = (Device) cs.readObject(ObjectType.DEVICE, devid);
+			if(de == null)
+				throw new NoSuchObjectException("Can not find device :"+devid);
+			return de;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		} 
 	}
 
 	@Override
@@ -1412,14 +1457,14 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public long getCurrentFID() {
-		// TODO Auto-generated method stub
-		return 0;
+		return g_fid;
 	}
 
 	@Override
 	public List<Device> listDevice() throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		List<Device> dl = new ArrayList<Device>();
+		dl.addAll(CacheStore.getDeviceHm().values());
+		return dl;
 	}
 
 	@Override
@@ -1430,8 +1475,8 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public long countDevice() throws MetaException {
-		// TODO Auto-generated method stub
-		return 0;
+		
+		return CacheStore.getDeviceHm().size();
 	}
 
 	@Override
@@ -1440,4 +1485,5 @@ public class RawStoreImp implements RawStore {
 		return 0;
 	}
 
+	
 }
