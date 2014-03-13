@@ -63,23 +63,28 @@ public class RawStoreImp implements RawStore {
 
 	private static final Long g_fid_syncer = new Long(0);
   private static long g_fid = 0;
-	private NewMSConf conf;
+	private static NewMSConf conf;
 	private CacheStore cs;
 
 	public RawStoreImp(NewMSConf conf) {
-		this.conf = conf;
+		RawStoreImp.conf = conf;
 		cs = new CacheStore(conf);
 	}
 
 	public RawStoreImp() {
-    // TODO Auto-generated constructor stub
-  }
+		cs = new CacheStore(conf);
+	}
 
   public CacheStore getCs()
 	{
 		return cs;
 	}
 	
+  public static void setNewMSConf(NewMSConf conf)
+  {
+  	RawStoreImp.conf = conf;
+  }
+ 
 	private long getNextFID() {
     synchronized (g_fid_syncer) {
       return g_fid++;
@@ -352,10 +357,14 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public List<SFileLocation> getSFileLocations(int status)
-			throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+	public List<SFileLocation> getSFileLocations(int status) throws MetaException {
+		try {
+			List<SFileLocation> sfll = cs.getSFileLocations(status);
+			return sfll;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -379,10 +388,21 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public SFileLocation updateSFileLocation(SFileLocation newsfl)
-			throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+	public SFileLocation updateSFileLocation(SFileLocation newsfl) throws MetaException {
+		try {
+			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
+			sfl.setUpdate_time(System.currentTimeMillis());
+			sfl.setVisit_status(newsfl.getVisit_status());
+			sfl.setRep_id(newsfl.getRep_id());
+			sfl.setDigest(sfl.getDigest());
+			//状态改变的话，还需要改变更新关于visit status的索引
+			cs.removeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
+			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
+			return sfl;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -922,7 +942,12 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public Node findNode(String ip) throws MetaException {
-		// TODO Auto-generated method stub
+		for(Node n : CacheStore.getNodeHm().values())
+		{
+			for(String p : n.getIps())
+				if(p.equals(ip))
+					return n;
+		}			
 		return null;
 	}
 

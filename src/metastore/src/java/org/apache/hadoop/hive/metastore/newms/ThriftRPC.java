@@ -2,10 +2,13 @@ package org.apache.hadoop.hive.metastore.newms;
 
 import iie.metastore.MetaStoreClient;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.logging.Log;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.RawStore;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
@@ -68,15 +71,21 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	private NewMSConf conf;
 	private RawStore ms;
 	private MetaStoreClient msClient;
+	private static final Log LOG= NewMS.LOG;
+	private DiskManager dm;
 	public ThriftRPC(NewMSConf conf)
 	{
 		this.conf = conf;
 		ms = new RawStoreImp(conf);
-//		try {
-//			msClient = new MetaStoreClient(conf.getMshost(), conf.getMsport());
-//		} catch (MetaException e) {
-//			e.printStackTrace();
-//		}
+		try {
+			msClient = new MetaStoreClient(conf.getMshost(), conf.getMsport());
+			dm = new DiskManager(new HiveConf(DiskManager.class), LOG);
+		} catch (MetaException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 	@Override
 	public long aliveSince() throws TException {
@@ -760,10 +769,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public String getMP(String arg0, String arg1) throws MetaException,
+	public String getMP(String node_name, String devid) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return null;
+		return dm.getMP(node_name, devid);
 	}
 
 	@Override
@@ -830,18 +838,6 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public List<String> get_all_databases() throws MetaException, TException {
 		List<String> dbNames = new ArrayList<String>();
 		dbNames.addAll(CacheStore.getDatabaseHm().keySet());
-//		for(String key : MetadataStorage.getDatabaseHm().keySet()){
-//			try {
-//				Database db = (Database)ms.readObject(ObjectType.DATABASE, key);
-//				dbNames.add(db.getName());
-//			} catch (JedisConnectionException e) {
-//				e.printStackTrace();
-//			} catch (IOException e) {
-//				e.printStackTrace();
-//			} catch (ClassNotFoundException e) {
-//				e.printStackTrace();
-//			}
-//		}
 		return dbNames;
 	}
 
