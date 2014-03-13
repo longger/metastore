@@ -27,6 +27,8 @@ import org.apache.hadoop.hive.metastore.api.Table;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Pipeline;
+import redis.clients.jedis.ScanParams;
+import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 
 public class CacheStore {
@@ -141,6 +143,10 @@ public class CacheStore {
       }
       else if(key.equals(ObjectType.SFILELOCATION)) {
       	sflHm.put(field, (SFileLocation)o);
+      	
+      	//为了getSFileLocations(int status)
+      	SFileLocation sfl = (SFileLocation)o;
+      	jedis.sadd(generateSflStatKey(sfl.getVisit_status()), SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
       }
       else if(key.equals(ObjectType.DATABASE)) {
         databaseHm.put(field, (Database)o);
@@ -325,7 +331,6 @@ public class CacheStore {
     //删除一个sfile时要把预先建立的一些信息也删掉
     if(key.equals(ObjectType.SFILE))
     {
-     
         SFile sf = (SFile) readObject(key, field);
         if(sf != null)
         {
@@ -347,7 +352,24 @@ public class CacheStore {
           }
         }
       
-    }else
+    } else if(key.equals(ObjectType.SFILELOCATION)){
+    	SFileLocation sfl = (SFileLocation) readObject(key, field);
+      if(sfl != null)
+      {
+        Jedis jedis = null;
+        try{
+          jedis = rf.getDefaultInstance();
+          jedis.srem(generateSflStatKey(sfl.getVisit_status()), field);
+        }catch(JedisConnectionException e){
+          RedisFactory.putBrokenInstance(jedis);
+          jedis = null;
+          throw e;
+        }finally{
+          RedisFactory.putInstance(jedis);
+        }
+      }
+    }
+    else
     {
     	Jedis jedis = null;
       try{
@@ -533,6 +555,40 @@ public class CacheStore {
       RedisFactory.putInstance(jedis);
     }
   }
+  
+  public List<SFileLocation> getSFileLocations(int status) throws JedisConnectionException, IOException, ClassNotFoundException
+  {
+  	long start = System.currentTimeMillis();
+  	Jedis jedis = null;
+  	List<SFileLocation> sfll = new ArrayList<SFileLocation>();
+    try{
+      jedis = rf.getDefaultInstance();
+      ScanResult<String> re = null;
+      ScanParams sp = new ScanParams();
+      sp.count(5000);
+  		String cursor = "0";
+  		do{
+  			re = jedis.sscan(generateSflStatKey(status), cursor,sp);
+  			cursor = re.getStringCursor();
+//  			System.out.println(cursor +"  "+re.getResult().size());
+  			for(String en : re.getResult())
+  			{
+  				 ByteArrayInputStream bais = new ByteArrayInputStream(jedis.hget(ObjectType.SFILELOCATION.getName().getBytes(), en.getBytes()));
+  		     ObjectInputStream ois = new ObjectInputStream(bais);
+  		     SFileLocation sfl = (SFileLocation)ois.readObject();
+  		     sfll.add(sfl);
+  			}
+  		}while(!cursor.equals("0"));
+  		System.out.println("in cache store, getSFileLocations() consume "+(System.currentTimeMillis()-start)+"ms");
+      return sfll;
+    }catch(JedisConnectionException e){
+      RedisFactory.putBrokenInstance(jedis);
+      jedis = null;
+      throw e;
+    }finally{
+      RedisFactory.putInstance(jedis);
+    }
+  }
 
   private String generateLtfKey(String tablename, String dbname)
   {
@@ -558,6 +614,10 @@ public class CacheStore {
       return p;
     }
     return p+digest;
+  }
+  private String generateSflStatKey(int status)
+  {
+  	return "sfl.stat."+status;
   }
 
 

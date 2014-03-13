@@ -790,10 +790,11 @@ public class DiskManager {
         offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
         ff_range = hiveConf.getLongVar(HiveConf.ConfVars.DM_FF_RANGE);
 
-        String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
-        Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
-            rawStoreClassName);
-        this.trs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+//        String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
+//        Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
+//            rawStoreClassName);
+//        this.trs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+        this.trs = new RawStoreImp();
       }
 
       public void do_delete(SFile f, int nr) {
@@ -1612,10 +1613,10 @@ public class DiskManager {
     public DiskManager(HiveConf conf, Log LOG) throws IOException, MetaException {
       this.hiveConf = conf;
       this.LOG = LOG;
-      String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
-      Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
-        rawStoreClassName);
-      this.rs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+//      String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
+//      Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
+//        rawStoreClassName);
+//      this.rs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
       closeRepLimit = hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT);
@@ -2796,10 +2797,11 @@ public class DiskManager {
       }
 
       public void init(HiveConf conf) throws MetaException {
-        String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
-        Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
-            rawStoreClassName);
-        this.rrs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+//        String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
+//        Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
+//            rawStoreClassName);
+//        this.rrs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+        this.rrs = new RawStoreImp();
       }
 
       public DMRepThread(String threadName) {
