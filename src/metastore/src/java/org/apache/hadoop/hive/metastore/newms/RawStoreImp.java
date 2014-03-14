@@ -55,6 +55,7 @@ import org.apache.hadoop.hive.metastore.model.MRoleMap;
 import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
 import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
 import org.apache.hadoop.hive.metastore.model.MUser;
+import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.thrift.TException;
 
 import redis.clients.jedis.exceptions.JedisConnectionException;
@@ -211,7 +212,42 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng)
 			throws InvalidObjectException, MetaException {
-		// TODO Auto-generated method stub
+	  try {
+	    boolean doCreate = false;
+	    Device de  = (Device) cs.readObject(ObjectType.DEVICE, di.dev);
+	    if(de == null){
+	      Node n = getNode(node.getNode_name());
+	      if(n == null){
+	        throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
+	      }
+       
+	      if(di.mp == null){
+	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.SUSPECT, ng.getNode_group_name());
+	      }else{
+	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.ONLINE, ng.getNode_group_name());
+	      }
+	      doCreate = true;
+	    } else{
+	      if( di.mp != null && de.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT){
+	        de.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
+	      }
+	      if(!de.getNode_name().equals(node.getNode_name()) && 
+            de.getProp() == MetaStoreConst.MDeviceProp.ALONE){
+	        Node n = getNode(node.getNode_name());
+	        if(n == null){
+	          throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
+	        }
+	        de.setNode_name(node.getNode_name());
+	        doCreate = true;
+	      }
+	      if(doCreate){
+	        cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+	      }
+	    }
+	   } catch (Exception e) {
+	     e.printStackTrace();
+	     throw new MetaException(e.getMessage());
+    }
 
 	}
 
@@ -238,8 +274,20 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public boolean updateNode(Node node) throws MetaException {
-		// TODO Auto-generated method stub
-		return false;
+	  try {
+      Node n = (Node) cs.readObject(ObjectType.NODE,node.getNode_name());
+      if(n==null){
+        throw new Exception("Node" + node.getNode_name() + "is not in redis.");
+      }else{
+        n.setStatus(node.getStatus());
+        n.setIps(node.getIps());
+        cs.writeObject(ObjectType.NODE, n.getNode_name(), n);
+        return true;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      throw new MetaException(e.getMessage());
+    }
 	}
 
 	@Override
@@ -332,8 +380,24 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public SFile updateSFile(SFile newfile) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+	  try {
+	    SFile f = (SFile) this.getSFile(newfile.getFid());
+	    f.setDbName(newfile.getDbName());
+	    f.setTableName(newfile.getTableName());
+	    f.setStore_status(newfile.getStore_status());
+	    f.setRep_nr(newfile.getRep_nr());
+	    f.setDigest(newfile.getDigest());
+	    f.setRecord_nr(newfile.getRecord_nr());
+	    f.setAll_record_nr(newfile.getAll_record_nr());
+	    f.setLocations(newfile.getLocations());
+	    f.setLength(newfile.getLength());
+	    f.setRef_files(newfile.getRef_files());
+	    cs.writeObject(ObjectType.SFILE, f.getFid()+"", f);
+      return f;
+    } catch (Exception e) {
+      e.printStackTrace();
+      throw new MetaException(e.getMessage());
+    }
 	}
 
 	@Override
