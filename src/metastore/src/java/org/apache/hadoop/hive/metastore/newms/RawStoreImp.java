@@ -332,8 +332,25 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public SFile updateSFile(SFile newfile) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		SFile sf = this.getSFile(newfile.getFid());
+		if(sf == null)
+			throw new MetaException("Invalid SFile object provided!");
+		try {
+			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
+			sf.setRep_nr(newfile.getRep_nr());
+      sf.setDigest(newfile.getDigest());
+      sf.setRecord_nr(newfile.getRecord_nr());
+      sf.setAll_record_nr(newfile.getAll_record_nr());
+      sf.setStore_status(newfile.getStore_status());
+      sf.setLoad_status(newfile.getLoad_status());
+      sf.setLength(newfile.getLength());
+      sf.setRef_files(newfile.getRef_files());
+      cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+      return sf;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -391,12 +408,12 @@ public class RawStoreImp implements RawStore {
 	public SFileLocation updateSFileLocation(SFileLocation newsfl) throws MetaException {
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
+			//状态改变的话，还需要改变更新关于visit status的索引
+			cs.removeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
 			sfl.setUpdate_time(System.currentTimeMillis());
 			sfl.setVisit_status(newsfl.getVisit_status());
 			sfl.setRep_id(newsfl.getRep_id());
 			sfl.setDigest(sfl.getDigest());
-			//状态改变的话，还需要改变更新关于visit status的索引
-			cs.removeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
 			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
 			return sfl;
 		} catch (Exception e) {
@@ -1005,14 +1022,22 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering, long from,
 			long to) throws MetaException {
-		// TODO Auto-generated method stub
-
+		try {
+			cs.findFiles(underReplicated, overReplicated, lingering, from, to);
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
 	public void findVoidFiles(List<SFile> voidFiles) throws MetaException {
-		// TODO Auto-generated method stub
-
+		try {
+			cs.findVoidFiles(voidFiles);
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
