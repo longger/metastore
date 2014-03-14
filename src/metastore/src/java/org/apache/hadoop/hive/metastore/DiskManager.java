@@ -123,12 +123,13 @@ public class DiskManager {
           r.removeAll(statis.keySet());
         }
         if (r.size() == 0) {
-          // this means we have used all available nodes, then we use REF to calculate available nodes
+          // this means we have used all available nodes, then we use REF COUNT to calculate available nodes
           long level = Long.MAX_VALUE;
           for (Map.Entry<String, Long> e : statis.entrySet()) {
             if (e.getValue() < level) {
               r.clear();
               r.add(e.getKey());
+              level = e.getValue();
             } else if (e.getValue() == level) {
               r.add(e.getKey());
             }

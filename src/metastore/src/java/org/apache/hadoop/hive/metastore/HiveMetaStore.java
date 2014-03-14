@@ -4510,7 +4510,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
                     Long.parseLong(values.get(0).getValue()),
                     Long.parseLong(l2keys[1])) + " for " + db_name + "." + table_name +
                     " L1Key=" + values.get(0).getValue() +
-                    " L2Key=" + l2keys[1]);
+                    " L2Key=" + l2keys[1] + ", vs " + node_name);
               }
             }
             catch (NumberFormatException nfe) {
