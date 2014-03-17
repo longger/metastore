@@ -228,7 +228,7 @@ public class CacheStore {
     }
     if(o != null)
     {
-      System.out.println("in function readObject: read "+key.getName()+":"+field+" from cache.");
+//      System.out.println("in function readObject: read "+key.getName()+":"+field+" from cache.");
       return o;
     }
     Jedis jedis = null;
@@ -321,7 +321,7 @@ public class CacheStore {
       else if(key.equals(ObjectType.DEVICE)) {
         deviceHm.put(field, (Device)o);
       }
-      System.out.println("in function readObject: read "+key.getName()+":"+field+" from redis.");
+//      System.out.println("in function readObject: read "+key.getName()+":"+field+" from redis.");
 
 
     }catch(JedisConnectionException e){

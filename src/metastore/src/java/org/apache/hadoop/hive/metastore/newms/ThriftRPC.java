@@ -1,7 +1,5 @@
 package org.apache.hadoop.hive.metastore.newms;
 
-import iie.metastore.MetaStoreClient;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,6 +7,7 @@ import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RawStore;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
@@ -70,7 +69,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	private NewMSConf conf;
 	private RawStore ms;
-	private MetaStoreClient msClient;
+	private IMetaStoreClient client;
 	private static final Log LOG= NewMS.LOG;
 	private DiskManager dm;
 	public ThriftRPC(NewMSConf conf)
@@ -78,7 +77,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		this.conf = conf;
 		ms = new RawStoreImp(conf);
 		try {
-			msClient = new MetaStoreClient(conf.getMshost(), conf.getMsport());
+			client = MsgProcessing.createMetaStoreClient();
 			dm = new DiskManager(new HiveConf(DiskManager.class), LOG);
 		} catch (MetaException e) {
 			e.printStackTrace();
@@ -750,8 +749,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public String getDMStatus() throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
+
+		return dm.getDMStatus();
 	}
 
 	@Override
