@@ -176,12 +176,14 @@ public class DiskManager {
         }
         r += "}\n";
 
-        for (Map.Entry<String, FLEntry> e : context.entrySet()) {
-          r += "Table '" + e.getKey() + "' -> {\n";
-          r += "\tl1Key=" + e.getValue().l1Key + ", l2KeyMax=" + e.getValue().l2KeyMax + "\n";
-          r += "\t" + e.getValue().distribution + "\n";
-          r += "\t" + e.getValue().statis + "\n";
-          r += "}\n";
+        synchronized (context) {
+          for (Map.Entry<String, FLEntry> e : context.entrySet()) {
+            r += "Table '" + e.getKey() + "' -> {\n";
+            r += "\tl1Key=" + e.getValue().l1Key + ", l2KeyMax=" + e.getValue().l2KeyMax + "\n";
+            r += "\t" + e.getValue().distribution + "\n";
+            r += "\t" + e.getValue().statis + "\n";
+            r += "}\n";
+          }
         }
         return r;
       }
@@ -2912,9 +2914,12 @@ public class DiskManager {
                 NodeInfo ni = ndmap.get(loc.getNode_name());
                 if (ni == null) {
                   // add back to cleanQ
-                  synchronized (cleanQ) {
+                  // BUG-XXX: if this node has gone, we repeat delete the other exist LOC. So, ignore it?
+                  /*synchronized (cleanQ) {
                     cleanQ.add(r);
-                  }
+                  }*/
+                  LOG.warn("RM_PHYSICAL fid " + r.file.getFid() + " DEV " + loc.getDevid() + " LOC " +
+                      loc.getLocation() + " failed, NODE " + loc.getNode_name());
                   break;
                 }
                 synchronized (ni.toDelete) {
@@ -3055,6 +3060,9 @@ public class DiskManager {
               } catch (NoSuchObjectException e1) {
                 LOG.error(e1, e1);
                 excludes.add(r.file.getLocations().get(i).getNode_name());
+              } catch (javax.jdo.JDOException e1) {
+                LOG.error(e1, e1);
+                excludes.add(r.file.getLocations().get(i).getNode_name());
               }
               excl_dev.add(r.file.getLocations().get(i).getDevid());
 
@@ -3135,6 +3143,8 @@ public class DiskManager {
                     node_name = r.file.getLocations().get(master).getNode_name();
                   }
                 } catch (NoSuchObjectException e1) {
+                  LOG.error(e1, e1);
+                } catch (Exception e1) {
                   LOG.error(e1, e1);
                 }
 
