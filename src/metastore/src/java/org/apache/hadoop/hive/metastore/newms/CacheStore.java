@@ -582,9 +582,7 @@ public class CacheStore {
 //  			System.out.println(cursor +"  "+re.getResult().size());
   			for(String en : re.getResult())
   			{
-  				 ByteArrayInputStream bais = new ByteArrayInputStream(jedis.hget(ObjectType.SFILELOCATION.getName().getBytes(), en.getBytes()));
-  		     ObjectInputStream ois = new ObjectInputStream(bais);
-  		     SFileLocation sfl = (SFileLocation)ois.readObject();
+  		     SFileLocation sfl = (SFileLocation)this.readObject(ObjectType.SFILELOCATION, en);
   		     sfll.add(sfl);
   			}
   		}while(!cursor.equals("0"));
@@ -613,9 +611,9 @@ public class CacheStore {
   			cursor = re.getStringCursor();
   			for(String en : re.getResult())
   			{
-  				 ByteArrayInputStream bais = new ByteArrayInputStream(jedis.hget(ObjectType.SFILE.getName().getBytes(), en.getBytes()));
-  		     ObjectInputStream ois = new ObjectInputStream(bais);
-  		     SFile sf = (SFile)ois.readObject();
+//  				 ByteArrayInputStream bais = new ByteArrayInputStream(jedis.hget(ObjectType.SFILE.getName().getBytes(), en.getBytes()));
+//  		     ObjectInputStream ois = new ObjectInputStream(bais);
+  		     SFile sf = (SFile)this.readObject(ObjectType.SFILE, en);
   		     boolean ok = false;
   		     for(SFileLocation sfl : sf.getLocations())
   		     {
@@ -664,10 +662,7 @@ public class CacheStore {
       			cursor = re.getStringCursor();
       			for(String en : re.getResult())
       			{
-      				 ByteArrayInputStream bais = new ByteArrayInputStream(jedis.hget(ObjectType.SFILE.getName().getBytes(), en.getBytes()));
-      		     ObjectInputStream ois = new ObjectInputStream(bais);
-      		     SFile sf = (SFile)ois.readObject();
-      		     
+      		     SFile sf = (SFile) this.readObject(ObjectType.SFILE, en);
       		     temp.add(sf);
       			}
       		}while(!cursor.equals("0"));
@@ -681,6 +676,9 @@ public class CacheStore {
     }finally{
       RedisFactory.putInstance(jedis);
     }
+    System.out.println("in cache store, findFiles() consume "+(System.currentTimeMillis()-start)+"ms");  
+    if(to > temp.size() || from < 0 || from > to)
+    	return;
     List<SFile> files = temp.subList((int)from, (int)to);
     for(SFile m : files)
     {
@@ -749,7 +747,7 @@ public class CacheStore {
         }
       }
     }
-    System.out.println("in cache store, findFiles() consume "+(System.currentTimeMillis()-start)+"ms");   
+     
 	}
 
   private String generateLtfKey(String tablename, String dbname)
