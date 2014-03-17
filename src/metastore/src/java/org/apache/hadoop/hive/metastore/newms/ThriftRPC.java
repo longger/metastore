@@ -462,8 +462,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public SFile create_file(String arg0, int arg1, String arg2, String arg3,
-			List<SplitValue> arg4) throws FileOperationException, TException {
+	public SFile create_file(String node_name, int repnr, String db_name, String table_name, List<SplitValue> values) 
+			throws FileOperationException, TException {
 		// TODO Auto-generated method stub
 		return null;
 	}
@@ -768,8 +768,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public long getMaxFid() throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return 0;
+		return ms.getCurrentFID();
 	}
 
 	@Override
@@ -894,10 +893,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public Device get_device(String devid) throws MetaException,
-			NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return null;
+	public Device get_device(String devid) throws MetaException, NoSuchObjectException, TException {
+		return ms.getDevice(devid);
 	}
 
 	@Override
@@ -1333,8 +1330,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public List<Device> list_device() throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
+		return ms.listDevice();
 	}
 
 	@Override
@@ -1639,8 +1635,13 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public List<SFile> get_files_by_ids(List<Long> fids)
 			throws FileOperationException, MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
+		List<SFile> fl = new ArrayList<SFile>();
+		for(Long fid : fids)
+		{
+			SFile sf = this.get_file_by_id(fid);
+			fl.add(sf);
+		}
+		return fl;
 	}
 	
 //	@Override

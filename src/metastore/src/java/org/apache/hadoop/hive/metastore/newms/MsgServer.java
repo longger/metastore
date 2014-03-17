@@ -25,7 +25,6 @@ import com.taobao.metamorphosis.utils.ZkUtils.ZKConfig;
 public class MsgServer {
 //	public static final Log LOG = LogFactory.getLog(ObjectStore.class.getName());
 	private static NewMSConf conf;
-	static String zkAddr = "127.0.0.1:3181";
 	static Producer producer = null;
 	static int times = 3;
 	private static boolean initalized = false;
