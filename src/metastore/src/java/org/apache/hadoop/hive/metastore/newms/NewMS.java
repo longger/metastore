@@ -19,14 +19,12 @@ import org.apache.thrift.transport.TServerTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.apache.thrift.transport.TTransportFactory;
 
-import com.taobao.metamorphosis.client.MetaClientConfig;
 import com.taobao.metamorphosis.exception.MetaClientException;
 import com.taobao.metamorphosis.utils.ZkUtils.ZKConfig;
 
 public class NewMS {
 
 	public static Log LOG = LogFactory.getLog(NewMS.class);
-	final MetaClientConfig metaClientConfig = new MetaClientConfig();
 	final ZKConfig zkConfig = new ZKConfig();
 	private NewMSConf conf;
 
