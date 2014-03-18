@@ -55,6 +55,7 @@ import org.apache.hadoop.hive.metastore.model.MRoleMap;
 import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
 import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
 import org.apache.hadoop.hive.metastore.model.MUser;
+import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.thrift.TException;
 
 import redis.clients.jedis.exceptions.JedisConnectionException;
@@ -63,19 +64,28 @@ public class RawStoreImp implements RawStore {
 
 	private static final Long g_fid_syncer = new Long(0);
   private static long g_fid = 0;
-	private NewMSConf conf;
+	private static NewMSConf conf;
 	private CacheStore cs;
 
 	public RawStoreImp(NewMSConf conf) {
-		this.conf = conf;
+		RawStoreImp.conf = conf;
 		cs = new CacheStore(conf);
 	}
 
-	public CacheStore getCs()
+	public RawStoreImp() {
+		cs = new CacheStore(conf);
+	}
+
+  public CacheStore getCs()
 	{
 		return cs;
 	}
 	
+  public static void setNewMSConf(NewMSConf conf)
+  {
+  	RawStoreImp.conf = conf;
+  }
+ 
 	private long getNextFID() {
     synchronized (g_fid_syncer) {
       return g_fid++;
@@ -132,8 +142,9 @@ public class RawStoreImp implements RawStore {
 	public Database getDatabase(String name) throws NoSuchObjectException {
 		try {
 			Database d = (Database) cs.readObject(ObjectType.DATABASE, name);
-			if(d == null)
-				throw new NoSuchObjectException("There is no database named "+name);
+			if(d == null) {
+        throw new NoSuchObjectException("There is no database named "+name);
+      }
 			return d;
 			//到底是抛出去，还是自己捕获呢。。
 		} catch (JedisConnectionException e) {
@@ -201,7 +212,42 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng)
 			throws InvalidObjectException, MetaException {
-		// TODO Auto-generated method stub
+	  try {
+	    boolean doCreate = false;
+	    Device de  = (Device) cs.readObject(ObjectType.DEVICE, di.dev);
+	    if(de == null){
+	      Node n = getNode(node.getNode_name());
+	      if(n == null){
+	        throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
+	      }
+       
+	      if(di.mp == null){
+	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.SUSPECT, ng.getNode_group_name());
+	      }else{
+	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.ONLINE, ng.getNode_group_name());
+	      }
+	      doCreate = true;
+	    } else{
+	      if( di.mp != null && de.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT){
+	        de.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
+	      }
+	      if(!de.getNode_name().equals(node.getNode_name()) && 
+            de.getProp() == MetaStoreConst.MDeviceProp.ALONE){
+	        Node n = getNode(node.getNode_name());
+	        if(n == null){
+	          throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
+	        }
+	        de.setNode_name(node.getNode_name());
+	        doCreate = true;
+	      }
+	      if(doCreate){
+	        cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+	      }
+	    }
+	   } catch (Exception e) {
+	     e.printStackTrace();
+	     throw new MetaException(e.getMessage());
+    }
 
 	}
 
@@ -228,8 +274,20 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public boolean updateNode(Node node) throws MetaException {
-		// TODO Auto-generated method stub
-		return false;
+	  try {
+      Node n = (Node) cs.readObject(ObjectType.NODE,node.getNode_name());
+      if(n==null){
+        throw new Exception("Node" + node.getNode_name() + "is not in redis.");
+      }else{
+        n.setStatus(node.getStatus());
+        n.setIps(node.getIps());
+        cs.writeObject(ObjectType.NODE, n.getNode_name(), n);
+        return true;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      throw new MetaException(e.getMessage());
+    }
 	}
 
 	@Override
@@ -262,7 +320,7 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public long countNode() throws MetaException {
-		
+
 		return CacheStore.getNodeHm().size();
 	}
 
@@ -322,8 +380,26 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public SFile updateSFile(SFile newfile) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		SFile sf = this.getSFile(newfile.getFid());
+		if(sf == null)
+			throw new MetaException("Invalid SFile object provided!");
+		try {
+			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
+			sf.setRep_nr(newfile.getRep_nr());
+      sf.setDigest(newfile.getDigest());
+      sf.setRecord_nr(newfile.getRecord_nr());
+      sf.setAll_record_nr(newfile.getAll_record_nr());
+      sf.setStore_status(newfile.getStore_status());
+      sf.setLoad_status(newfile.getLoad_status());
+      sf.setLength(newfile.getLength());
+      sf.setRef_files(newfile.getRef_files());
+      cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+      return sf;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
+
 	}
 
 	@Override
@@ -340,16 +416,21 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<SFileLocation> getSFileLocations(long fid) throws MetaException {
 		SFile f = getSFile(fid);
-		if(f != null)
-			return f.getLocations();
+		if(f != null) {
+      return f.getLocations();
+    }
 		return null;
 	}
 
 	@Override
-	public List<SFileLocation> getSFileLocations(int status)
-			throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+	public List<SFileLocation> getSFileLocations(int status) throws MetaException {
+		try {
+			List<SFileLocation> sfll = cs.getSFileLocations(status);
+			return sfll;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -373,10 +454,21 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public SFileLocation updateSFileLocation(SFileLocation newsfl)
-			throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+	public SFileLocation updateSFileLocation(SFileLocation newsfl) throws MetaException {
+		try {
+			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
+			//状态改变的话，还需要改变更新关于visit status的索引
+			cs.removeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
+			sfl.setUpdate_time(System.currentTimeMillis());
+			sfl.setVisit_status(newsfl.getVisit_status());
+			sfl.setRep_id(newsfl.getRep_id());
+			sfl.setDigest(sfl.getDigest());
+			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
+			return sfl;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -506,8 +598,9 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<Table> getTableObjectsByName(String dbname,
 			List<String> tableNames) throws MetaException, UnknownDBException {
-		if(!CacheStore.getDatabaseHm().containsKey(dbname))
-			throw new UnknownDBException("Can not find database: "+dbname);
+		if(!CacheStore.getDatabaseHm().containsKey(dbname)) {
+      throw new UnknownDBException("Can not find database: "+dbname);
+    }
 		Set<String> noDupNames = new HashSet<String>();
   	noDupNames.addAll(tableNames);
 		List<Table> ts = new ArrayList<Table>();
@@ -515,12 +608,13 @@ public class RawStoreImp implements RawStore {
 		{
 			try {
 				Table t = (Table) cs.readObject(ObjectType.TABLE, dbname+"."+tblname);
-				if(t != null)
-					ts.add(t);
+				if(t != null) {
+          ts.add(t);
+        }
 			} catch (Exception e) {
 				e.printStackTrace();
 //				throw new MetaException(e.getMessage());
-			} 
+			}
 		}
 		return ts;
 	}
@@ -530,8 +624,9 @@ public class RawStoreImp implements RawStore {
 		List<String> ts = new ArrayList<String>();
 		for(String s : CacheStore.getTableHm().keySet())
 		{
-			if(s.startsWith(dbName+"."))
-				ts.add(s);
+			if(s.startsWith(dbName+".")) {
+        ts.add(s);
+      }
 		}
 		return ts;
 	}
@@ -608,9 +703,10 @@ public class RawStoreImp implements RawStore {
 		List<Index> ins = new ArrayList<Index>();
 		for(Map.Entry<String, Index> en : CacheStore.getIndexHm().entrySet())
 		{
-			if(en.getKey().startsWith(dbName+"."+origTableName+"."))
-				ins.add(en.getValue());
-				
+			if(en.getKey().startsWith(dbName+"."+origTableName+".")) {
+        ins.add(en.getValue());
+      }
+
 		}
 		return ins;
 	}
@@ -621,9 +717,10 @@ public class RawStoreImp implements RawStore {
 		List<String> ins = new ArrayList<String>();
 		for(Map.Entry<String, Index> en : CacheStore.getIndexHm().entrySet())
 		{
-			if(en.getKey().startsWith(dbName+"."+origTableName+"."))
-				ins.add(en.getValue().getIndexName());
-				
+			if(en.getKey().startsWith(dbName+"."+origTableName+".")) {
+        ins.add(en.getValue().getIndexName());
+      }
+
 		}
 		return ins;
 	}
@@ -911,7 +1008,12 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public Node findNode(String ip) throws MetaException {
-		// TODO Auto-generated method stub
+		for(Node n : CacheStore.getNodeHm().values())
+		{
+			for(String p : n.getIps())
+				if(p.equals(ip))
+					return n;
+		}			
 		return null;
 	}
 
@@ -969,14 +1071,22 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering, long from,
 			long to) throws MetaException {
-		// TODO Auto-generated method stub
-
+		try {
+			cs.findFiles(underReplicated, overReplicated, lingering, from, to);
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
 	public void findVoidFiles(List<SFile> voidFiles) throws MetaException {
-		// TODO Auto-generated method stub
-
+		try {
+			cs.findVoidFiles(voidFiles);
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -1196,8 +1306,9 @@ public class RawStoreImp implements RawStore {
 			throws NoSuchObjectException, MetaException {
 		try {
 			GlobalSchema gs = (GlobalSchema) cs.readObject(ObjectType.GLOBALSCHEMA, schema_name);
-			if(gs == null)
-				throw new NoSuchObjectException("Can not find globalschema :"+schema_name);
+			if(gs == null) {
+        throw new NoSuchObjectException("Can not find globalschema :"+schema_name);
+      }
 			return gs;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -1304,7 +1415,7 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<Long> findSpecificDigestFiles(String digest)
 			throws MetaException {
-		
+
 		return cs.listFilesByDegist(digest);
 	}
 
@@ -1331,8 +1442,9 @@ public class RawStoreImp implements RawStore {
 		{
 			try {
 				NodeGroup ng = (NodeGroup) cs.readObject(ObjectType.NODEGROUP, name);
-				if(ng != null)
-					ngs.add(ng);
+				if(ng != null) {
+          ngs.add(ng);
+        }
 			} catch (Exception e) {
 				e.printStackTrace();
 				throw new MetaException(e.getMessage());

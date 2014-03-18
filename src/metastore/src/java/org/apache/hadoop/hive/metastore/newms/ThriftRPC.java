@@ -1,11 +1,13 @@
 package org.apache.hadoop.hive.metastore.newms;
 
-import iie.metastore.MetaStoreClient;
-
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.logging.Log;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.DiskManager;
 import org.apache.hadoop.hive.metastore.RawStore;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
@@ -65,23 +67,28 @@ import com.facebook.fb303.fb_status;
 
 public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface{
 
-	private NewMSConf conf;
-	private RawStore ms;
+	private final NewMSConf conf;
+	private final RawStore ms;
 	private MetaStoreClient msClient;
+	private static final Log LOG= NewMS.LOG;
+	private DiskManager dm;
 	public ThriftRPC(NewMSConf conf)
 	{
 		this.conf = conf;
 		ms = new RawStoreImp(conf);
-//		try {
-//			msClient = new MetaStoreClient(conf.getMshost(), conf.getMsport());
-//		} catch (MetaException e) {
-//			e.printStackTrace();
-//		}
+		try {
+			msClient = new MetaStoreClient(conf.getMshost(), conf.getMsport());
+			dm = new DiskManager(new HiveConf(DiskManager.class), LOG);
+        } catch (MetaException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 	@Override
 	public long aliveSince() throws TException {
-		// TODO Auto-generated method stub
-		return 0;
+        return 0;
 	}
 
 	@Override
@@ -140,19 +147,19 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public void reinitialize() throws TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void setOption(String arg0, String arg1) throws TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void shutdown() throws TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -317,14 +324,14 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public void alter_database(String arg0, Database arg1)
 			throws MetaException, NoSuchObjectException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void alter_index(String arg0, String arg1, String arg2, Index arg3)
 			throws InvalidOperationException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -338,7 +345,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public void alter_partition(String arg0, String arg1, Partition arg2)
 			throws InvalidOperationException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -346,21 +353,21 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			String arg1, Partition arg2, EnvironmentContext arg3)
 			throws InvalidOperationException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void alter_partitions(String arg0, String arg1, List<Partition> arg2)
 			throws InvalidOperationException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void alter_table(String arg0, String arg1, Table arg2)
 			throws InvalidOperationException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -368,14 +375,14 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			Table arg2, EnvironmentContext arg3)
 			throws InvalidOperationException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void append_busi_type_datacenter(BusiTypeDatacenter arg0)
 			throws InvalidObjectException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -414,7 +421,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public void cancel_delegation_token(String arg0) throws MetaException,
 			TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -444,14 +451,14 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			throws AlreadyExistsException, InvalidObjectException,
 			MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void create_database(Database arg0) throws AlreadyExistsException,
 			InvalidObjectException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -462,7 +469,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public SFile create_file(String node_name, int repnr, String db_name, String table_name, List<SplitValue> values) 
+	public SFile create_file(String node_name, int repnr, String db_name, String table_name, List<SplitValue> values)
 			throws FileOperationException, TException {
 		// TODO Auto-generated method stub
 		return null;
@@ -487,7 +494,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			InvalidObjectException, MetaException, NoSuchObjectException,
 			TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -495,7 +502,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			throws AlreadyExistsException, InvalidObjectException,
 			MetaException, NoSuchObjectException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -504,7 +511,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			InvalidObjectException, MetaException, NoSuchObjectException,
 			TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -617,7 +624,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			throws NoSuchObjectException, InvalidOperationException,
 			MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -625,7 +632,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			throws NoSuchObjectException, InvalidOperationException,
 			MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -704,7 +711,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public void drop_table(String arg0, String arg1, boolean arg2)
 			throws NoSuchObjectException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -760,10 +767,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public String getMP(String arg0, String arg1) throws MetaException,
+	public String getMP(String node_name, String devid) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return null;
+		return dm.getMP(node_name, devid);
 	}
 
 	@Override
@@ -830,18 +836,6 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public List<String> get_all_databases() throws MetaException, TException {
 		List<String> dbNames = new ArrayList<String>();
 		dbNames.addAll(CacheStore.getDatabaseHm().keySet());
-//		for(String key : MetadataStorage.getDatabaseHm().keySet()){
-//			try {
-//				Database db = (Database)ms.readObject(ObjectType.DATABASE, key);
-//				dbNames.add(db.getName());
-//			} catch (JedisConnectionException e) {
-//				e.printStackTrace();
-//			} catch (IOException e) {
-//				e.printStackTrace();
-//			} catch (ClassNotFoundException e) {
-//				e.printStackTrace();
-//			}
-//		}
 		return dbNames;
 	}
 
@@ -901,8 +895,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public List<FieldSchema> get_fields(String dbname, String tablename)
 			throws MetaException, UnknownTableException, UnknownDBException, TException {
 			Table t = ms.getTable(dbname, tablename);
-			if(t == null)
-				throw new UnknownTableException("Table not found by name:"+dbname+"."+tablename);
+			if(t == null) {
+        throw new UnknownTableException("Table not found by name:"+dbname+"."+tablename);
+      }
 			return t.getSd().getCols();
 	}
 
@@ -912,8 +907,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		// TODO Auto-generated method stub
 		try {
 			SFile f = ms.getSFile(fid);
-			if(f == null)
-				throw new FileOperationException("File not found by id:"+fid, FOFailReason.INVALID_FILE);
+			if(f == null) {
+        throw new FileOperationException("File not found by id:"+fid, FOFailReason.INVALID_FILE);
+      }
 			return f;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -925,8 +921,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public SFile get_file_by_name(String node, String devid, String location)
 			throws FileOperationException, MetaException, TException {
 		SFile f = ms.getSFile(devid, location);
-		if(f == null)
-			throw new FileOperationException("Can not find SFile by name: " + node + ":" + devid + ":" + location, FOFailReason.INVALID_FILE);
+		if(f == null) {
+      throw new FileOperationException("Can not find SFile by name: " + node + ":" + devid + ":" + location, FOFailReason.INVALID_FILE);
+    }
 		return f;
 	}
 
@@ -935,9 +932,10 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			throws MetaException, NoSuchObjectException, TException {
 			String key = dbName + "." + tableName + "." + indexName;
 			Index ind = ms.getIndex(dbName, tableName, indexName);
-			
-			if(ind == null)
-				throw new NoSuchObjectException("Index not found by name:"+key);
+
+			if(ind == null) {
+        throw new NoSuchObjectException("Index not found by name:"+key);
+      }
 			return ind;
 	}
 
@@ -1119,12 +1117,14 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			String baseTableName = tablename.split("\\.")[0];
 //			Table baseTable = (Table) ms.readObject(ObjectType.TABLE, dbname+"."+baseTableName);
 			Table baseTable = ms.getTable(dbname, baseTableName);
-			if(baseTable == null)
-				throw new UnknownTableException("Table not found by name:"+baseTableName);
+			if(baseTable == null) {
+        throw new UnknownTableException("Table not found by name:"+baseTableName);
+      }
 			List<FieldSchema> fss = baseTable.getSd().getCols();
-			if(baseTable.getPartitionKeys() != null)
-				fss.addAll(baseTable.getPartitionKeys());
-			
+			if(baseTable.getPartitionKeys() != null) {
+        fss.addAll(baseTable.getPartitionKeys());
+      }
+
 			return fss;
 		}catch(Exception e){
 			throw new MetaException(e.getMessage());
@@ -1162,7 +1162,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public List<String> get_table_names_by_filter(String dbName, String filter, short maxTables) 
+	public List<String> get_table_names_by_filter(String dbName, String filter, short maxTables)
 			throws MetaException, InvalidOperationException, UnknownDBException, TException {
 		// TODO Auto-generated method stub
 		return null;
@@ -1243,7 +1243,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public List<Long> listFilesByDigest(String digest) throws MetaException,
 			TException {
-		
+
 		return ms.findSpecificDigestFiles(digest);
 	}
 
@@ -1257,7 +1257,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public List<NodeGroup> listNodeGroupByNames(List<String> ngNames)
 			throws MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 		return ms.listNodeGroupByNames(ngNames);
 	}
 
@@ -1283,7 +1283,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public List<GlobalSchema> listSchemas() throws MetaException, TException {
-		List<GlobalSchema> gss = new ArrayList<GlobalSchema>(); 
+		List<GlobalSchema> gss = new ArrayList<GlobalSchema>();
 		gss.addAll(CacheStore.getGlobalSchemaHm().values());
 		return gss;
 	}
@@ -1291,10 +1291,10 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	/*
 	void setRange(long fromIncl, long toExcl)
 
-    Set the range of results to return. The execution of the query is modified to return only a 
-    subset of results. If the filter would normally return 100 instances, and fromIncl is set to 50, 
-    and toExcl is set to 70, then the first 50 results that would have been returned are skipped, 
-    the next 20 results are returned and the remaining 30 results are ignored. An implementation should 
+    Set the range of results to return. The execution of the query is modified to return only a
+    subset of results. If the filter would normally return 100 instances, and fromIncl is set to 50,
+    and toExcl is set to 70, then the first 50 results that would have been returned are skipped,
+    the next 20 results are returned and the remaining 30 results are ignored. An implementation should
     execute the query such that the range algorithm is done at the data store.
 
     Parameters:
@@ -1302,14 +1302,14 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
         toExcl - 0-based exclusive end index, or Long.MAX_VALUE for no limit.
     Since:
         2.0
-	
+
 	返回的结果集中包含from，不包含to，一共返回from-to个元素
 	而zrange的两边是inclusive
 	 */
 	@Override
-	public List<Long> listTableFiles(String dbName, String tabName, int from, int to) 
+	public List<Long> listTableFiles(String dbName, String tabName, int from, int to)
 			throws MetaException, TException {
-		
+
 		return ms.listTableFiles(dbName, tabName, from, to-1);
 	}
 
@@ -1317,8 +1317,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public List<NodeGroup> listTableNodeDists(String dbName, String tabName)
 			throws MetaException, TException {
 		Table t = get_table(dbName, tabName);
-		if(t == null)
-			throw new MetaException("No table found by dbname:"+dbName+", tableName:"+tabName);
+		if(t == null) {
+      throw new MetaException("No table found by dbname:"+dbName+", tableName:"+tabName);
+    }
 		return t.getNodeGroups();
 	}
 
@@ -1368,7 +1369,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			UnknownTableException, UnknownPartitionException,
 			InvalidPartitionException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -1497,7 +1498,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			Partition arg3) throws InvalidOperationException, MetaException,
 			TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -1553,7 +1554,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public void set_file_repnr(long arg0, int arg1)
 			throws FileOperationException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -1594,14 +1595,14 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public void truncTableFiles(String arg0, String arg1) throws MetaException,
 			TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void update_attribution(Database arg0) throws NoSuchObjectException,
 			InvalidOperationException, MetaException, TException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -1643,13 +1644,13 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		}
 		return fl;
 	}
-	
+
 //	@Override
 //	public int del_fileLocation(SFileLocation arg0)
 //			throws FileOperationException, MetaException, TException {
 //		// TODO Auto-generated method stub
 //		return 0;
 //	}
-//	
+//
 
 }

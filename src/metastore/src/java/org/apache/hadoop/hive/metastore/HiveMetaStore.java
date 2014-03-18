@@ -7169,7 +7169,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     HMSHandler.LOG.error("HERE ->>>>>>>>>>>>>>>>>");
   }
 
-  static synchronized void connect_to_top_attribution(HiveConf conf) throws MetaException {
+  public static synchronized void connect_to_top_attribution(HiveConf conf) throws MetaException {
     boolean is_top_attribution = conf.getBoolVar(ConfVars.IS_TOP_ATTRIBUTION);
     if (!is_top_attribution) {
       LOG.info("Begin connecting to Top-level Attribution Metastore ...");
