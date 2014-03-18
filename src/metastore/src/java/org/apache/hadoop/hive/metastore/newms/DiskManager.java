@@ -3467,7 +3467,7 @@ public class DiskManager {
               continue;
             }
             String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
-            //LOG.debug("RECV: " + recvStr);
+            LOG.debug("RECV: " + recvStr);
 
             DMReport report = parseReport(recvStr);
 

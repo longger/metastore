@@ -115,15 +115,13 @@ public class CacheStore {
   public void writeObject(ObjectType.TypeDesc key, String field, Object o)throws JedisConnectionException, IOException {
     Jedis jedis = null;
     try{
-      jedis = rf.getDefaultInstance();
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      ObjectOutputStream oos = new ObjectOutputStream(baos);
-      oos.writeObject(o);
-      jedis.hset(key.getName().getBytes(), field.getBytes(), baos.toByteArray());
-
+    	jedis = rf.getDefaultInstance();
       if(key.equals(ObjectType.SFILE))
       {
-      	SFileImage sfi = (SFileImage)o;
+      	SFile sf = (SFile)o;
+      	sFileHm.put(sf.getFid()+"", sf);
+      	SFileImage sfi = SFileImage.generateSFileImage(sf);
+      	o = sfi;		//redis中存入的是sfi
       	//为listtablefiles
       	if(sfi.getDbName() != null && sfi.getTableName() != null)
       	{
@@ -148,6 +146,10 @@ public class CacheStore {
       		jedis.sadd(k, sfi.getFid()+"");
       	}
       	
+      	for(int i = 0;i<sfi.getSflkeys().size();i++)
+				{
+					writeObject(ObjectType.SFILELOCATION, sfi.getSflkeys().get(i), sf.getLocations().get(i));
+				}
       }
       else if(key.equals(ObjectType.SFILELOCATION)) {
       	sflHm.put(field, (SFileLocation)o);
@@ -182,6 +184,11 @@ public class CacheStore {
       else if(key.equals(ObjectType.DEVICE)) {
       	deviceHm.put(field, (Device)o);
       }
+      
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      ObjectOutputStream oos = new ObjectOutputStream(baos);
+      oos.writeObject(o);
+      jedis.hset(key.getName().getBytes(), field.getBytes(), baos.toByteArray());
     }catch(JedisConnectionException e){
       RedisFactory.putBrokenInstance(jedis);
       jedis = null;
@@ -342,6 +349,15 @@ public class CacheStore {
         SFile sf = (SFile) readObject(key, field);
         if(sf != null)
         {
+        	//删除sfile也要删除sfilelocation
+        	if(sf.getLocations() != null)
+					{
+						for(SFileLocation sfl : sf.getLocations())
+						{
+							String k = SFileImage.generateSflkey(sfl.getLocation(),sfl.getDevid());
+							removeObject(ObjectType.SFILELOCATION, k);
+						}
+					}
           Jedis jedis = null;
           try{
             jedis = rf.getDefaultInstance();
@@ -678,7 +694,10 @@ public class CacheStore {
     }
     System.out.println("in cache store, findFiles() consume "+(System.currentTimeMillis()-start)+"ms");  
     if(to > temp.size() || from < 0 || from > to)
+    {
+    	System.out.println("in cache store, findFiles() argument invalid: from:"+from+", to:+"+to);
     	return;
+    }
     List<SFile> files = temp.subList((int)from, (int)to);
     for(SFile m : files)
     {

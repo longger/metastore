@@ -19,6 +19,9 @@ import org.apache.thrift.transport.TServerTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.apache.thrift.transport.TTransportFactory;
 
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+
 import com.taobao.metamorphosis.exception.MetaClientException;
 import com.taobao.metamorphosis.utils.ZkUtils.ZKConfig;
 
@@ -240,7 +243,6 @@ public class NewMS {
 			// System.exit(0);
 		}
 		
-		
 		new Thread(new RPCServer(conf)).start();
 		MsgServer.setConf(conf);
 		RawStoreImp.setNewMSConf(conf);
@@ -250,6 +252,45 @@ public class NewMS {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		
+		//get g_fid from redis
+		Jedis jedis = null;
+    try{
+    	jedis = new RedisFactory(conf).getDefaultInstance();
+    	String fid = jedis.get("g_fid");
+    	if(fid == null)
+    		RawStoreImp.setFID(0l);
+    	else
+    		RawStoreImp.setFID(Long.parseLong(fid));
+    	
+    }catch(JedisConnectionException e){
+    	LOG.warn(e,e);
+    	RedisFactory.putBrokenInstance(jedis);
+    	jedis = null;
+    }finally{
+    	RedisFactory.putInstance(jedis);
+    }
+		 // Add shutdown hook.
+		final NewMSConf co = conf; 
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
+        String shutdownMsg = "Shutting down newms, store g_fid: "+RawStoreImp.getFid()+" in redis.";
+        LOG.info(shutdownMsg);
+        Jedis jedis = null;
+        try{
+        	jedis = new RedisFactory(co).getDefaultInstance();
+        	jedis.set("g_fid",RawStoreImp.getFid()+"");
+        	
+        }catch(JedisConnectionException e){
+        	LOG.warn(e,e);
+        	RedisFactory.putBrokenInstance(jedis);
+        	jedis = null;
+        }finally{
+        	RedisFactory.putInstance(jedis);
+        }
+      }
+    });
 	}
 
 }
