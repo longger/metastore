@@ -3613,17 +3613,9 @@ public class DiskManager {
             LOG.debug("Invalid report line value: " + lines[i]);
             continue;
           }
-          synchronized (rs) {
-            try {
-              Device d = rs.getDevice(di.dev);
-              di.prop = d.getProp();
-            } catch (MetaException e) {
-              LOG.error(e, e);
-            } catch (NoSuchObjectException e) {
-              LOG.error(e, e);
-            }
-          }
           di.mp = stats[0];
+          // BUG-XXX: do NOT update device prop here now!
+          di.prop = 0;
           di.read_nr = Long.parseLong(stats[1]);
           di.write_nr = Long.parseLong(stats[2]);
           di.err_nr = Long.parseLong(stats[3]);
