@@ -7,6 +7,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,6 +17,7 @@ import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
 import org.apache.hadoop.hive.metastore.api.Index;
+import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Node;
 import org.apache.hadoop.hive.metastore.api.NodeGroup;
 import org.apache.hadoop.hive.metastore.api.Partition;
@@ -24,9 +26,12 @@ import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.api.SplitValue;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Pipeline;
+import redis.clients.jedis.ScanParams;
+import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 
 public class CacheStore {
@@ -137,10 +142,19 @@ public class CacheStore {
       		String k = generateLfbdKey(sfi.getDigest());
       		jedis.sadd(k, sfi.getFid()+"");
       	}
+      	//为findFiles
+      	{
+      		String k = generateSfStatKey(sfi.getStore_status());
+      		jedis.sadd(k, sfi.getFid()+"");
+      	}
       	
       }
       else if(key.equals(ObjectType.SFILELOCATION)) {
       	sflHm.put(field, (SFileLocation)o);
+      	
+      	//为了getSFileLocations(int status)
+      	SFileLocation sfl = (SFileLocation)o;
+      	jedis.sadd(generateSflStatKey(sfl.getVisit_status()), SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
       }
       else if(key.equals(ObjectType.DATABASE)) {
         databaseHm.put(field, (Database)o);
@@ -214,7 +228,7 @@ public class CacheStore {
     }
     if(o != null)
     {
-      System.out.println("in function readObject: read "+key.getName()+":"+field+" from cache.");
+//      System.out.println("in function readObject: read "+key.getName()+":"+field+" from cache.");
       return o;
     }
     Jedis jedis = null;
@@ -307,7 +321,7 @@ public class CacheStore {
       else if(key.equals(ObjectType.DEVICE)) {
         deviceHm.put(field, (Device)o);
       }
-      System.out.println("in function readObject: read "+key.getName()+":"+field+" from redis.");
+//      System.out.println("in function readObject: read "+key.getName()+":"+field+" from redis.");
 
 
     }catch(JedisConnectionException e){
@@ -325,7 +339,6 @@ public class CacheStore {
     //删除一个sfile时要把预先建立的一些信息也删掉
     if(key.equals(ObjectType.SFILE))
     {
-     
         SFile sf = (SFile) readObject(key, field);
         if(sf != null)
         {
@@ -336,6 +349,7 @@ public class CacheStore {
             p.srem(generateLfbdKey(sf.getDigest()), field);
             p.srem(generateFtlKey(sf.getValues()), field);
             p.zrem(generateLtfKey(sf.getTableName(), sf.getDbName()), field);
+            p.srem(generateSflStatKey(sf.getStore_status()), sf.getFid()+"");
             p.hdel(key.getName(), field);
             p.sync();
           }catch(JedisConnectionException e){
@@ -347,7 +361,24 @@ public class CacheStore {
           }
         }
       
-    }else
+    } else if(key.equals(ObjectType.SFILELOCATION)){
+    	SFileLocation sfl = (SFileLocation) readObject(key, field);
+      if(sfl != null)
+      {
+        Jedis jedis = null;
+        try{
+          jedis = rf.getDefaultInstance();
+          jedis.srem(generateSflStatKey(sfl.getVisit_status()), field);
+        }catch(JedisConnectionException e){
+          RedisFactory.putBrokenInstance(jedis);
+          jedis = null;
+          throw e;
+        }finally{
+          RedisFactory.putInstance(jedis);
+        }
+      }
+    }
+    else
     {
     	Jedis jedis = null;
       try{
@@ -533,6 +564,191 @@ public class CacheStore {
       RedisFactory.putInstance(jedis);
     }
   }
+  
+  public List<SFileLocation> getSFileLocations(int status) throws JedisConnectionException, IOException, ClassNotFoundException
+  {
+  	long start = System.currentTimeMillis();
+  	Jedis jedis = null;
+  	List<SFileLocation> sfll = new ArrayList<SFileLocation>();
+    try{
+      jedis = rf.getDefaultInstance();
+      ScanResult<String> re = null;
+      ScanParams sp = new ScanParams();
+      sp.count(5000);
+  		String cursor = "0";
+  		do{
+  			re = jedis.sscan(generateSflStatKey(status), cursor,sp);
+  			cursor = re.getStringCursor();
+//  			System.out.println(cursor +"  "+re.getResult().size());
+  			for(String en : re.getResult())
+  			{
+  		     SFileLocation sfl = (SFileLocation)this.readObject(ObjectType.SFILELOCATION, en);
+  		     sfll.add(sfl);
+  			}
+  		}while(!cursor.equals("0"));
+  		System.out.println("in cache store, getSFileLocations() consume "+(System.currentTimeMillis()-start)+"ms");
+      return sfll;
+    }catch(JedisConnectionException e){
+      RedisFactory.putBrokenInstance(jedis);
+      jedis = null;
+      throw e;
+    }finally{
+      RedisFactory.putInstance(jedis);
+    }
+  }
+  
+	public void findVoidFiles(List<SFile> voidFiles) throws JedisConnectionException, IOException, ClassNotFoundException {
+		long start = System.currentTimeMillis();
+  	Jedis jedis = null;
+    try{
+      jedis = rf.getDefaultInstance();
+      ScanResult<String> re = null;
+      ScanParams sp = new ScanParams();
+      sp.count(5000);
+  		String cursor = "0";
+  		do{
+  			re = jedis.sscan(generateSfStatKey(MetaStoreConst.MFileStoreStatus.INCREATE), cursor,sp);
+  			cursor = re.getStringCursor();
+  			for(String en : re.getResult())
+  			{
+//  				 ByteArrayInputStream bais = new ByteArrayInputStream(jedis.hget(ObjectType.SFILE.getName().getBytes(), en.getBytes()));
+//  		     ObjectInputStream ois = new ObjectInputStream(bais);
+  		     SFile sf = (SFile)this.readObject(ObjectType.SFILE, en);
+  		     boolean ok = false;
+  		     for(SFileLocation sfl : sf.getLocations())
+  		     {
+  		    	 if(sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE)
+  		    	 {
+  		    		 ok = true;
+  		    		 break;
+  		    	 }
+  		     }
+  		     if(!ok)
+  		    	 voidFiles.add(sf);
+  		     
+  			}
+  		}while(!cursor.equals("0"));
+  		System.out.println("in cache store, findVoidFiles() consume "+(System.currentTimeMillis()-start)+"ms");
+    }catch(JedisConnectionException e){
+      RedisFactory.putBrokenInstance(jedis);
+      jedis = null;
+      throw e;
+    }finally{
+      RedisFactory.putInstance(jedis);
+    }
+	}
+	
+	public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering,
+      long from, long to) throws JedisConnectionException, IOException, ClassNotFoundException, MetaException {
+		long start = System.currentTimeMillis();
+		long node_nr = CacheStore.getNodeHm().size();
+		List<SFile> temp = new LinkedList<SFile>();
+    if (underReplicated == null || overReplicated == null || lingering == null) {
+      throw new MetaException("Invalid input List<SFile> collection. IS NULL");
+    }
+  	Jedis jedis = null;
+    try {
+    	jedis = rf.getDefaultInstance();
+    	for(String key : jedis.keys(generateSfStatKey(-1)))
+    	{
+    		if(!key.equals(generateSfStatKey(MetaStoreConst.MFileStoreStatus.INCREATE)))
+    		{
+    			ScanResult<String> re = null;
+          ScanParams sp = new ScanParams();
+          sp.count(5000);
+      		String cursor = "0";
+      		do{
+      			re = jedis.sscan(key, cursor,sp);
+      			cursor = re.getStringCursor();
+      			for(String en : re.getResult())
+      			{
+      		     SFile sf = (SFile) this.readObject(ObjectType.SFILE, en);
+      		     temp.add(sf);
+      			}
+      		}while(!cursor.equals("0"));
+    		}
+    	}
+    	
+    }catch(JedisConnectionException e){
+      RedisFactory.putBrokenInstance(jedis);
+      jedis = null;
+      throw e;
+    }finally{
+      RedisFactory.putInstance(jedis);
+    }
+    System.out.println("in cache store, findFiles() consume "+(System.currentTimeMillis()-start)+"ms");  
+    if(to > temp.size() || from < 0 || from > to)
+    	return;
+    List<SFile> files = temp.subList((int)from, (int)to);
+    for(SFile m : files)
+    {
+    	List<SFileLocation> l = m.getLocations();
+
+      // find under replicated files
+      if (m.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
+          m.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+        int nr = 0;
+
+        for (SFileLocation fl : l) {
+          if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            nr++;
+          }
+        }
+        if (m.getRep_nr() > nr) {
+          try {
+            underReplicated.add(m);
+          } catch (javax.jdo.JDOObjectNotFoundException e) {
+            // it means the file slips ...
+            e.printStackTrace();
+          }
+        }
+      }
+      
+      // find over  replicated files
+      if (m.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
+        int nr = 0;
+
+        for (SFileLocation fl : l) {
+          if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            nr++;
+          }
+        }
+        if (m.getRep_nr() < nr) {
+          try {
+            overReplicated.add(m);
+          } catch (javax.jdo.JDOObjectNotFoundException e) {
+            // it means the file slips ...
+          	e.printStackTrace();
+          }
+        }
+      }
+      // find lingering files
+      if (m.getStore_status() == MetaStoreConst.MFileStoreStatus.RM_PHYSICAL) {
+        lingering.add(m);
+      }
+      if (m.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
+        int offnr = 0, onnr = 0;
+
+        for (SFileLocation fl : l) {
+          if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            onnr++;
+          } else if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
+            offnr++;
+          }
+        }
+        if ((m.getRep_nr() <= onnr && offnr > 0) ||
+            (onnr + offnr >= node_nr && offnr > 0)) {
+          try {
+            lingering.add(m);
+          } catch (javax.jdo.JDOObjectNotFoundException e) {
+            // it means the file slips ...
+          	e.printStackTrace();
+          }
+        }
+      }
+    }
+     
+	}
 
   private String generateLtfKey(String tablename, String dbname)
   {
@@ -558,6 +774,16 @@ public class CacheStore {
       return p;
     }
     return p+digest;
+  }
+  private String generateSflStatKey(int status)
+  {
+  	return "sfl.stat."+status;
+  }
+  private String generateSfStatKey(int status)
+  {
+  	if(status < 0)
+  		return "sf.stat.*";
+  	return "sf.stat."+status;
   }
 
 

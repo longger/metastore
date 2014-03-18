@@ -5,6 +5,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore;
 import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisInstance;
 import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisMode;
@@ -17,13 +19,12 @@ import org.apache.thrift.transport.TServerTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.apache.thrift.transport.TTransportFactory;
 
-import com.taobao.metamorphosis.client.MetaClientConfig;
 import com.taobao.metamorphosis.exception.MetaClientException;
 import com.taobao.metamorphosis.utils.ZkUtils.ZKConfig;
 
 public class NewMS {
 
-	final MetaClientConfig metaClientConfig = new MetaClientConfig();
+	public static Log LOG = LogFactory.getLog(NewMS.class);
 	final ZKConfig zkConfig = new ZKConfig();
 	private NewMSConf conf;
 
@@ -83,7 +84,7 @@ public class NewMS {
 		public void run() {
 			// TODO Auto-generated method stub
 
-			System.out.println("RPCServer start at port:" + conf.getRpcport());
+			LOG.info("RPCServer start at port:" + conf.getRpcport());
 
 			TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
 			try {
@@ -242,6 +243,7 @@ public class NewMS {
 		
 		new Thread(new RPCServer(conf)).start();
 		MsgServer.setConf(conf);
+		RawStoreImp.setNewMSConf(conf);
 		try {
 			MsgServer.startConsumer(conf.getZkaddr(), "meta-test", "newms");
 		} catch (MetaClientException e) {

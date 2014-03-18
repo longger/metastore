@@ -3535,6 +3535,9 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     }
     List<FieldSchema> fieldSchemas = tab.getFileSplitKeys();
     for(FieldSchema fs : fieldSchemas){
+      if(oldColName.equals(newColName)){
+        continue;
+      }
       if (fs.getName().equals(oldColName)){
         throw new SemanticException("AlterColumn error! you can't rename the column which is the table splited by.");
       }
