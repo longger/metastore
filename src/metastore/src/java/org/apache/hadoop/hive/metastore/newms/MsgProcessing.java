@@ -1,12 +1,16 @@
 package org.apache.hadoop.hive.metastore.newms;
 
 
-import iie.metastore.MetaStoreClient;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.HiveMetaHook;
+import org.apache.hadoop.hive.metastore.HiveMetaHookLoader;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.FileOperationException;
@@ -27,28 +31,35 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 
 public class MsgProcessing {
 
-	private MetaStoreClient msClient;
+	private IMetaStoreClient client;
+	private static HiveConf hiveConf;
 	private NewMSConf conf;
 	private CacheStore cs;
 	public MsgProcessing(NewMSConf conf) {
 		this.conf = conf;
 		try {
-			msClient = new MetaStoreClient(conf.getMshost(), conf.getMsport());
+			client = createMetaStoreClient();
 			cs = new CacheStore(conf);
-      Database localdb = msClient.client.get_local_attribution();
-      cs.writeObject(ObjectType.DATABASE, localdb.getName(), localdb);
-      this.conf.setLocalDbName(localdb.getName());
-      List<Database> dbs = msClient.client.get_all_attributions();
-      for(Database db : dbs)
-      {
-        cs.writeObject(ObjectType.DATABASE, db.getName(), db);
-      }
-      
-      List<Device> dl = msClient.client.listDevice();
-      for(Device de : dl)
-      	cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
-      long fid = msClient.client.getMaxFid();
-      RawStoreImp.setFID(fid);
+			if(client == null)
+			{
+				this.conf.setLocalDbName(hiveConf.get("hive.attribution.local"));
+			}
+			else{
+	      Database localdb = client.get_local_attribution();
+	      cs.writeObject(ObjectType.DATABASE, localdb.getName(), localdb);
+	      this.conf.setLocalDbName(localdb.getName());
+	      List<Database> dbs = client.get_all_attributions();
+	      for(Database db : dbs)
+	      {
+	        cs.writeObject(ObjectType.DATABASE, db.getName(), db);
+	      }
+	      
+	      List<Device> dl = client.listDevice();
+	      for(Device de : dl)
+	      	cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+	      long fid = client.getMaxFid();
+	      RawStoreImp.setFID(fid);
+			}
 		} catch (MetaException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -64,9 +75,30 @@ public class MsgProcessing {
 		}
 	}
 
+	public static IMetaStoreClient createMetaStoreClient() throws MetaException
+	{
+		if(hiveConf == null)
+			hiveConf = new HiveConf();
+		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
+		{
+//			System.out.println("isUseMetaStoreClient false");
+			return null;
+		}
+		HiveMetaHookLoader hookLoader = new HiveMetaHookLoader() {
+			public HiveMetaHook getHook(
+					org.apache.hadoop.hive.metastore.api.Table tbl)
+					throws MetaException {
+
+				return null;
+			}
+		};
+		return RetryingMetaStoreClient.getProxy(hiveConf, hookLoader, HiveMetaStoreClient.class.getName());
+	}
 
 	public void handleMsg(DDLMsg msg) throws JedisConnectionException, IOException, NoSuchObjectException, TException, ClassNotFoundException {
 		
+		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
+			return;
 		int eventid = (int) msg.getEvent_id();
 		switch (eventid) {
 			case MSGType.MSG_NEW_DATABESE: 
@@ -75,7 +107,7 @@ public class MsgProcessing {
 			{
 				String dbName = (String) msg.getMsg_data().get("db_name");
 				try{
-					Database db = msClient.client.getDatabase(dbName);
+					Database db = client.getDatabase(dbName);
 					cs.writeObject(ObjectType.DATABASE, dbName, db);
 				}catch(NoSuchObjectException e ){
 					e.printStackTrace();
@@ -99,7 +131,7 @@ public class MsgProcessing {
 				if(CacheStore.getTableHm().remove(oldKey) != null){
 					cs.removeObject(ObjectType.TABLE, oldKey);
 				}
-				Table tbl = msClient.client.getTable(dbName, tableName);
+				Table tbl = client.getTable(dbName, tableName);
 				TableImage ti = TableImage.generateTableImage(tbl);
 				CacheStore.getTableHm().put(newKey, tbl);
 				cs.writeObject(ObjectType.TABLE, newKey, ti);
@@ -119,7 +151,7 @@ public class MsgProcessing {
 				String dbName = (String) msg.getMsg_data().get("db_name");
 				String tableName = (String) msg.getMsg_data().get("table_name");
 				String key = dbName + "." + tableName;
-				Table tbl = msClient.client.getTable(dbName, tableName);
+				Table tbl = client.getTable(dbName, tableName);
 				TableImage ti = TableImage.generateTableImage(tbl);
 				CacheStore.getTableHm().put(key, tbl);
 				cs.writeObject(ObjectType.TABLE, key, ti);
@@ -130,14 +162,14 @@ public class MsgProcessing {
 						if(!CacheStore.getNodeGroupHm().containsKey(ti.getNgKeys().get(i))){
 							List<String> ngNames = new ArrayList<String>();
 							ngNames.add(ti.getNgKeys().get(i));
-							List<NodeGroup> ngs = msClient.client.listNodeGroups(ngNames);
+							List<NodeGroup> ngs = client.listNodeGroups(ngNames);
 							NodeGroup ng = ngs.get(0);
 							NodeGroupImage ngi = NodeGroupImage.generateNodeGroupImage(ng);
 							CacheStore.getNodeGroupHm().put(ng.getNode_group_name(), ng);
 							cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ngi);
 							for(int j = 0; j<ngi.getNodeKeys().size();j++){
 								if(!CacheStore.getNodeHm().containsKey(ngi.getNodeKeys().get(j))){
-									Node node = msClient.client.get_node(ngi.getNodeKeys().get(j));
+									Node node = client.get_node(ngi.getNodeKeys().get(j));
 									cs.writeObject(ObjectType.NODE, ngi.getNodeKeys().get(j), node);
 								}
 							}
@@ -170,7 +202,7 @@ public class MsgProcessing {
 				long fid = Long.parseLong(id.toString());
 				SFile sf = null;
 				try{
-					sf = msClient.client.get_file_by_id(fid);
+					sf = client.get_file_by_id(fid);
 				}catch(FileOperationException e)
 				{
 					//Can not find SFile by FID ...
@@ -218,7 +250,7 @@ public class MsgProcessing {
 				String indexName = (String)msg.getMsg_data().get("index_name");
 				if(dbName == null || tblName == null || indexName == null)
 					break;
-				Index ind = msClient.client.getIndex(dbName, tblName, indexName);
+				Index ind = client.getIndex(dbName, tblName, indexName);
 				String key = dbName + "." + tblName + "." + indexName;
 				cs.writeObject(ObjectType.INDEX, key, ind);
 				break;
@@ -228,7 +260,7 @@ public class MsgProcessing {
 				String dbName = (String)msg.getMsg_data().get("db_name");
 				String tblName = (String)msg.getMsg_data().get("table_name");
 				String indexName = (String)msg.getMsg_data().get("index_name");
-				//Index ind = msClient.client.getIndex(dbName, tblName, indexName);
+				//Index ind = client.getIndex(dbName, tblName, indexName);
 				String key = dbName + "." + tblName + "." + indexName;
 				if(CacheStore.getIndexHm().remove(key) != null)
 					cs.removeObject(ObjectType.INDEX, key);
@@ -240,7 +272,7 @@ public class MsgProcessing {
 			case MSGType.MSG_BACK_NODE:
 			{
 				String nodename = (String)msg.getMsg_data().get("node_name");
-				Node node = msClient.client.get_node(nodename);
+				Node node = client.get_node(nodename);
 				cs.writeObject(ObjectType.NODE, nodename, node);
 				break;
 			}
@@ -261,7 +293,7 @@ public class MsgProcessing {
 			{
 				String schema_name = (String)msg.getMsg_data().get("schema_name");
 				try{
-					GlobalSchema s = msClient.client.getSchemaByName(schema_name);
+					GlobalSchema s = client.getSchemaByName(schema_name);
 					cs.writeObject(ObjectType.GLOBALSCHEMA, schema_name, s);
 				}catch(NoSuchObjectException e){
 					e.printStackTrace();
@@ -282,7 +314,7 @@ public class MsgProcessing {
 				}
 				else{
 					try{
-						GlobalSchema ngs = msClient.client.getSchemaByName(schema_name);
+						GlobalSchema ngs = client.getSchemaByName(schema_name);
 						cs.writeObject(ObjectType.GLOBALSCHEMA, schema_name, ngs);
 					}
 					catch(NoSuchObjectException e)
@@ -305,7 +337,7 @@ public class MsgProcessing {
 				String nodeGroupName = (String)msg.getMsg_data().get("nodegroup_name");
 				List<String> ngNames = new ArrayList<String>();
 				ngNames.add(nodeGroupName);
-				List<NodeGroup> ngs = msClient.client.listNodeGroups(ngNames);
+				List<NodeGroup> ngs = client.listNodeGroups(ngNames);
 				if(ngs == null || ngs.size() == 0)
 					break;
 				NodeGroup ng = ngs.get(0);
@@ -314,7 +346,7 @@ public class MsgProcessing {
 				cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ngi);
 				for(int i = 0; i<ngi.getNodeKeys().size();i++){
 					if(!CacheStore.getNodeHm().containsKey(ngi.getNodeKeys().get(i))){
-						Node node = msClient.client.get_node(ngi.getNodeKeys().get(i));
+						Node node = client.get_node(ngi.getNodeKeys().get(i));
 						cs.writeObject(ObjectType.NODE, ngi.getNodeKeys().get(i), node);
 					}
 				}
@@ -345,7 +377,7 @@ public class MsgProcessing {
 		    case MSGType.MSG_REVOKE_PARTITION_COLUMN:
 		    case MSGType.MSG_REVOKE_TABLE_COLUMN:
 		    {
-//		    	msClient.client.
+//		    	client.
 		    	break;
 		    }
 			default:
