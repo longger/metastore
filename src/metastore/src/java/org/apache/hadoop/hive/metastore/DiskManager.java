@@ -1688,6 +1688,8 @@ public class DiskManager {
                 }
               } catch (MetaException e) {
                 LOG.error(e, e);
+              } catch (Exception e) {
+                LOG.error(e, e);
               }
             }
 
@@ -1703,8 +1705,10 @@ public class DiskManager {
                 trs.findVoidFiles(voidFiles);
               } catch (MetaException e) {
                 LOG.error(e, e);
-                updateRunningState();
-                return;
+                voidFiles.clear();
+              } catch (Exception e) {
+                LOG.error(e, e);
+                voidFiles.clear();
               }
             }
             for (SFile f : voidFiles) {

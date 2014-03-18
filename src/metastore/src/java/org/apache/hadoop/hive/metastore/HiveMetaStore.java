@@ -4599,7 +4599,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
 
         if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-          LOG.error("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").");
+          LOG.error("File " + file.getFid() + " StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").");
           throw new FileOperationException("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").",
               FOFailReason.INVALID_STATE);
         }
@@ -4615,11 +4615,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             }
           }
           if (valid_nr > 1) {
-            LOG.error("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]");
+            LOG.error("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED] " + file.getFid());
             throw new FileOperationException("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]",
                 FOFailReason.INVALID_FILE);
           } else if (valid_nr < 1) {
-            LOG.error("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]");
+            LOG.error("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED] " + file.getFid());
             e = new FileOperationException("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]",
                 FOFailReason.INVALID_FILE);
           }
@@ -4640,7 +4640,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             file.getLocations().removeAll(sflToDel);
           }
         } else {
-          LOG.error("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]");
+          LOG.error("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED] " + file.getFid());
           e = new FileOperationException("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]",
                 FOFailReason.INVALID_FILE);
         }
