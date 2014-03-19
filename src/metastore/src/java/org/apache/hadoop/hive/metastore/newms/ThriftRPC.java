@@ -151,7 +151,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
   @Override
   public String getStatusDetails() throws TException {
-    // TODO Auto-generated method stub
+
     return null;
   }
 
@@ -200,7 +200,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean addNodeGroup(NodeGroup arg0) throws AlreadyExistsException,
       MetaException, TException {
-    // TODO Auto-generated method stub
+
     return false;
   }
 
@@ -557,26 +557,26 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean deleteEquipRoom(EquipRoom er) throws MetaException,
       TException {
-    return er != null && client.deleteEquipRoom(er);
+    return er != null && ms.deleteEquipRoom(er);
   }
 
   @Override
   public boolean deleteGeoLocation(GeoLocation gl) throws MetaException,
       TException {
-    return gl!=null && client.deleteGeoLocation(gl);
+    return gl!=null && ms.deleteGeoLocation(gl);
   }
 
   @Override
   public boolean deleteNodeAssignment(String nodeName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
     boolean expr = Strings.isNullOrEmpty(nodeName)||Strings.isNullOrEmpty(dbName);
-    return !expr && client.deleteNodeAssignment(nodeName, dbName);
+    return !expr && ms.deleteNodeAssignment(nodeName, dbName);
   }
 
   @Override
   public boolean deleteNodeGroup(NodeGroup nodeGroup) throws MetaException,
       TException {
-    return nodeGroup != null && client.deleteNodeGroup(nodeGroup);
+    return nodeGroup != null && ms.deleteNodeGroup(nodeGroup);
   }
 
   @Override
@@ -605,7 +605,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
    */
   @Override
   public boolean deleteSchema(String arg0) throws MetaException, TException {
-    return !Strings.isNullOrEmpty(arg0) && client.deleteSchema(arg0);
+    return !Strings.isNullOrEmpty(arg0) && ms.deleteSchema(arg0);
   }
 
   /**
@@ -618,7 +618,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
    * @param arg2
    *          node group
    * @return if the param is valid and
-   *         {@link IMetaStoreClient#deleteTableNodeDist(String, String, List)} is success then
+   *         {@link RawStore#deleteTableNodeDist(String, String, List)} is success then
    *         return true
    *         else return false;
    * @author mzy
@@ -627,7 +627,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public boolean deleteTableNodeDist(String arg0, String arg1,
       List<String> arg2) throws MetaException, TException {
     final boolean expr = Strings.isNullOrEmpty(arg0) || Strings.isNullOrEmpty(arg1) || arg2 == null;
-    return !expr && client.deleteTableNodeDist(arg0, arg1, arg2);
+    return !expr && ms.deleteTableNodeDist(arg0, arg1, arg2);
   }
 
   /**
@@ -636,7 +636,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
    * @param userName
    * @param dbName
    * @return if userName and dbName is not null or empty and
-   *         {@link IMetaStoreClient#deleteUserAssignment(String, String)} is success then return
+   *         {@link RawStore#deleteUserAssignment(String, String)} is success then return
    *         true
    *         else return false;
    * @author mzy
@@ -645,7 +645,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public boolean deleteUserAssignment(String userName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
     final boolean expr = Strings.isNullOrEmpty(userName) || Strings.isNullOrEmpty(dbName);
-    return !expr && client.deleteUserAssignment(userName, dbName);
+    return !expr && ms.deleteUserAssignment(userName, dbName);
   }
 
   @Override
