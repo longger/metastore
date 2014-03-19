@@ -282,6 +282,7 @@ public class RawStoreImp implements RawStore {
       if(n==null){
         throw new Exception("Node" + node.getNode_name() + "is not in redis.");
       }else{
+      	cs.removeObject(ObjectType.NODE, node.getNode_name());
         n.setStatus(node.getStatus());
         n.setIps(node.getIps());
         cs.writeObject(ObjectType.NODE, n.getNode_name(), n);
@@ -387,6 +388,7 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public SFile updateSFile(SFile newfile) throws MetaException {
 		SFile sf = this.getSFile(newfile.getFid());
+		System.out.println("In RawStoreImp: "+sf);
 		if(sf == null)
 			throw new MetaException("Invalid SFile object provided!");
 		try {
@@ -411,6 +413,11 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public boolean createFileLocation(SFileLocation location)	throws InvalidObjectException, MetaException {
 		try {
+			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, location.getFid()+"");
+			if(sf == null)
+				throw new MetaException("No SFile found by id:"+location.getFid());
+			sf.addToLocations(location);
+			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
 			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(location.getLocation(), location.getDevid()), location);
 			return true;
 		} catch (Exception e) {
@@ -1548,16 +1555,67 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public void truncTableFiles(String dbName, String tableName)
-			throws MetaException, NoSuchObjectException {
-		// TODO Auto-generated method stub
+	public void truncTableFiles(String dbName, String tableName) throws MetaException, NoSuchObjectException {
 
+      for (int i = 0, step = 1000; i < Integer.MAX_VALUE; i+=step) {
+        List<Long> files = listTableFiles(dbName, tableName, i, i + step);
+        for (int j = 0; j < files.size(); j++) {
+        	System.out.println("in RawStoreImp, truncTableFiles, sfile.size()="+files.size());
+          SFile f = this.getSFile(files.get(j));
+          if (f != null) {
+            f.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);
+            updateSFile(f);
+          }
+        }
+        if (files.size() < step) {
+          break;
+        }
+     }
 	}
 
 	@Override
 	public boolean reopenSFile(SFile file) throws MetaException {
-		// TODO Auto-generated method stub
-		return false;
+		boolean changed = false;
+		SFile sf = this.getSFile(file.getFid());
+		if(sf == null)
+			throw new MetaException("No SFile found by id:"+file.getFid());
+		if (sf.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+      sf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
+//      pm.makePersistent(mf);
+      this.updateSFile(sf);
+
+      List<SFileLocation> sfl = sf.getLocations();
+      boolean selected = false;
+      int idx = 0;
+
+      if (sfl.size() > 0) {
+        for (int i = 0; i < sfl.size(); i++) {
+          SFileLocation x = sfl.get(i);
+
+          if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            selected = true;
+            idx = i;
+            break;
+          }
+        }
+        if (selected) {
+          // it is ok to reopen, and close other locations
+          for (int i = 0; i < sfl.size(); i++) {
+            if (i != idx) {
+              SFileLocation x = sfl.get(i);
+              // mark it as OFFLINE
+              x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+//              pm.makePersistent(x);
+              this.updateSFileLocation(x);
+            }
+          }
+        }
+      }
+      if (selected) {
+        changed = true;
+      }
+    }
+		return changed;
 	}
 
 	@Override

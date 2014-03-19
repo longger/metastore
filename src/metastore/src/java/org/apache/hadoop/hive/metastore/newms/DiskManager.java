@@ -3481,6 +3481,7 @@ public class DiskManager {
               try {
                 synchronized (rs) {
                   reportNode = rs.findNode(recvPacket.getAddress().getHostAddress());
+                  LOG.info("---zy-- findNode:"+reportNode);
                 }
               } catch (MetaException e) {
                 LOG.error(e, e);
@@ -3489,6 +3490,7 @@ public class DiskManager {
               try {
                 synchronized (rs) {
                   reportNode = rs.getNode(report.node);
+                  LOG.info("---zy-- getNode:"+reportNode);
                 }
               } catch (MetaException e) {
                 LOG.error(e, e);
@@ -3515,6 +3517,7 @@ public class DiskManager {
                 if (report.replies != null && report.replies.size() > 0) {
                   for (DMReply r : report.replies) {
                     String[] args = r.args.split(",");
+                    LOG.info("---zy-- r.type"+r.type);
                     switch (r.type) {
                     case INFO:
                       try {
@@ -3555,11 +3558,13 @@ public class DiskManager {
                       try {
                         synchronized (rs) {
                           sfl = rs.getSFileLocation(args[1], args[2]);
+                          LOG.info("---zy-- getSFl:"+sfl);
                           if (sfl != null) {
                             // delete this SFL right now
                             if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
                               LOG.info("Failed Replication for file " + sfl.getFid() + " dev " + sfl.getDevid() + " loc " + sfl.getLocation() + ", delete it now.");
-                              rs.delSFileLocation(args[1], args[2]);
+                              boolean b = rs.delSFileLocation(args[1], args[2]);
+                              LOG.info("---zy-- delSFl: "+b);
                             }
                           }
                         }
@@ -3574,6 +3579,7 @@ public class DiskManager {
               }
 
               // 1. update Node status
+              LOG.info("---zy-- reportNode.getStatus():"+reportNode.getStatus());
               switch (reportNode.getStatus()) {
               default:
               case MetaStoreConst.MNodeStatus.ONLINE:
@@ -3583,6 +3589,7 @@ public class DiskManager {
                   reportNode.setStatus(MetaStoreConst.MNodeStatus.ONLINE);
                   synchronized (rs) {
                     rs.updateNode(reportNode);
+                    LOG.info("---zy-- updateNode:"+reportNode);
                   }
                 } catch (MetaException e) {
                   LOG.error(e, e);
@@ -3605,6 +3612,7 @@ public class DiskManager {
               if (report.replies != null) {
                 for (DMReply r : report.replies) {
                   String[] args = r.args.split(",");
+                  LOG.info("---zy-- report.replies type:"+r.type);
                   switch (r.type) {
                   case REPLICATED:
                     // release limiting
@@ -3632,6 +3640,7 @@ public class DiskManager {
 
                         synchronized (rs) {
                           newsfl = rs.getSFileLocation(args[1], args[2]);
+                          LOG.info("---zy-- getSFl:"+newsfl);
                           if (newsfl == null) {
                             SFLTriple t = new SFLTriple(args[0], args[1], args[2]);
                             if (rrmap.containsKey(t.toString())) {
@@ -3648,6 +3657,7 @@ public class DiskManager {
                             throw new MetaException("Can not find SFileLocation " + args[0] + "," + args[1] + "," + args[2]);
                           }
                           SFile file = rs.getSFile(newsfl.getFid());
+                          LOG.info("---zy-- getSFile:"+file);
                           if (file != null) {
                             if (file.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                               LOG.warn("Somebody reopen the file and we do replicate on it, so ignore this replicate and delete it:(");
@@ -3743,6 +3753,7 @@ public class DiskManager {
                   try {
                     synchronized (rs) {
                       List<SFileLocation> sfl = rs.getSFileLocations(f.getFid());
+                      LOG.info("---zy-- getSFl:"+sfl);
                       if (sfl.size() == 0) {
                         // delete this file: if it's in INCREATE state, ignore it; if it's in !INCREAT && !RM_PHYSICAL state, warning it.
                         if (f.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
