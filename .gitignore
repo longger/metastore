@@ -3,3 +3,8 @@ src/*.classpath
 src/*.project
 src/*.launch
 src/.settings/*
+*.eml
+\.*
+*.log
+*.iml
+*.out
