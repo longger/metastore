@@ -94,6 +94,9 @@ public class RawStoreImp implements RawStore {
 	public static void setFID(long fid){
 		g_fid = fid;
 	}
+	public static long getFid(){
+		return g_fid;
+	}
 	
 	@Override
 	public Configuration getConf() {
@@ -347,8 +350,11 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public SFile getSFile(long fid) throws MetaException {
 		try {
-			SFile f = (SFile)cs.readObject(ObjectType.SFILE, fid+"");
-			return f;
+			
+			Object o = cs.readObject(ObjectType.SFILE, fid+"");
+			if(o == null)
+				return null;
+			return (SFile)o;
 		} catch (Exception e) {
 			e.printStackTrace();
 			throw new MetaException(e.getMessage());

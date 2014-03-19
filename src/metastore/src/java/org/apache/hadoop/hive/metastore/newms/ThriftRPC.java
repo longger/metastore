@@ -1,15 +1,18 @@
 package org.apache.hadoop.hive.metastore.newms;
 
-import iie.metastore.MetaStoreClient;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RawStore;
+import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
@@ -57,6 +60,8 @@ import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
 import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.statfs;
+import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.metastore.newms.DiskManager.FileLocatingPolicy;
 import org.apache.thrift.TException;
 
 import com.facebook.fb303.fb_status;
@@ -69,16 +74,16 @@ import com.facebook.fb303.fb_status;
 public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface{
 
 	private NewMSConf conf;
-	private RawStore ms;
-	private MetaStoreClient msClient;
+	private RawStore rs;
+	private IMetaStoreClient client;
 	private static final Log LOG= NewMS.LOG;
 	private DiskManager dm;
 	public ThriftRPC(NewMSConf conf)
 	{
 		this.conf = conf;
-		ms = new RawStoreImp(conf);
+		rs = new RawStoreImp(conf);
 		try {
-			msClient = new MetaStoreClient(conf.getMshost(), conf.getMsport());
+			client = MsgProcessing.createMetaStoreClient();
 			dm = new DiskManager(new HiveConf(DiskManager.class), LOG);
 		} catch (MetaException e) {
 			e.printStackTrace();
@@ -473,13 +478,158 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public SFile create_file(String node_name, int repnr, String db_name, String table_name, List<SplitValue> values) 
 			throws FileOperationException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+		DMProfile.fcreate1R.incrementAndGet();
+    if (!fileSplitValuesCheck(values)) {
+      throw new FileOperationException("Invalid File Split Values: inconsistent version among values?", FOFailReason.INVALID_FILE);
+    }
+    // TODO: if repnr less than 1, we should increase it to replicate to BACKUP-STORE
+    if (repnr <= 1) {
+      repnr++;
+    }
 
+    Set<String> excl_node = new TreeSet<String>();
+    Set<String> excl_dev = new TreeSet<String>();
+    Set<String> spec_node = new TreeSet<String>();
+
+    dm.findBackupDevice(excl_dev, excl_node);
+
+    // check if we should create in table's node group
+    if (node_name == null && db_name != null && table_name != null) {
+      try {
+        Table tbl = rs.getTable(db_name, table_name);
+        if (tbl.getNodeGroupsSize() > 0) {
+          for (NodeGroup ng : tbl.getNodeGroups()) {
+            if (ng.getNodesSize() > 0) {
+              for (Node n : ng.getNodes()) {
+                spec_node.add(n.getNode_name());
+              }
+            }
+          }
+        }
+      } catch (MetaException me) {
+        throw new FileOperationException("getTable:" + db_name + "." + table_name + " + " + me.getMessage(), FOFailReason.INVALID_TABLE);
+      }
+    }
+    // do not select the backup/shared device for the first entry
+    FileLocatingPolicy flp;
+
+    if (spec_node.size() > 0) {
+      flp = new FileLocatingPolicy(spec_node, excl_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
+    } else {
+      flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
+    }
+
+    SFile rf = create_file(flp, node_name, repnr, db_name, table_name, values);
+    DMProfile.fcreate1SuccR.incrementAndGet();
+
+    return rf;
+	}
+	//copy from HiveMetaStore
+	 public boolean fileSplitValuesCheck(List<SplitValue> values) {
+     long version = -1;
+
+     if (values == null || values.size() <= 0) {
+       return true;
+     }
+
+     for (SplitValue sv : values) {
+       if (version == -1) {
+         version = sv.getVerison();
+       }
+       if (version != sv.getVerison()) {
+         return false;
+       }
+     }
+
+     return true;
+   }
+	//copy from HiveMetaStore
+	private SFile create_file(FileLocatingPolicy flp, String node_name, int repnr, String db_name, String table_name, List<SplitValue> values)
+      throws FileOperationException, TException {
+		Random rand = new Random();
+    String table_path = null;
+
+    if (node_name == null) {
+      // this means we should select Best Available Node and Best Available Device;
+      try {
+        node_name = dm.findBestNode(flp);
+        if (node_name == null) {
+          throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
+        }
+      } catch (IOException e) {
+        LOG.error(e, e);
+        throw new FileOperationException("Can not find any Best Available Node now, please retry", FOFailReason.SAFEMODE);
+      }
+    }
+
+    SFile cfile = null;
+
+    // Step 1: find best device to put a file
+    if (dm == null) {
+      return null;
+    }
+    try {
+      if (flp == null) {
+        flp = new FileLocatingPolicy(null, null, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, true);
+      }
+      String devid = dm.findBestDevice(node_name, flp);
+
+      if (devid == null) {
+        throw new FileOperationException("Can not find any available device on node '" + node_name + "' now", FOFailReason.NOTEXIST);
+      }
+      // try to parse table_name
+      if (db_name != null && table_name != null) {
+        Table tbl;
+        try {
+          tbl = rs.getTable(db_name, table_name);
+        } catch (MetaException me) {
+          throw new FileOperationException("Invalid DB or Table name:" + db_name + "." + table_name + " + " + me.getMessage(), FOFailReason.INVALID_TABLE);
+        }
+        if (tbl == null) {
+          throw new FileOperationException("Invalid DB or Table name:" + db_name + "." + table_name, FOFailReason.INVALID_TABLE);
+        }
+        table_path = tbl.getDbName() + "/" + tbl.getTableName();
+      }
+
+      // how to convert table_name to tbl_id?
+      cfile = new SFile(0, db_name, table_name, MetaStoreConst.MFileStoreStatus.INCREATE, repnr,
+          "SFILE_DEFALUT", 0, 0, null, 0, null, values, MetaStoreConst.MFileLoadStatus.OK);
+      cfile = rs.createFile(cfile);
+      //cfile = getMS().getSFile(cfile.getFid());
+      if (cfile == null) {
+        throw new FileOperationException("Creating file with internal error, metadata inconsistent?", FOFailReason.INVALID_FILE);
+      }
+
+      do {
+        String location = "/data/";
+
+        if (table_path == null) {
+          location += "UNNAMED-DB/UNNAMED-TABLE/" + rand.nextInt(Integer.MAX_VALUE);
+        } else {
+          location += table_path + "/" + rand.nextInt(Integer.MAX_VALUE);
+        }
+        SFileLocation sfloc = new SFileLocation(node_name, cfile.getFid(), devid, location, 0, System.currentTimeMillis(),
+            MetaStoreConst.MFileLocationVisitStatus.OFFLINE, "SFL_DEFAULT");
+        if (!rs.createFileLocation(sfloc)) {
+          continue;
+        }
+        List<SFileLocation> sfloclist = new ArrayList<SFileLocation>();
+        sfloclist.add(sfloc);
+        cfile.setLocations(sfloclist);
+        break;
+      } while (true);
+    } catch (IOException e) {
+      throw new FileOperationException("System might in Safe Mode, please wait ... {" + e + "}", FOFailReason.SAFEMODE);
+    } catch (InvalidObjectException e) {
+      throw new FileOperationException("Internal error: " + e.getMessage(), FOFailReason.INVALID_FILE);
+    }
+
+    return cfile;
+  }
+	
 	@Override
-	public SFile create_file_by_policy(CreatePolicy arg0, int arg1,
-			String arg2, String arg3, List<SplitValue> arg4)
+	public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name,
+      String table_name, List<SplitValue> values)
 			throws FileOperationException, TException {
 		// TODO Auto-generated method stub
 		return null;
@@ -731,7 +881,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 	@Override
 	public List<SFile> filterTableFiles(String dbName, String tabName, List<SplitValue> values) throws MetaException, TException {
-		return ms.filterTableFiles(dbName, tabName, values);
+		return rs.filterTableFiles(dbName, tabName, values);
 	}
 
 	@Override
@@ -750,8 +900,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public String getDMStatus() throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
+
+		return dm.getDMStatus();
 	}
 
 	@Override
@@ -776,7 +926,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public long getMaxFid() throws MetaException, TException {
-		return ms.getCurrentFID();
+		return rs.getCurrentFID();
 	}
 
 	@Override
@@ -788,7 +938,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public GlobalSchema getSchemaByName(String schName)
 			throws NoSuchObjectException, MetaException, TException {
-			GlobalSchema gs = ms.getSchema(schName);
+			GlobalSchema gs = rs.getSchema(schName);
 			return gs;
 	}
 
@@ -851,7 +1001,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public List<String> get_all_tables(String dbname) throws MetaException,
 			TException {
-		return ms.getAllTables(dbname);
+		return rs.getAllTables(dbname);
 	}
 
 	@Override
@@ -870,7 +1020,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public Database get_database(String dbName) throws NoSuchObjectException,
 			MetaException, TException {
-			Database db = ms.getDatabase(dbName);
+			Database db = rs.getDatabase(dbName);
 			return db;
 	}
 
@@ -890,13 +1040,13 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public Device get_device(String devid) throws MetaException, NoSuchObjectException, TException {
-		return ms.getDevice(devid);
+		return rs.getDevice(devid);
 	}
 
 	@Override
 	public List<FieldSchema> get_fields(String dbname, String tablename)
 			throws MetaException, UnknownTableException, UnknownDBException, TException {
-			Table t = ms.getTable(dbname, tablename);
+			Table t = rs.getTable(dbname, tablename);
 			if(t == null)
 				throw new UnknownTableException("Table not found by name:"+dbname+"."+tablename);
 			return t.getSd().getCols();
@@ -907,7 +1057,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			MetaException, TException {
 		// TODO Auto-generated method stub
 		try {
-			SFile f = ms.getSFile(fid);
+			SFile f = rs.getSFile(fid);
 			if(f == null)
 				throw new FileOperationException("File not found by id:"+fid, FOFailReason.INVALID_FILE);
 			return f;
@@ -920,7 +1070,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public SFile get_file_by_name(String node, String devid, String location)
 			throws FileOperationException, MetaException, TException {
-		SFile f = ms.getSFile(devid, location);
+		SFile f = rs.getSFile(devid, location);
 		if(f == null)
 			throw new FileOperationException("Can not find SFile by name: " + node + ":" + devid + ":" + location, FOFailReason.INVALID_FILE);
 		return f;
@@ -930,7 +1080,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public Index get_index_by_name(String dbName, String tableName, String indexName)
 			throws MetaException, NoSuchObjectException, TException {
 			String key = dbName + "." + tableName + "." + indexName;
-			Index ind = ms.getIndex(dbName, tableName, indexName);
+			Index ind = rs.getIndex(dbName, tableName, indexName);
 			
 			if(ind == null)
 				throw new NoSuchObjectException("Index not found by name:"+key);
@@ -969,7 +1119,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		// TODO Auto-generated method stub
 		String dbname = conf.getLocalDbName();
 		try {
-			Database db = ms.getDatabase(dbname);
+			Database db = rs.getDatabase(dbname);
 			return db;
 		} catch (Exception e) {
 			throw new MetaException(e.getMessage());
@@ -988,7 +1138,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public Node get_node(String node_name) throws MetaException, TException {
 		// TODO Auto-generated method stub
-			Node n = ms.getNode(node_name);
+			Node n = rs.getNode(node_name);
 			return n;
 	}
 
@@ -1114,7 +1264,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		try{
 			String baseTableName = tablename.split("\\.")[0];
 //			Table baseTable = (Table) ms.readObject(ObjectType.TABLE, dbname+"."+baseTableName);
-			Table baseTable = ms.getTable(dbname, baseTableName);
+			Table baseTable = rs.getTable(dbname, baseTableName);
 			if(baseTable == null)
 				throw new UnknownTableException("Table not found by name:"+baseTableName);
 			List<FieldSchema> fss = baseTable.getSd().getCols();
@@ -1144,7 +1294,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public Table get_table(String dbname, String tablename) throws MetaException,
 			NoSuchObjectException, TException {
-			Table t = ms.getTable(dbname, tablename);
+			Table t = rs.getTable(dbname, tablename);
 			return t;
 	}
 
@@ -1174,7 +1324,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		if (names == null) {
 			throw new InvalidOperationException("table names are null");
 		}
-		return ms.getTableObjectsByName(dbname, names);
+		return rs.getTableObjectsByName(dbname, names);
 	}
 
 	@Override
@@ -1240,7 +1390,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public List<Long> listFilesByDigest(String digest) throws MetaException,
 			TException {
 		
-		return ms.findSpecificDigestFiles(digest);
+		return rs.findSpecificDigestFiles(digest);
 	}
 
 	@Override
@@ -1254,7 +1404,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			throws MetaException, TException {
 		// TODO Auto-generated method stub
 		
-		return ms.listNodeGroupByNames(ngNames);
+		return rs.listNodeGroupByNames(ngNames);
 	}
 
 	@Override
@@ -1306,7 +1456,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	public List<Long> listTableFiles(String dbName, String tabName, int from, int to) 
 			throws MetaException, TException {
 		
-		return ms.listTableFiles(dbName, tabName, from, to-1);
+		return rs.listTableFiles(dbName, tabName, from, to-1);
 	}
 
 	@Override
@@ -1326,7 +1476,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public List<Device> list_device() throws MetaException, TException {
-		return ms.listDevice();
+		return rs.listDevice();
 	}
 
 	@Override

@@ -63,7 +63,8 @@ public final class TimeLimitedCacheMap {
                     continue;
                 }
                 long interval = currentTime - lastTime;
-                long elapsedTime = TimeUnit.NANOSECONDS.convert(interval, expiryTimeUnit);
+//                long elapsedTime = TimeUnit.NANOSECONDS.convert(interval, expiryTimeUnit);
+                long elapsedTime = expiryTimeUnit.convert(interval, TimeUnit.NANOSECONDS);
                 if(elapsedTime > expiryTime){
                     markedForRemoval.add(key);
                 }
@@ -80,7 +81,8 @@ public final class TimeLimitedCacheMap {
                     continue;
                 }
                 long interval = currentTime - lastTime;
-                long elapsedTime = TimeUnit.NANOSECONDS.convert(interval, expiryTimeUnit);
+//                long elapsedTime = TimeUnit.NANOSECONDS.convert(interval, expiryTimeUnit);
+                long elapsedTime = expiryTimeUnit.convert(interval, TimeUnit.NANOSECONDS);
                 if(elapsedTime > expiryTime){
                     remove(key);
                 }
@@ -186,7 +188,12 @@ public final class TimeLimitedCacheMap {
     }
     
     public Object get(String key) {
-    	return objectMap.get(key);
+    	accessLock.readLock().lock();
+    	Object value = objectMap.get(key);
+    	if(value != null)
+        timeMap.put(key, System.nanoTime());
+    	accessLock.readLock().unlock();
+    	return value;
     }
     
     /* Clone requires locking, to prevent the edge case where 
