@@ -1128,7 +1128,7 @@ public class MetaStoreUtils {
    * @return
    * @throws MetaException
    */
-  static <T> List<T> getMetaStoreListeners(Class<T> clazz,
+  public static <T> List<T> getMetaStoreListeners(Class<T> clazz,
       HiveConf conf, String listenerImplList) throws MetaException {
 
     List<T> listeners = new ArrayList<T>();

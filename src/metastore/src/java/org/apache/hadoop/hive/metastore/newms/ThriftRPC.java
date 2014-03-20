@@ -1,7 +1,14 @@
 package org.apache.hadoop.hive.metastore.newms;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Strings.isNullOrEmpty;
+
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -9,16 +16,20 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.commons.logging.Log;
+import org.apache.hadoop.hive.common.metrics.Metrics;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionContext;
+import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionListener;
+import org.apache.hadoop.hive.metastore.MetaStoreUtils;
 import org.apache.hadoop.hive.metastore.RawStore;
-import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
+import org.apache.hadoop.hive.metastore.api.CreateOperation;
 import org.apache.hadoop.hive.metastore.api.CreatePolicy;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
@@ -61,10 +72,15 @@ import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.metastore.newms.DiskManager.DMProfile;
+import org.apache.hadoop.hive.metastore.newms.DiskManager.DMRequest;
 import org.apache.hadoop.hive.metastore.newms.DiskManager.FileLocatingPolicy;
+import org.apache.hadoop.hive.metastore.tools.PartitionFactory;
+import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.thrift.TException;
 
 import com.facebook.fb303.fb_status;
+import com.google.common.collect.Lists;
 
 /*
  * 没缓存的对象，但是rpc里要得到的
@@ -78,13 +94,22 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	private IMetaStoreClient client;
 	private static final Log LOG= NewMS.LOG;
 	private DiskManager dm;
+	private final long startTimeMillis;
+	public static Long file_creation_lock = 0L;
+  public static Long file_reopen_lock = 0L;
+  private List<MetaStoreEndFunctionListener> endFunctionListeners;
 	public ThriftRPC(NewMSConf conf)
 	{
 		this.conf = conf;
 		rs = new RawStoreImp(conf);
+		startTimeMillis = System.currentTimeMillis();
 		try {
 			client = MsgProcessing.createMetaStoreClient();
-			dm = new DiskManager(new HiveConf(DiskManager.class), LOG);
+			HiveConf hc = new HiveConf(DiskManager.class);
+			dm = new DiskManager(hc, LOG);
+			endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
+          MetaStoreEndFunctionListener.class, hc,
+          hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
 		} catch (MetaException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -92,22 +117,38 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 			e.printStackTrace();
 		}
 	}
-	@Override
-	public long aliveSince() throws TException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+	/**
+   * return the alive timemillis since last set up
+   * the {@code startTimeMillis} is inited in the constructor method {@link #ThriftRPC(NewMSConf)}
+   *
+   * @author mzy
+   * @return {@code System.currentTimeMillis - startTimeMillis}
+   */
+  @Override
+  public long aliveSince() throws TException {
+    return System.currentTimeMillis() - startTimeMillis;
+  }
 
-	@Override
-	public long getCounter(String arg0) throws TException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+  @Override
+  public long getCounter(String arg0) throws TException {
+    if (isNullOrEmpty(arg0)) {
+      return -1;
+    }
+    return 0;
+  }
 
 	@Override
 	public Map<String, Long> getCounters() throws TException {
-		// TODO Auto-generated method stub
-		return null;
+		AbstractMap<String, Long> counters = new HashMap<String, Long>();
+
+    // Allow endFunctionListeners to add any counters they have collected
+    if (endFunctionListeners != null) {
+      for (MetaStoreEndFunctionListener listener : endFunctionListeners) {
+        listener.exportCounters(counters);
+      }
+    }
+
+    return counters;
 	}
 
 	@Override
@@ -147,8 +188,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public String getVersion() throws TException {
-		// TODO Auto-generated method stub
-		return null;
+		return "0.1";
 	}
 
 	@Override
@@ -172,65 +212,63 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public boolean addEquipRoom(EquipRoom arg0) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return false;
+		return arg0 != null && client.addEquipRoom(arg0);
 	}
 
 	@Override
 	public boolean addGeoLocation(GeoLocation arg0) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return false;
+		return arg0 != null && client.addGeoLocation(arg0);
 	}
 
 	@Override
-	public boolean addNodeAssignment(String arg0, String arg1)
+	public boolean addNodeAssignment(String nodeName, String dbName)
 			throws MetaException, NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return false;
+		final boolean expr = isNullOrEmpty(nodeName) || isNullOrEmpty(dbName);
+    return !expr && client.addNodeAssignment(nodeName, dbName);
 	}
 
 	@Override
-	public boolean addNodeGroup(NodeGroup arg0) throws AlreadyExistsException,
-			MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  public boolean addNodeGroup(NodeGroup nodeGroup) throws AlreadyExistsException,
+      MetaException, TException {
+
+    return nodeGroup != null && client.addNodeGroup(nodeGroup);
+  }
 
 	@Override
-	public boolean addNodeGroupAssignment(NodeGroup arg0, String arg1)
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  public boolean addNodeGroupAssignment(NodeGroup nodeGroup, String dbName)
+      throws MetaException, TException {
+    final boolean expr = nodeGroup == null || isNullOrEmpty(dbName);
+    return !expr && client.addNodeGroupAssignment(nodeGroup, dbName);
+  }
 
-	@Override
-	public boolean addRoleAssignment(String arg0, String arg1)
-			throws MetaException, NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean addRoleAssignment(String roleName, String dbName)
+      throws MetaException, NoSuchObjectException, TException {
+    final boolean expr = isNullOrEmpty(roleName) || isNullOrEmpty(dbName);
+    return !expr && client.addRoleAssignment(roleName, dbName);
+  }
 
-	@Override
-	public boolean addTableNodeDist(String arg0, String arg1, List<String> arg2)
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean addTableNodeDist(String dbName, String tableName, List<String> nodeGroupList)
+      throws MetaException, TException {
+    final boolean expr = isNullOrEmpty(dbName) || isNullOrEmpty(tableName) || nodeGroupList == null;
+    return !expr && client.addTableNodeDist(dbName, tableName, nodeGroupList);
+  }
 
-	@Override
-	public boolean addUserAssignment(String arg0, String arg1)
-			throws MetaException, NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean addUserAssignment(String userName, String dbName)
+      throws MetaException, NoSuchObjectException, TException {
+    final boolean expr = isNullOrEmpty(userName) || isNullOrEmpty(dbName);
+    return !expr && client.addUserAssignment(userName, dbName);
+  }
 
-	@Override
-	public boolean add_datawarehouse_sql(int arg0, String arg1)
-			throws InvalidObjectException, MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean add_datawarehouse_sql(int arg0, String arg1)
+      throws InvalidObjectException, MetaException, TException {
+
+    return false;
+  }
 
 	@Override
 	public Index add_index(Index arg0, Table arg1)
@@ -240,34 +278,36 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		return null;
 	}
 
-	@Override
-	public Node add_node(String arg0, List<String> arg1) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public Node add_node(String nodeName, List<String> ipl) throws MetaException,
+      TException {
+    final boolean expr = isNullOrEmpty(nodeName) || ipl == null;
+    checkArgument(expr, "nodeName and ipl shuldn't be null or empty");
+    final Node node = client.add_node(nodeName, ipl);
+    return node;
+  }
 
-	@Override
-	public Partition add_partition(Partition arg0)
-			throws InvalidObjectException, AlreadyExistsException,
-			MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public Partition add_partition(Partition partition)
+      throws InvalidObjectException, AlreadyExistsException,
+      MetaException, TException {
+    return client.add_partition(checkNotNull(partition, "partation shuldn't be null"));
+  }
 
-	@Override
-	public int add_partition_files(Partition arg0, List<SFile> arg1)
-			throws TException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+  @Override
+  public int add_partition_files(Partition partition, List<SFile> sfiles)
+      throws TException {
+    checkNotNull(partition);
+    checkNotNull(sfiles);
+    return client.add_partition_files(partition, sfiles);
+  }
 
-	@Override
-	public boolean add_partition_index(Index arg0, Partition arg1)
-			throws MetaException, AlreadyExistsException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean add_partition_index(Index index, Partition partition)
+      throws MetaException, AlreadyExistsException, TException {
+
+    return client.add_partition_index(checkNotNull(index), checkNotNull(partition));
+  }
 
 	@Override
 	public boolean add_partition_index_files(Index arg0, Partition arg1,
@@ -432,12 +472,113 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public int close_file(SFile arg0) throws FileOperationException,
-			MetaException, TException {
-		// TODO Auto-generated method stub
-		return 0;
+	public int close_file(SFile file) throws FileOperationException, MetaException, TException {
+		startFunction("close_file ", "fid: " + file.getFid());
+    DMProfile.fcloseR.incrementAndGet();
+
+    FileOperationException e = null;
+    SFile saved = rs.getSFile(file.getFid());
+
+    try {
+      if (saved == null) {
+        throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
+      }
+
+      if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
+        LOG.error("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").");
+        throw new FileOperationException("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").",
+            FOFailReason.INVALID_STATE);
+      }
+
+      // find the valid filelocation, mark it and trigger replication
+      if (file.getLocationsSize() > 0) {
+        int valid_nr = 0;
+
+        // find valid Online NR
+        for (SFileLocation sfl : file.getLocations()) {
+          if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            valid_nr++;
+          }
+        }
+        if (valid_nr > 1) {
+          LOG.error("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]");
+          throw new FileOperationException("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]",
+              FOFailReason.INVALID_FILE);
+        } else if (valid_nr < 1) {
+          LOG.error("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]");
+          e = new FileOperationException("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]",
+              FOFailReason.INVALID_FILE);
+        }
+        // finally, do it
+        List<SFileLocation> sflToDel = new ArrayList<SFileLocation>();
+        for (SFileLocation sfl : file.getLocations()) {
+          if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            sfl.setRep_id(0);
+            sfl.setDigest(file.getDigest());
+            rs.updateSFileLocation(sfl);
+          } else {
+            sflToDel.add(sfl);
+            dm.asyncDelSFL(sfl);
+          }
+        }
+        // BUG-XXX: trunc offline sfls
+        if (sflToDel.size() > 0) {
+          file.getLocations().removeAll(sflToDel);
+        }
+      } else {
+        LOG.error("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]");
+        e = new FileOperationException("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]",
+              FOFailReason.INVALID_FILE);
+      }
+
+      file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
+      // keep repnr unchanged
+      file.setRep_nr(saved.getRep_nr());
+      rs.updateSFile(file);
+
+      if (e != null) {
+        throw e;
+      }
+
+      synchronized (dm.repQ) {
+        dm.repQ.add(new DMRequest(file, DMRequest.DMROperation.REPLICATE, 1));
+        dm.repQ.notify();
+      }
+    } finally {
+      DMProfile.fcloseSuccRS.incrementAndGet();
+    }
+    return 0;
 	}
 
+	public String startFunction(String function, String extraLogInfo) {
+//    incrementCounter(function);
+//    logInfo((getIpAddress() == null ? "" : "source:" + getIpAddress() + " ") + function + extraLogInfo);
+    try {
+      Metrics.startScope(function);
+    } catch (IOException e) {
+      LOG.debug("Exception when starting metrics scope"
+          + e.getClass().getName() + " " + e.getMessage());
+      MetaStoreUtils.printStackTrace(e);
+    }
+    return function;
+  }
+	public void endFunction(String function, boolean successful, Exception e) {
+    endFunction(function, new MetaStoreEndFunctionContext(successful, e));
+  }
+
+  public void endFunction(String function, MetaStoreEndFunctionContext context) {
+    try {
+      Metrics.endScope(function);
+    } catch (IOException e) {
+      LOG.debug("Exception when closing metrics scope" + e);
+    }
+
+    for (MetaStoreEndFunctionListener listener : endFunctionListeners) {
+      listener.onEndFunction(function, context);
+    }
+  }
+
+	
 	@Override
 	public int createBusitype(Busitype arg0) throws InvalidObjectException,
 			MetaException, TException {
@@ -628,11 +769,262 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 	
 	@Override
-	public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name,
-      String table_name, List<SplitValue> values)
+	public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name, String table_name, List<SplitValue> values)
 			throws FileOperationException, TException {
-		// TODO Auto-generated method stub
-		return null;
+		DMProfile.fcreate2R.incrementAndGet();
+    Table tbl = null;
+    List<NodeGroup> ngs = null;
+    Set<String> ngnodes = new HashSet<String>();
+
+    // Step 1: parse the policy and check arguments
+    switch (policy.getOperation()) {
+    case CREATE_NEW_IN_NODEGROUPS:
+    case CREATE_NEW:
+    case CREATE_NEW_RANDOM:
+    case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
+      // check db, table now
+      try {
+        tbl = rs.getTable(db_name, table_name);
+      } catch (MetaException me) {
+        throw new FileOperationException("getTable:" + db_name + "." + table_name + " + " + me.getMessage(), FOFailReason.INVALID_TABLE);
+      }
+      if (tbl == null) {
+          throw new FileOperationException("Invalid DB or Table name:" + db_name + "." + table_name, FOFailReason.INVALID_TABLE);
+      }
+
+      // check nodegroups now
+      if (policy.getOperation() == CreateOperation.CREATE_NEW_IN_NODEGROUPS) {
+        if (policy.getArgumentsSize() <= 0) {
+          throw new FileOperationException("Invalid arguments in CreatePolicy.", FOFailReason.INVALID_NODE_GROUPS);
+        }
+        ngs = tbl.getNodeGroups();
+        if (ngs != null && ngs.size() > 0) {
+           for (NodeGroup ng : ngs) {
+             if (ng.getNodesSize() > 0) {
+               for (Node n : ng.getNodes()) {
+                 ngnodes.add(n.getNode_name());
+               }
+             }
+           }
+        }
+        for (String ng : policy.getArguments()) {
+          if (!ngnodes.contains(ng)) {
+            throw new FileOperationException("Invalid node groups set in CreatePolicy.", FOFailReason.INVALID_NODE_GROUPS);
+          }
+        }
+      } else {
+        ngs = tbl.getNodeGroups();
+      }
+      // check values now
+      if (values == null || values.size() == 0) {
+        throw new FileOperationException("Invalid file split values.", FOFailReason.INVALID_SPLIT_VALUES);
+      }
+      List<PartitionInfo> allpis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl.getFileSplitKeys());
+      List<PartitionInfo> pis = new ArrayList<PartitionInfo>();
+      // find the max version
+      long version = 0;
+      for (PartitionInfo pi : allpis) {
+        if (pi.getP_version() > version) {
+          version = pi.getP_version();
+        }
+      }
+      if (values.get(0).getVerison() > version) {
+        throw new FileOperationException("Invalid Version specified, provide " + values.get(0).getVerison() + " expected " + version, FOFailReason.INVALID_SPLIT_VALUES);
+      } else {
+        version = values.get(0).getVerison();
+      }
+      // remove non-max versions
+      for (PartitionInfo pi : allpis) {
+        if (pi.getP_version() == version) {
+          pis.add(pi);
+        }
+      }
+      int vlen = 0;
+      for (PartitionInfo pi : pis) {
+        switch (pi.getP_type()) {
+        case none:
+        case roundrobin:
+        case list:
+        case range:
+          break;
+        case interval:
+          vlen += 2;
+          break;
+        case hash:
+          vlen += 1;
+          break;
+        }
+      }
+      if (vlen != values.size()) {
+        throw new FileOperationException("File split value should be " + vlen + " entries.", FOFailReason.INVALID_SPLIT_VALUES);
+      }
+      long low = -1, high = -1;
+      for (int i = 0, j = 0; i < values.size(); i++) {
+        SplitValue sv = values.get(i);
+        PartitionInfo pi = pis.get(j);
+
+        switch (pi.getP_type()) {
+        case none:
+        case roundrobin:
+        case list:
+        case range:
+          throw new FileOperationException("Split type " + pi.getP_type() + " shouldn't be set values.", FOFailReason.INVALID_SPLIT_VALUES);
+        case interval:
+          if (low == -1) {
+            try {
+              low = Long.parseLong(sv.getValue());
+            } catch (NumberFormatException e) {
+              throw new FileOperationException("Split value expect Long for interval: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            break;
+          }
+          if (high == -1) {
+            try {
+              high = Long.parseLong(sv.getValue());
+            } catch (NumberFormatException e) {
+              throw new FileOperationException("Split value expect Long for interval: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            // check range
+            String interval_unit = pi.getArgs().get(0);
+            Double d = Double.parseDouble(pi.getArgs().get(1));
+            Long interval_seconds = 0L;
+            try {
+              interval_seconds = PartitionFactory.getIntervalSeconds(interval_unit, d);
+            } catch (Exception e) {
+              throw new FileOperationException("Handle interval split: internal error.", FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            if (high - low != interval_seconds) {
+              throw new FileOperationException("Invalid interval range specified: [" + low + ", " + high +
+                  "), expect range length: " + interval_seconds + ".", FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            // unit check
+            Long iu = 1L;
+            try {
+              iu = PartitionFactory.getIntervalUnit(interval_unit);
+            } catch (Exception e) {
+              throw new FileOperationException("Handle interval split unit: interval error.", FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            if (low % iu != 0) {
+              throw new FileOperationException("The low limit of interval split should be MODed by unit " +
+                  interval_unit + "(" + iu + ").", FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            j++;
+            break;
+          }
+          break;
+        case hash:
+          low = high = -1;
+          long v;
+          try {
+            // Format: "num-value"
+            String[] hv = sv.getValue().split("-");
+            if (hv == null || hv.length != 2) {
+              throw new FileOperationException("Split value for hash except format: 'bucket_size-value' : " + sv.getValue(),
+                  FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            v = Long.parseLong(hv[0]);
+            if (v != pi.getP_num()) {
+              throw new FileOperationException("Split value of hash bucket_size mismatch: expect " + pi.getP_num() + " but provided " + v,
+                  FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            v = Long.parseLong(hv[1]);
+          } catch (NumberFormatException e) {
+            throw new FileOperationException("Split value expect Long for hash: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+          }
+          if (v < 0 && v >= pi.getP_num()) {
+            throw new FileOperationException("Hash value exceeds valid range: [0, " + pi.getP_num() + ").", FOFailReason.INVALID_SPLIT_VALUES);
+          }
+          break;
+        }
+        // check version, column name here
+        if (sv.getVerison() != pi.getP_version() ||
+            !pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
+          throw new FileOperationException("SplitKeyName mismatch, please check your metadata.", FOFailReason.INVALID_SPLIT_VALUES);
+        }
+
+      }
+      break;
+    case CREATE_AUX_IDX_FILE:
+      // ignore db, table, and values check
+      break;
+    }
+
+    // Step 2: do file creation or file gets now
+    boolean do_create = true;
+    SFile r = null;
+
+    if (policy.getOperation() == CreateOperation.CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST) {
+      // get files by value firstly
+      List<SFile> gfs = rs.filterTableFiles(db_name, table_name, values);
+      if (gfs != null && gfs.size() > 0) {
+        // this means there are many files with this same split value, check if there exists INCREATE file
+        for (SFile f : gfs) {
+          if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+            // ok, we should return this INCREATE file
+            r = f;
+            do_create = false;
+            break;
+          }
+        }
+      }
+    }
+    if (do_create) {
+      FileLocatingPolicy flp = null;
+
+      // do not select the backup/shared device for the first entry
+      switch (policy.getOperation()) {
+      case CREATE_NEW_IN_NODEGROUPS:
+        flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+        break;
+      case CREATE_NEW:
+      case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
+      case CREATE_NEW_RANDOM:
+        if (ngs != null) {
+          // use all available node group's nodes
+          for (NodeGroup ng : ngs) {
+            if (ng.getNodesSize() > 0) {
+              for (Node n : ng.getNodes()) {
+                ngnodes.add(n.getNode_name());
+              }
+            }
+          }
+          if (policy.getOperation() == CreateOperation.CREATE_NEW_RANDOM) {
+            // TODO: Do we need random dev selection here?
+            flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.RANDOM_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
+          } else {
+            flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+          }
+        }
+        break;
+      case CREATE_AUX_IDX_FILE:
+        // use all available ndoes
+        flp = new FileLocatingPolicy(null, dm.backupDevs, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+        break;
+      default:
+          throw new FileOperationException("Invalid create operation provided!", FOFailReason.INVALID_FILE);
+      }
+
+      if (policy.getOperation() == CreateOperation.CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST) {
+        synchronized (file_creation_lock) {
+          // final check here
+          List<SFile> gfs = rs.filterTableFiles(db_name, table_name, values);
+          if (gfs != null && gfs.size() > 0) {
+            for (SFile f : gfs) {
+              if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+                // oh, we should return now
+                return f;
+              }
+            }
+          }
+          // ok, it means there is no INCREATE files, create one
+          r = create_file(flp, null, repnr, db_name, table_name, values);
+        }
+      } else {
+        r = create_file(flp, null, repnr, db_name, table_name, values);
+      }
+    }
+    DMProfile.fcreate2SuccR.incrementAndGet();
+    return r;
 	}
 
 	@Override
@@ -686,90 +1078,121 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		return false;
 	}
 
-	@Override
-	public int del_node(String arg0) throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+  @Override
+  public int del_node(String nodeName) throws MetaException, TException {
+    return (!isNullOrEmpty(nodeName) && client.del_node(nodeName)) ? 1 : 0;
+  }
 
-	@Override
-	public boolean deleteEquipRoom(EquipRoom arg0) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean deleteEquipRoom(EquipRoom er) throws MetaException,
+      TException {
+    return er != null && client.deleteEquipRoom(er);
+  }
 
-	@Override
-	public boolean deleteGeoLocation(GeoLocation arg0) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean deleteGeoLocation(GeoLocation gl) throws MetaException,
+      TException {
+    return gl != null && client.deleteGeoLocation(gl);
+  }
 
-	@Override
-	public boolean deleteNodeAssignment(String arg0, String arg1)
-			throws MetaException, NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
 
-	@Override
-	public boolean deleteNodeGroup(NodeGroup arg0) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean deleteNodeAssignment(String nodeName, String dbName)
+      throws MetaException, NoSuchObjectException, TException {
+    boolean expr = isNullOrEmpty(nodeName) || isNullOrEmpty(dbName);
+    return !expr && client.deleteNodeAssignment(nodeName, dbName);
+  }
 
-	@Override
-	public boolean deleteNodeGroupAssignment(NodeGroup arg0, String arg1)
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean deleteNodeGroup(NodeGroup nodeGroup) throws MetaException,
+      TException {
+    return nodeGroup != null && client.deleteNodeGroup(nodeGroup);
+  }
 
-	@Override
-	public boolean deleteRoleAssignment(String arg0, String arg1)
-			throws MetaException, NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean deleteNodeGroupAssignment(NodeGroup nodeGroup, String dbName)
+      throws MetaException, TException {
+    return client.deleteNodeGroupAssignment(nodeGroup, dbName);
+  }
 
-	@Override
-	public boolean deleteSchema(String arg0) throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
 
-	@Override
-	public boolean deleteTableNodeDist(String arg0, String arg1,
-			List<String> arg2) throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean deleteRoleAssignment(String roleName, String dbName)
+      throws MetaException, NoSuchObjectException, TException {
+    return client.deleteRoleAssignment(roleName, dbName);
+  }
 
-	@Override
-	public boolean deleteUserAssignment(String arg0, String arg1)
-			throws MetaException, NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  /**
+   * Delete a schema with the assigned param
+   *
+   * @param arg0
+   *          is schema name
+   * @return if the param is {@code NULL} or Empty
+   *         return false
+   *         else return {@link IMetaStoreClient#deleteSchema(String)}
+   * @author mzy
+   */
+  @Override
+  public boolean deleteSchema(String arg0) throws MetaException, TException {
+    return !isNullOrEmpty(arg0) && client.deleteSchema(arg0);
+  }
 
-	@Override
-	public boolean delete_partition_column_statistics(String arg0, String arg1,
-			String arg2, String arg3) throws NoSuchObjectException,
-			MetaException, InvalidObjectException, InvalidInputException,
-			TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  /**
+   * Delete Table node dist
+   *
+   * @param arg0
+   *          db name
+   * @param arg1
+   *          table name
+   * @param arg2
+   *          node group
+   * @return if the param is valid and
+   *         {@link IMetaStoreClient#deleteTableNodeDist(String, String, List)} is success then
+   *         return true
+   *         else return false;
+   * @author mzy
+   */
+  @Override
+  public boolean deleteTableNodeDist(String arg0, String arg1,
+      List<String> arg2) throws MetaException, TException {
+    final boolean expr = isNullOrEmpty(arg0) || isNullOrEmpty(arg1) || arg2 == null;
+    return !expr && client.deleteTableNodeDist(arg0, arg1, arg2);
+  }
 
-	@Override
-	public boolean delete_table_column_statistics(String arg0, String arg1,
-			String arg2) throws NoSuchObjectException, MetaException,
-			InvalidObjectException, InvalidInputException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+
+  /**
+   * Delete User from db by userName and dbName
+   *
+   * @param userName
+   * @param dbName
+   * @return if userName and dbName is not null or empty and
+   *         {@link IMetaStoreClient#deleteUserAssignment(String, String)} is success then return
+   *         true
+   *         else return false;
+   * @author mzy
+   */
+  @Override
+  public boolean deleteUserAssignment(String userName, String dbName)
+      throws MetaException, NoSuchObjectException, TException {
+    final boolean expr = isNullOrEmpty(userName) || isNullOrEmpty(dbName);
+    return !expr && client.deleteUserAssignment(userName, dbName);
+  }
+
+
+  @Override
+  public boolean delete_partition_column_statistics(String dbName, String tableName,
+      String partName, String colName) throws NoSuchObjectException,
+      MetaException, InvalidObjectException, InvalidInputException,
+      TException {
+    return client.deletePartitionColumnStatistics(dbName, tableName, partName, colName);
+  }
+
+  @Override
+  public boolean delete_table_column_statistics(String dbName, String tableName,
+      String colName) throws NoSuchObjectException, MetaException,
+      InvalidObjectException, InvalidInputException, TException {
+    return client.deleteTableColumnStatistics(dbName, tableName, colName);
+  }
 
 	@Override
 	public void drop_attribution(String arg0, boolean arg1, boolean arg2)
@@ -779,124 +1202,116 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		
 	}
 
-	@Override
-	public void drop_database(String arg0, boolean arg1, boolean arg2)
-			throws NoSuchObjectException, InvalidOperationException,
-			MetaException, TException {
-		// TODO Auto-generated method stub
-		
-	}
+  @Override
+  public void drop_database(String name, boolean ifDeleteData, boolean ifIgnoreUnknownDb)
+      throws NoSuchObjectException, InvalidOperationException,
+      MetaException, TException {
+    client.dropDatabase(name, ifDeleteData, ifIgnoreUnknownDb);
+  }
 
-	@Override
-	public boolean drop_index_by_name(String arg0, String arg1, String arg2,
-			boolean arg3) throws NoSuchObjectException, MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean drop_index_by_name(String dbName, String tableName, String indexName,
+      boolean ifDeleteData) throws NoSuchObjectException, MetaException,
+      TException {
+    return client.dropIndex(dbName, tableName, indexName, ifDeleteData);
+  }
 
-	@Override
-	public boolean drop_partition(String arg0, String arg1, List<String> arg2,
-			boolean arg3) throws NoSuchObjectException, MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean drop_partition(String dbName, String tableName, List<String> partValues,
+      boolean ifDeleteData) throws NoSuchObjectException, MetaException,
+      TException {
+    return client.dropPartition(dbName, tableName, partValues, ifDeleteData);
+  }
 
-	@Override
-	public boolean drop_partition_by_name(String arg0, String arg1,
-			String arg2, boolean arg3) throws NoSuchObjectException,
-			MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean drop_partition_by_name(String dbName, String tableName,
+      String partName, boolean ifDelData) throws NoSuchObjectException,
+      MetaException, TException {
+    return client.dropPartition(dbName, tableName, partName, ifDelData);
+  }
 
-	@Override
-	public int drop_partition_files(Partition arg0, List<SFile> arg1)
-			throws TException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+  @Override
+  public int drop_partition_files(Partition part, List<SFile> files)
+      throws TException {
+    return client.drop_partition_files(part, files);
+  }
 
-	@Override
-	public boolean drop_partition_index(Index arg0, Partition arg1)
-			throws MetaException, AlreadyExistsException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean drop_partition_index(Index index, Partition part)
+      throws MetaException, AlreadyExistsException, TException {
+    return client.drop_partition_index(index, part);
+  }
 
-	@Override
-	public boolean drop_partition_index_files(Index arg0, Partition arg1,
-			List<SFile> arg2) throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean drop_partition_index_files(Index index, Partition part,
+      List<SFile> file) throws MetaException, TException {
+    return client.drop_partition_index_files(index, part, file);
+  }
 
-	@Override
-	public boolean drop_role(String arg0) throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
 
-	@Override
-	public int drop_subpartition_files(Subpartition arg0, List<SFile> arg1)
-			throws TException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+  @Override
+  public boolean drop_role(String roleName) throws MetaException, TException {
+    return client.drop_role(roleName);
+  }
 
-	@Override
-	public boolean drop_subpartition_index(Index arg0, Subpartition arg1)
-			throws MetaException, AlreadyExistsException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public int drop_subpartition_files(Subpartition subpart, List<SFile> files)
+      throws TException {
+    return client.drop_subpartition_files(subpart, files);
+  }
 
-	@Override
-	public boolean drop_subpartition_index_files(Index arg0, Subpartition arg1,
-			List<SFile> arg2) throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean drop_subpartition_index(Index index, Subpartition subpart)
+      throws MetaException, AlreadyExistsException, TException {
+    return client.drop_subpartition_index(index, subpart);
+  }
 
-	@Override
-	public void drop_table(String arg0, String arg1, boolean arg2)
-			throws NoSuchObjectException, MetaException, TException {
-		// TODO Auto-generated method stub
-		
-	}
 
-	@Override
-	public boolean drop_type(String arg0) throws MetaException,
-			NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public boolean drop_subpartition_index_files(Index index, Subpartition subpart,
+      List<SFile> file) throws MetaException, TException {
+    return client.drop_subpartition_index_files(index, subpart, file);
+  }
 
-	@Override
-	public boolean drop_user(String arg0) throws NoSuchObjectException,
-			MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
-	}
+  @Override
+  public void drop_table(String dbName, String tableName, boolean ifDelData)
+      throws NoSuchObjectException, MetaException, TException {
+    client.dropTable(dbName,tableName,ifDelData,true);
+  }
+
+  @Override
+  public boolean drop_type(String type) throws MetaException,
+      NoSuchObjectException, TException {
+        return rs.dropType(type);
+  }
+
+  @Override
+  public boolean drop_user(String userName) throws NoSuchObjectException,
+      MetaException, TException {
+    return client.drop_user(userName);
+  }
 	@Override
 	public List<SFile> filterTableFiles(String dbName, String tabName, List<SplitValue> values) throws MetaException, TException {
 		return rs.filterTableFiles(dbName, tabName, values);
 	}
 
 	@Override
-	public List<Node> find_best_nodes(int arg0) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
+  public List<Node> find_best_nodes(int nr) throws MetaException,
+      TException {
+    try {
+      List<Node> list = Lists.newArrayList(dm.findBestNodes(nr));
+      return list;
+    } catch (IOException e) {
+      return Lists.newArrayList();
+    }
+  }
 	@Override
-	public List<Node> find_best_nodes_in_groups(String arg0, String arg1,
-			int arg2, FindNodePolicy arg3) throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  public List<Node> find_best_nodes_in_groups(String arg0, String arg1,
+      int arg2, FindNodePolicy arg3) throws MetaException, TException {
+    //return Lists.newArrayList(d);
+    //TODO to know how to find the best nodes in grops
+    return Lists.newArrayList();
+  }
 
 	@Override
 	public String getDMStatus() throws MetaException, TException {
@@ -904,25 +1319,25 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		return dm.getDMStatus();
 	}
 
-	@Override
-	public GeoLocation getGeoLocationByName(String arg0) throws MetaException,
-			NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
 
-	@Override
-	public List<GeoLocation> getGeoLocationByNames(List<String> arg0)
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public GeoLocation getGeoLocationByName(String geoLocName) throws MetaException,
+      NoSuchObjectException, TException {
+    return client.getGeoLocationByName(geoLocName);
+  }
 
-	@Override
-	public String getMP(String node_name, String devid) throws MetaException,
-			TException {
-		return dm.getMP(node_name, devid);
-	}
+  @Override
+  public List<GeoLocation> getGeoLocationByNames(List<String> geoLocNames)
+      throws MetaException, TException {
+    return Lists.newArrayList(client.getGeoLocationByNames(geoLocNames));
+  }
+
+  @Override
+  public String getMP(String node_name, String devid) throws MetaException,
+      TException {
+    return dm.getMP(node_name, devid);
+  }
+
 
 	@Override
 	public long getMaxFid() throws MetaException, TException {
@@ -931,8 +1346,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public String getNodeInfo() throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
+		return dm.getNodeInfo();
 	}
 
 	@Override
@@ -944,7 +1358,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public long getSessionId() throws MetaException, TException {
-		// TODO Auto-generated method stub
+		//TODO find the way to the method
 		return 0;
 	}
 
@@ -969,20 +1383,18 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		dbs.addAll(CacheStore.getDatabaseHm().values());
 		return dbs;
 	}
-
 	@Override
-	public List<BusiTypeColumn> get_all_busi_type_cols() throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  public List<BusiTypeColumn> get_all_busi_type_cols() throws MetaException,
+      TException {
+    return Lists.newArrayList(client.get_all_busi_type_cols());
+  }
 
-	@Override
-	public List<BusiTypeDatacenter> get_all_busi_type_datacenters()
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public List<BusiTypeDatacenter> get_all_busi_type_datacenters()
+      throws MetaException, TException {
+    return Lists.newArrayList(client.get_all_busi_type_datacenters());
+  }
+
 
 	@Override
 	public List<String> get_all_databases() throws MetaException, TException {
@@ -1013,7 +1425,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public String get_config_value(String arg0, String arg1)
 			throws ConfigValSecurityException, TException {
-		// TODO Auto-generated method stub
+		// TODO to implement this method
 		return null;
 	}
 
@@ -1025,18 +1437,16 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public List<String> get_databases(String pattern) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  public List<String> get_databases(String pattern) throws MetaException,
+      TException {
+     return Lists.newArrayList(client.getDatabases(pattern));
+  }
 
-	@Override
-	public String get_delegation_token(String arg0, String arg1)
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public String get_delegation_token(String owner, String renewerKerberosPrincipalName)
+      throws MetaException, TException {
+    return client.getDelegationToken(owner, renewerKerberosPrincipalName);
+  }
 
 	@Override
 	public Device get_device(String devid) throws MetaException, NoSuchObjectException, TException {
@@ -1131,93 +1541,90 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	@Override
 	public List<String> get_lucene_index_names(String arg0, String arg1,
 			short arg2) throws MetaException, TException {
-		// TODO Auto-generated method stub
+		//TODO to implement this method
 		return null;
 	}
 
 	@Override
 	public Node get_node(String node_name) throws MetaException, TException {
-		// TODO Auto-generated method stub
 			Node n = rs.getNode(node_name);
 			return n;
 	}
 
-	@Override
-	public Partition get_partition(final String dbname, final String tabname,
-	        final List<String> partVals)
-			throws MetaException, NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
 
-	@Override
-	public Partition get_partition_by_name(String arg0, String arg1, String arg2)
-			throws MetaException, NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public Partition get_partition(final String dbName, final String tableName,
+      final List<String> partVals)
+      throws MetaException, NoSuchObjectException, TException {
+    return client.getPartition(dbName,tableName,partVals);
+  }
 
-	@Override
-	public ColumnStatistics get_partition_column_statistics(String arg0,
-			String arg1, String arg2, String arg3)
-			throws NoSuchObjectException, MetaException, InvalidInputException,
-			InvalidObjectException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public Partition get_partition_by_name(String dbName, String tableName, String partName)
+      throws MetaException, NoSuchObjectException, TException {
+        return client.getPartition(dbName, tableName, partName);
+  }
 
-	@Override
-	public List<SFileRef> get_partition_index_files(Index arg0, Partition arg1)
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public ColumnStatistics get_partition_column_statistics(String dbName,
+      String tableName, String partitionName, String colName)
+      throws NoSuchObjectException, MetaException, InvalidInputException,
+      InvalidObjectException, TException {
+    return client.getPartitionColumnStatistics(dbName, tableName, partitionName, colName);
+  }
 
-	@Override
-	public List<String> get_partition_names(String arg0, String arg1, short arg2)
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public List<SFileRef> get_partition_index_files(Index index, Partition part)
+      throws MetaException, TException {
+    return client.get_partition_index_files(index, part);
+  }
 
-	@Override
-	public List<String> get_partition_names_ps(String arg0, String arg1,
-			List<String> arg2, short arg3) throws MetaException,
-			NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public List<String> get_partition_names(String dbName, String tableName, short maxPart)
+      throws MetaException, TException {
+    return client.get_partition_names(dbName, tableName, maxPart);
+  }
 
-	@Override
-	public Partition get_partition_with_auth(String arg0, String arg1,
-			List<String> arg2, String arg3, List<String> arg4)
-			throws MetaException, NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public List<String> get_partition_names_ps(String arg0, String arg1,
+      List<String> arg2, short arg3) throws MetaException,
+      NoSuchObjectException, TException {
+    //TODO implement this method
+    return Lists.newArrayList();
+  }
 
-	@Override
-	public List<Partition> get_partitions(String arg0, String arg1, short arg2)
-			throws NoSuchObjectException, MetaException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public Partition get_partition_with_auth(String dbName, String tableName,
+      List<String> pvals, String userName, List<String> groupNames)
+      throws MetaException, NoSuchObjectException, TException {
+    return client.getPartitionWithAuthInfo(dbName, tableName, pvals, userName, groupNames);
+  }
 
-	@Override
-	public List<Partition> get_partitions_by_filter(String arg0, String arg1,
-			String arg2, short arg3) throws MetaException,
-			NoSuchObjectException, TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public List<Partition> get_partitions(String dbName, String tableName, short maxParts)
+      throws NoSuchObjectException, MetaException, TException {
+    List<String> list = client.get_partition_names(dbName, tableName,maxParts);
+    List<Partition> plist = Lists.newArrayList();
+    for(String str:list){
+      plist.add(client.getPartition(dbName, tableName, str));
+    }
+    return plist;
+  }
 
-	@Override
-	public List<Partition> get_partitions_by_names(String arg0, String arg1,
-			List<String> arg2) throws MetaException, NoSuchObjectException,
-			TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public List<Partition> get_partitions_by_filter(String arg0, String arg1,
+      String arg2, short arg3) throws MetaException,
+      NoSuchObjectException, TException {
+    //TODO to implement this method
+    return Lists.newArrayList();
+  }
+
+  @Override
+  public List<Partition> get_partitions_by_names(String tblName, String dbName,
+      List<String> partVals) throws MetaException, NoSuchObjectException,
+      TException {
+    return Lists.newArrayList(client.getPartition(tblName, dbName, partVals));
+  }
 
 	@Override
 	public List<Partition> get_partitions_ps(String arg0, String arg1,
@@ -1606,17 +2013,34 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public boolean offline_filelocation(SFileLocation arg0)
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
+	public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException {
+	// try to update the OFFLINE flag immediately
+    startFunction("offline_filelocation:", "dev " + sfl.getDevid() + " loc " + sfl.getLocation());
+    sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+    rs.updateSFileLocation(sfl);
+    endFunction("offline_filelocation", true, null);
+
+    return true;
 	}
 
 	@Override
-	public boolean online_filelocation(SFile arg0) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return false;
+	public boolean online_filelocation(SFile file) throws MetaException, TException {
+	// reget the file now
+    SFile stored_file = get_file_by_id(file.getFid());
+
+    if (stored_file.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
+      throw new MetaException("online filelocation can only do on INCREATE file " + file.getFid() +
+          " STATE: " + stored_file.getStore_status());
+    }
+    if (stored_file.getLocationsSize() != 1) {
+      throw new MetaException("Invalid file location in SFile fid: " + stored_file.getFid());
+    }
+    SFileLocation sfl = stored_file.getLocations().get(0);
+    assert sfl != null;
+    sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
+    rs.updateSFileLocation(sfl);
+
+    return true;
 	}
 
 	@Override
@@ -1654,17 +2078,49 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public boolean reopen_file(long arg0) throws FileOperationException,
-			MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
+	public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException {
+		DMProfile.freopenR.incrementAndGet();
+		startFunction("reopen_file ", "fid: " + fid);
+		
+    SFile saved = rs.getSFile(fid);
+    boolean success = false;
+
+    if (saved == null) {
+      throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
+    }
+    // check if this file is in REPLICATED state, otherwise, complain about that.
+    switch (saved.getStore_status()) {
+    case MetaStoreConst.MFileStoreStatus.INCREATE:
+      throw new FileOperationException("SFile " + fid + " has already been in INCREATE state.", FOFailReason.INVALID_STATE);
+    case MetaStoreConst.MFileStoreStatus.CLOSED:
+      throw new FileOperationException("SFile " + fid + " is in CLOSE state, please wait.", FOFailReason.INVALID_STATE);
+    case MetaStoreConst.MFileStoreStatus.REPLICATED:
+      // FIXME: seq reopenSFiles
+      synchronized (file_reopen_lock) {
+        success = rs.reopenSFile(saved);
+      }
+      break;
+    case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
+    case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+      throw new FileOperationException("SFile " + fid + " is in RM-* state, reject all reopens.", FOFailReason.INVALID_STATE);
+    }
+    return success;
 	}
 
 	@Override
-	public int restore_file(SFile arg0) throws FileOperationException,
-			MetaException, TException {
-		// TODO Auto-generated method stub
-		return 0;
+	public int restore_file(SFile file) throws FileOperationException, MetaException, TException {
+		DMProfile.frestoreR.incrementAndGet();
+    SFile saved = rs.getSFile(file.getFid());
+    if (saved == null) {
+      throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
+    }
+
+    if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.RM_LOGICAL) {
+      throw new FileOperationException("File StoreStatus is not in RM_LOGICAL.", FOFailReason.INVALID_STATE);
+    }
+    saved.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
+    rs.updateSFile(saved);
+    return 0;
 	}
 
 	@Override
@@ -1682,31 +2138,67 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public int rm_file_logical(SFile arg0) throws FileOperationException,
+	public int rm_file_logical(SFile file) throws FileOperationException,	MetaException, TException {
+		DMProfile.frmlR.incrementAndGet();
+    SFile saved = rs.getSFile(file.getFid());
+    if (saved == null) {
+      throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
+    }
+
+    // only in REPLICATED state can step into RM_LOGICAL
+    if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.REPLICATED) {
+      throw new FileOperationException("File StoreStatus is not in REPLICATED.", FOFailReason.INVALID_STATE);
+    }
+    saved.setStore_status(MetaStoreConst.MFileStoreStatus.RM_LOGICAL);
+    rs.updateSFile(saved);
+    return 0;
+	}
+
+	@Override
+	public int rm_file_physical(SFile file) throws FileOperationException,
 			MetaException, TException {
-		// TODO Auto-generated method stub
-		return 0;
+		DMProfile.frmpR.incrementAndGet();
+    SFile saved = rs.getSFile(file.getFid());
+    if (saved == null) {
+      throw new FileOperationException("Can not find SFile by FID " + file.getFid(), FOFailReason.INVALID_FILE);
+    }
+
+    if (!(saved.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE ||
+        saved.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED ||
+        saved.getStore_status() == MetaStoreConst.MFileStoreStatus.RM_LOGICAL)) {
+      throw new FileOperationException("File StoreStatus is not in INCREATE/REPLICATED/RM_LOGICAL.", FOFailReason.INVALID_STATE);
+    }
+    saved.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);
+    file = rs.updateSFile(saved);
+    file.setLocations(rs.getSFileLocations(file.getFid()));
+    synchronized (dm.cleanQ) {
+      dm.cleanQ.add(new DMRequest(file, DMRequest.DMROperation.RM_PHYSICAL, 0));
+      dm.cleanQ.notify();
+    }
+    return 0;
 	}
 
 	@Override
-	public int rm_file_physical(SFile arg0) throws FileOperationException,
-			MetaException, TException {
-		// TODO Auto-generated method stub
-		return 0;
+	public void set_file_repnr(long fid, int repnr)	throws FileOperationException, TException {
+//		startFunction("set_file_repnr", "fid " + fid + " repnr " + repnr);
+    SFile f = get_file_by_id(fid);
+    if (f != null) {
+      f.setRep_nr(repnr);
+      // FIXME: Caution, this might be a conflict code section for concurrent sfile field modification.
+      rs.updateSFile(f);
+    }		
 	}
 
 	@Override
-	public void set_file_repnr(long arg0, int arg1)
-			throws FileOperationException, TException {
-		// TODO Auto-generated method stub
-		
-	}
+	public boolean set_loadstatus_bad(long fid) throws MetaException, TException {
+		SFile saved = rs.getSFile(fid);
+    if (saved == null) {
+      throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
+    }
 
-	@Override
-	public boolean set_loadstatus_bad(long arg0) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return false;
+    saved.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
+    rs.updateSFile(saved);
+    return true;
 	}
 
 	@Override
@@ -1737,10 +2229,13 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public void truncTableFiles(String arg0, String arg1) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		
+	public void truncTableFiles(String dbName, String tabName) throws MetaException, TException {
+//		startFunction("truncTableFiles", "DB: " + dbName + " Table: " + tabName);
+//    try {
+      rs.truncTableFiles(dbName, tabName);
+//    } finally {
+//      endFunction("truncTableFiles", true, null);
+//    }		
 	}
 
 	@Override
@@ -1773,10 +2268,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		return false;
 	}
 	@Override
-	public boolean del_filelocation(SFileLocation slf) throws MetaException,
+	public boolean del_filelocation(SFileLocation sfl) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return false;
+		return rs.delSFileLocation(sfl.getDevid(), sfl.getLocation());
 	}
 	@Override
 	public List<SFile> get_files_by_ids(List<Long> fids)
@@ -1789,13 +2283,6 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		}
 		return fl;
 	}
-	
-//	@Override
-//	public int del_fileLocation(SFileLocation arg0)
-//			throws FileOperationException, MetaException, TException {
-//		// TODO Auto-generated method stub
-//		return 0;
-//	}
-//	
-
 }
+	
+	 

@@ -201,37 +201,48 @@ public class CacheStore {
   public Object readObject(ObjectType.TypeDesc key, String field)throws JedisConnectionException, IOException,ClassNotFoundException {
     Object o = null;
     if(key.equals(ObjectType.SFILE)) {
-      o = sFileHm.get(field);
+      SFile temp =(SFile) sFileHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.SFILELOCATION)) {
-      o = sflHm.get(field);
+      SFileLocation temp = (SFileLocation)sflHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.DATABASE)) {
-      o = databaseHm.get(field);
+      Database temp = databaseHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.TABLE)) {
-      o = tableHm.get(field);
+      Table temp  = tableHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.INDEX)) {
-      o = indexHm.get(field);
+      Index temp = indexHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.NODE)) {
-      o = nodeHm.get(field);
+      Node temp = nodeHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.NODEGROUP)) {
-      o = nodeGroupHm.get(field);
+      NodeGroup temp = nodeGroupHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.GLOBALSCHEMA)) {
-      o = globalSchemaHm.get(field);
+      GlobalSchema temp = globalSchemaHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.PRIVILEGE)) {
-      o = privilegeBagHm.get(field);
+      PrivilegeBag temp = privilegeBagHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.PARTITION)) {
-      o = partitionHm.get(field);
+      Partition temp = partitionHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.DEVICE)) {
-      o = deviceHm.get(field);
+      Device temp = deviceHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     if(o != null)
     {
@@ -330,7 +341,6 @@ public class CacheStore {
       }
 //      System.out.println("in function readObject: read "+key.getName()+":"+field+" from redis.");
 
-
     }catch(JedisConnectionException e){
       RedisFactory.putBrokenInstance(jedis);
       jedis = null;
@@ -365,7 +375,8 @@ public class CacheStore {
             p.srem(generateLfbdKey(sf.getDigest()), field);
             p.srem(generateFtlKey(sf.getValues()), field);
             p.zrem(generateLtfKey(sf.getTableName(), sf.getDbName()), field);
-            p.srem(generateSflStatKey(sf.getStore_status()), sf.getFid()+"");
+            p.srem(generateSfStatKey(sf.getStore_status()), field);
+            System.out.println("in CacheStore remo:srem(generateSfStatKey(sf.getStore_status()), field);"+generateSfStatKey(sf.getStore_status())+","+field);
             p.hdel(key.getName(), field);
             p.sync();
           }catch(JedisConnectionException e){
@@ -384,7 +395,10 @@ public class CacheStore {
         Jedis jedis = null;
         try{
           jedis = rf.getDefaultInstance();
-          jedis.srem(generateSflStatKey(sfl.getVisit_status()), field);
+          Pipeline p = jedis.pipelined();
+          p.srem(generateSflStatKey(sfl.getVisit_status()), field);
+          p.hdel(key.getName(), field);
+          p.sync();
         }catch(JedisConnectionException e){
           RedisFactory.putBrokenInstance(jedis);
           jedis = null;
@@ -393,9 +407,7 @@ public class CacheStore {
           RedisFactory.putInstance(jedis);
         }
       }
-    }
-    else
-    {
+    } else {
     	Jedis jedis = null;
       try{
         jedis = rf.getDefaultInstance();
@@ -679,7 +691,10 @@ public class CacheStore {
       			for(String en : re.getResult())
       			{
       		     SFile sf = (SFile) this.readObject(ObjectType.SFILE, en);
-      		     temp.add(sf);
+      		     if(sf == null)
+      		    	 System.out.println("in CacheStore findFiles(),a SFile("+en+") read from sfstatkey("+key+") is null, bad...");
+      		     else
+      		    	 temp.add(sf);
       			}
       		}while(!cursor.equals("0"));
     		}
@@ -695,7 +710,7 @@ public class CacheStore {
     System.out.println("in cache store, findFiles() consume "+(System.currentTimeMillis()-start)+"ms");  
     if(to > temp.size() || from < 0 || from > to)
     {
-    	System.out.println("in cache store, findFiles() argument invalid: from:"+from+", to:+"+to);
+    	System.out.println("in cache store, findFiles() argument invalid: from:"+from+", to:"+to);
     	return;
     }
     List<SFile> files = temp.subList((int)from, (int)to);
