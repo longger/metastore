@@ -235,17 +235,18 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public boolean add_datawarehouse_sql(int dwNum, String sql)
+  public boolean add_datawarehouse_sql(int arg0, String arg1)
       throws InvalidObjectException, MetaException, TException {
-    return client.addDatawareHouseSql(dwNum, sql);
+
+    return false;
   }
 
   @Override
-  public Index add_index(Index index, Table indexTable)
+  public Index add_index(Index arg0, Table arg1)
       throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
-    client.createIndex(index, indexTable);
-    return index;
+
+    return null;
   }
 
   @Override
@@ -275,6 +276,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean add_partition_index(Index index, Partition partition)
       throws MetaException, AlreadyExistsException, TException {
+
     return client.add_partition_index(checkNotNull(index), checkNotNull(partition));
   }
 
@@ -1040,20 +1042,20 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       String tableName, String partitionName, String colName)
       throws NoSuchObjectException, MetaException, InvalidInputException,
       InvalidObjectException, TException {
-
     return client.getPartitionColumnStatistics(dbName, tableName, partitionName, colName);
   }
 
   @Override
   public List<SFileRef> get_partition_index_files(Index index, Partition part)
       throws MetaException, TException {
-    return rs.getPartitionIndexFiles(index, part);
+    return client.get_partition_index_files(index, part);
   }
 
   @Override
   public List<String> get_partition_names(String dbName, String tableName, short maxPart)
       throws MetaException, TException {
-    return rs.listPartitionNames(dbName,tableName, maxPart);
+    
+    return client.get_partition_names(dbName, tableName, maxPart);
   }
 
   @Override

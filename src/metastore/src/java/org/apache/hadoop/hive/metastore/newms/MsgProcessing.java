@@ -21,7 +21,6 @@ import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Node;
 import org.apache.hadoop.hive.metastore.api.NodeGroup;
 import org.apache.hadoop.hive.metastore.api.SFile;
-import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
@@ -57,8 +56,6 @@ public class MsgProcessing {
 	      List<Device> dl = client.listDevice();
 	      for(Device de : dl)
 	      	cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
-	      long fid = client.getMaxFid();
-	      RawStoreImp.setFID(fid);
 			}
 		} catch (MetaException e) {
 			// TODO Auto-generated catch block
@@ -211,13 +208,14 @@ public class MsgProcessing {
 					if(sf == null)
 						break;
 				}
-				SFileImage sfi = SFileImage.generateSFileImage(sf);
-				CacheStore.getsFileHm().put(fid+"", sf);
-				cs.writeObject(ObjectType.SFILE, fid+"", sfi);
-				for(int i = 0;i<sfi.getSflkeys().size();i++)
-				{
-					cs.writeObject(ObjectType.SFILELOCATION, sfi.getSflkeys().get(i), sf.getLocations().get(i));
-				}
+				cs.writeObject(ObjectType.SFILE, fid+"", sf);
+//				SFileImage sfi = SFileImage.generateSFileImage(sf);
+//				CacheStore.getsFileHm().put(fid+"", sf);
+//				cs.writeObject(ObjectType.SFILE, fid+"", sfi);
+//				for(int i = 0;i<sfi.getSflkeys().size();i++)
+//				{
+//					cs.writeObject(ObjectType.SFILELOCATION, sfi.getSflkeys().get(i), sf.getLocations().get(i));
+//				}
 				
 				break;
 			}
@@ -228,14 +226,6 @@ public class MsgProcessing {
 				SFile sf = (SFile)cs.readObject(ObjectType.SFILE, fid+"");
 				if(sf != null)
 				{
-					if(sf.getLocations() != null)
-					{
-						for(SFileLocation sfl : sf.getLocations())
-						{
-							String key = SFileImage.generateSflkey(sfl.getLocation(),sfl.getDevid());
-							cs.removeObject(ObjectType.SFILELOCATION, key);
-						}
-					}
 					cs.removeObject(ObjectType.SFILE, fid+"");
 				}
 				break;
