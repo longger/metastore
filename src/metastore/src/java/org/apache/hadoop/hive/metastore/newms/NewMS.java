@@ -48,21 +48,23 @@ public class NewMS {
 			System.out.println("Args " + i + ", " + args[i]);
 			switch (args[i].charAt(0)) {
 			case '-':
-				if (args[i].length() < 2)
-					throw new IllegalArgumentException("Not a valid argument: " + args[i]);
+				if (args[i].length() < 2) {
+          throw new IllegalArgumentException("Not a valid argument: " + args[i]);
+        }
 				if (args[i].charAt(1) == '-') {
-					if (args[i].length() < 3)
-						throw new IllegalArgumentException("Not a valid argument: "
+					if (args[i].length() < 3) {
+            throw new IllegalArgumentException("Not a valid argument: "
 								+ args[i]);
+          }
 				} else {
-					if (args.length - 1 > i)
-						if (args[i + 1].charAt(0) == '-') {
+					if (args.length - 1 > i) {
+            if (args[i + 1].charAt(0) == '-') {
 							optsList.add(new Option(args[i], null));
 						} else {
 							optsList.add(new Option(args[i], args[i + 1]));
 							i++;
 						}
-					else {
+          } else {
 						optsList.add(new Option(args[i], null));
 					}
 				}
@@ -77,7 +79,7 @@ public class NewMS {
 	}
 
 	static class RPCServer implements Runnable {
-		private NewMSConf conf;
+		private final NewMSConf conf;
 
 		public RPCServer(NewMSConf conf) {
 			this.conf = conf;
@@ -154,11 +156,11 @@ public class NewMS {
 						System.out.println("-rm redismode");
 						System.exit(0);
 					}
-					if (o.opt.equals("STA"))
-						rm = RedisMode.STANDALONE;
-					else if (o.opt.equals("STL"))
-						rm = RedisMode.SENTINEL;
-					else {
+					if (o.opt.equals("STA")) {
+            rm = RedisMode.STANDALONE;
+          } else if (o.opt.equals("STL")) {
+            rm = RedisMode.SENTINEL;
+          } else {
 						System.out.println("wrong redis mode:" + o.opt
 								+ ", should be STA or STL");
 						System.exit(0);
@@ -211,8 +213,9 @@ public class NewMS {
 				switch (rm) {
 				case SENTINEL:
 					sentinel = new HashSet<String>();
-					for (String s : ra.split(";"))
-						sentinel.add(s);
+					for (String s : ra.split(";")) {
+            sentinel.add(s);
+          }
 					conf = new NewMSConf(sentinel, rm, zkaddr, mh,
 							Integer.parseInt(mp), rpcp);
 					break;
@@ -242,7 +245,7 @@ public class NewMS {
 			conf.setFcs(40000);
 			// System.exit(0);
 		}
-		
+
 		new Thread(new RPCServer(conf)).start();
 		MsgServer.setConf(conf);
 		RawStoreImp.setNewMSConf(conf);
