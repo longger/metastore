@@ -235,18 +235,17 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public boolean add_datawarehouse_sql(int arg0, String arg1)
+  public boolean add_datawarehouse_sql(int dwNum, String sql)
       throws InvalidObjectException, MetaException, TException {
-
-    return false;
+    return client.addDatawareHouseSql(dwNum, sql);
   }
 
   @Override
-  public Index add_index(Index arg0, Table arg1)
+  public Index add_index(Index index, Table indexTable)
       throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
-
-    return null;
+    client.createIndex(index, indexTable);
+    return index;
   }
 
   @Override
@@ -268,21 +267,19 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public int add_partition_files(Partition partition, List<SFile> sfiles)
       throws TException {
-    checkNotNull(partition);
-    checkNotNull(sfiles);
-    return client.add_partition_files(partition, sfiles);
+    return client.add_partition_files(checkNotNull(partition), checkNotNull(sfiles));
   }
 
   @Override
   public boolean add_partition_index(Index index, Partition partition)
       throws MetaException, AlreadyExistsException, TException {
-
     return client.add_partition_index(checkNotNull(index), checkNotNull(partition));
   }
 
   @Override
   public boolean add_partition_index_files(Index arg0, Partition arg1,
       List<SFile> arg2, List<Long> arg3) throws MetaException, TException {
+    //TODO zy
     return false;
   }
 
@@ -290,23 +287,25 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public Partition add_partition_with_environment_context(Partition arg0,
       EnvironmentContext arg1) throws InvalidObjectException,
       AlreadyExistsException, MetaException, TException {
-    // TODO Auto-generated method stub
+    //TODO mzy
     return null;
   }
 
   @Override
-  public int add_partitions(List<Partition> arg0)
+  public int add_partitions(List<Partition> partitions)
       throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
-    // TODO Auto-generated method stub
-    return 0;
+    return client.add_partitions(partitions);
   }
 
+  /**
+   * just return true like HiveMetaStore
+   * @author mzy
+   */
   @Override
   public boolean add_subpartition(String arg0, String arg1,
       List<String> arg2, Subpartition arg3) throws TException {
-    // TODO Auto-generated method stub
-    return false;
+    return true;
   }
 
   @Override
@@ -317,10 +316,10 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public boolean add_subpartition_index(Index arg0, Subpartition arg1)
+  public boolean add_subpartition_index(Index index, Subpartition subpart)
       throws MetaException, AlreadyExistsException, TException {
     // TODO Auto-generated method stub
-    return false;
+    return client.add_subpartition_index(index, subpart);
   }
 
   @Override
@@ -331,114 +330,99 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public boolean alterNodeGroup(NodeGroup arg0)
+  public boolean alterNodeGroup(NodeGroup ng)
       throws AlreadyExistsException, MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+    return client.alterNodeGroup(ng);
   }
 
   @Override
-  public void alter_database(String arg0, Database arg1)
+  public void alter_database(String name, Database db)
       throws MetaException, NoSuchObjectException, TException {
-    // TODO Auto-generated method stub
-
+    client.alterDatabase(name, db);
   }
 
   @Override
-  public void alter_index(String arg0, String arg1, String arg2, Index arg3)
+  public void alter_index(String dbName, String tblName, String indexName, Index index)
       throws InvalidOperationException, MetaException, TException {
-    // TODO Auto-generated method stub
-
+    client.alter_index(dbName, tblName, indexName, index);
   }
 
   @Override
-  public Node alter_node(String arg0, List<String> arg1, int arg2)
+  public Node alter_node(String nodeName, List<String> ipl, int status)
       throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+    return client.alter_node(nodeName, ipl, status);
   }
 
   @Override
-  public void alter_partition(String arg0, String arg1, Partition arg2)
+  public void alter_partition(String dbName, String tblName, Partition newPart)
       throws InvalidOperationException, MetaException, TException {
-    // TODO Auto-generated method stub
-
+    client.alter_partition(dbName, tblName, newPart);
   }
 
   @Override
-  public void alter_partition_with_environment_context(String arg0,
-      String arg1, Partition arg2, EnvironmentContext arg3)
+  public void alter_partition_with_environment_context(String dbName,
+      String name, Partition newPart, EnvironmentContext arg3)
       throws InvalidOperationException, MetaException, TException {
-    // TODO Auto-generated method stub
-
+    client.renamePartition(dbName, name, null, newPart);
   }
 
   @Override
-  public void alter_partitions(String arg0, String arg1, List<Partition> arg2)
+  public void alter_partitions(String dbName, String tblName, List<Partition> newParts)
       throws InvalidOperationException, MetaException, TException {
-    // TODO Auto-generated method stub
-
+    client.alter_partitions(dbName, tblName, newParts);
   }
 
   @Override
-  public void alter_table(String arg0, String arg1, Table arg2)
+  public void alter_table(String defaultDatabaseName, String tblName, Table table)
       throws InvalidOperationException, MetaException, TException {
-    // TODO Auto-generated method stub
-
+    client.alter_table(defaultDatabaseName, tblName, table);
   }
 
   @Override
   public void alter_table_with_environment_context(String arg0, String arg1,
       Table arg2, EnvironmentContext arg3)
       throws InvalidOperationException, MetaException, TException {
-    // TODO Auto-generated method stub
-
+    //TODO implement this method
   }
 
   @Override
-  public void append_busi_type_datacenter(BusiTypeDatacenter arg0)
+  public void append_busi_type_datacenter(BusiTypeDatacenter busiTypeDatacenter)
       throws InvalidObjectException, MetaException, TException {
-    // TODO Auto-generated method stub
-
+    client.append_busi_type_datacenter(busiTypeDatacenter);
   }
 
   @Override
-  public Partition append_partition(String arg0, String arg1,
-      List<String> arg2) throws InvalidObjectException,
+  public Partition append_partition(String tableName, String dbName,
+      List<String> partVals) throws InvalidObjectException,
       AlreadyExistsException, MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+    return client.appendPartition(tableName, dbName, partVals);
   }
 
   @Override
-  public Partition append_partition_by_name(String arg0, String arg1,
-      String arg2) throws InvalidObjectException, AlreadyExistsException,
+  public Partition append_partition_by_name(String tableName, String dbName,
+      String name) throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+    return client.appendPartition(tableName, dbName, name);
   }
 
   @Override
-  public boolean assiginSchematoDB(String arg0, String arg1,
-      List<FieldSchema> arg2, List<FieldSchema> arg3, List<NodeGroup> arg4)
+  public boolean assiginSchematoDB(String dbName, String schemaName,
+      List<FieldSchema> fileSplitKeys, List<FieldSchema> partKeys, List<NodeGroup> ngs)
       throws InvalidObjectException, NoSuchObjectException,
       MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+    return client.assiginSchematoDB(dbName, schemaName, fileSplitKeys, partKeys, ngs);
   }
 
   @Override
-  public boolean authentication(String arg0, String arg1)
+  public boolean authentication(String userName, String passwd)
       throws NoSuchObjectException, MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+    return client.authentication(userName, passwd);
   }
 
   @Override
-  public void cancel_delegation_token(String arg0) throws MetaException,
+  public void cancel_delegation_token(String tokenStrForm) throws MetaException,
       TException {
-    // TODO Auto-generated method stub
-
+    client.cancelDelegationToken(tokenStrForm);
   }
 
   @Override
@@ -449,40 +433,36 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public int createBusitype(Busitype arg0) throws InvalidObjectException,
+  public int createBusitype(Busitype bt) throws InvalidObjectException,
       MetaException, TException {
-    // TODO Auto-generated method stub
-    return 0;
+    return client.createBusitype(bt);
   }
 
   @Override
-  public boolean createSchema(GlobalSchema arg0)
+  public boolean createSchema(GlobalSchema schema)
       throws AlreadyExistsException, InvalidObjectException,
       MetaException, TException {
     // TODO Auto-generated method stub
-    return false;
+    return client.createSchema(schema);
   }
 
   @Override
-  public void create_attribution(Database arg0)
+  public void create_attribution(Database db)
       throws AlreadyExistsException, InvalidObjectException,
       MetaException, TException {
-    // TODO Auto-generated method stub
-
+    client.create_attribution(db);
   }
 
   @Override
-  public void create_database(Database arg0) throws AlreadyExistsException,
+  public void create_database(Database db) throws AlreadyExistsException,
       InvalidObjectException, MetaException, TException {
-    // TODO Auto-generated method stub
-
+    client.createDatabase(db);
   }
 
   @Override
-  public Device create_device(String arg0, int arg1, String arg2)
+  public Device create_device(String devId, int prop, String nodeName)
       throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+    return client.createDevice(devId, prop, nodeName);
   }
 
   @Override
@@ -502,25 +482,22 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public boolean create_role(Role arg0) throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+  public boolean create_role(Role role) throws MetaException, TException {
+    return client.create_role(role);
   }
 
   @Override
-  public void create_table(Table arg0) throws AlreadyExistsException,
+  public void create_table(Table tbl) throws AlreadyExistsException,
       InvalidObjectException, MetaException, NoSuchObjectException,
       TException {
-    // TODO Auto-generated method stub
-
+    client.createTable(tbl);
   }
 
   @Override
-  public void create_table_by_user(Table arg0, User arg1)
+  public void create_table_by_user(Table tbl, User user)
       throws AlreadyExistsException, InvalidObjectException,
       MetaException, NoSuchObjectException, TException {
-    // TODO Auto-generated method stub
-
+    client.createTableByUser(tbl, user);
   }
 
   @Override
@@ -528,28 +505,24 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       EnvironmentContext arg1) throws AlreadyExistsException,
       InvalidObjectException, MetaException, NoSuchObjectException,
       TException {
-    // TODO Auto-generated method stub
-
+    //TODO implement this method
   }
 
   @Override
-  public boolean create_type(Type arg0) throws AlreadyExistsException,
+  public boolean create_type(Type type) throws AlreadyExistsException,
       InvalidObjectException, MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+    return rs.createType(type);
   }
 
   @Override
-  public boolean create_user(User arg0) throws InvalidObjectException,
+  public boolean create_user(User user) throws InvalidObjectException,
       MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+    return client.create_user(user);
   }
 
   @Override
-  public boolean del_device(String arg0) throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+  public boolean del_device(String devId) throws MetaException, TException {
+    return client.delDevice(devId);
   }
 
   @Override
@@ -665,10 +638,10 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public void drop_attribution(String arg0, boolean arg1, boolean arg2)
+  public void drop_attribution(String name, boolean deleteData, boolean ignoreUnknownDb)
       throws NoSuchObjectException, InvalidOperationException,
       MetaException, TException {
-    // TODO implement this method
+    client.dropDatabase(name, deleteData, ignoreUnknownDb);
   }
 
   @Override
@@ -702,7 +675,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public int drop_partition_files(Partition part, List<SFile> files)
       throws TException {
-    return client.drop_partition_files(part, files);
+    //TODO zy
+    return 0;//client.drop_partition_files(part, files);
   }
 
   @Override
@@ -714,7 +688,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean drop_partition_index_files(Index index, Partition part,
       List<SFile> file) throws MetaException, TException {
-    return client.drop_partition_index_files(index, part, file);
+    //TODO zy
+    return false;//client.drop_partition_index_files(index, part, file);
   }
 
   @Override
@@ -737,7 +712,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean drop_subpartition_index_files(Index index, Subpartition subpart,
       List<SFile> file) throws MetaException, TException {
-    return client.drop_subpartition_index_files(index, subpart, file);
+    //TODO zy
+    return false;//client.drop_subpartition_index_files(index, subpart, file);
   }
 
   @Override
@@ -749,6 +725,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean drop_type(String type) throws MetaException,
       NoSuchObjectException, TException {
+    //TODO mzy
         return rs.dropType(type);
   }
 
@@ -768,7 +745,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public List<Node> find_best_nodes(int nr) throws MetaException,
       TException {
     try {
-      List<Node> list = Lists.newArrayList(dm.findBestNodes(nr));
+      List<Node> list = dm.findBestNodes(nr);
       return list;
     } catch (IOException e) {
       return Lists.newArrayList();
@@ -798,7 +775,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public List<GeoLocation> getGeoLocationByNames(List<String> geoLocNames)
       throws MetaException, TException {
-    return Lists.newArrayList(client.getGeoLocationByNames(geoLocNames));
+    return client.getGeoLocationByNames(geoLocNames);
   }
 
   @Override
@@ -826,7 +803,6 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
   @Override
   public long getSessionId() throws MetaException, TException {
-    //TODO find the way to the method
     return 0L;
   }
 
@@ -855,13 +831,13 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public List<BusiTypeColumn> get_all_busi_type_cols() throws MetaException,
       TException {
-    return Lists.newArrayList(client.get_all_busi_type_cols());
+    return client.get_all_busi_type_cols();
   }
 
   @Override
   public List<BusiTypeDatacenter> get_all_busi_type_datacenters()
       throws MetaException, TException {
-    return Lists.newArrayList(client.get_all_busi_type_datacenters());
+    return client.get_all_busi_type_datacenters();
   }
 
   @Override
@@ -879,9 +855,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public List<String> get_all_tables(String dbname) throws MetaException,
+  public List<String> get_all_tables(String dbName) throws MetaException,
       TException {
-    return rs.getAllTables(dbname);
+    return client.getAllTables(dbName);
   }
 
   @Override
@@ -891,10 +867,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public String get_config_value(String arg0, String arg1)
+  public String get_config_value(String name, String defaultValue)
       throws ConfigValSecurityException, TException {
-    // TODO to implement this method
-    return null;
+    return client.getConfigValue(name, defaultValue);
   }
 
   @Override
@@ -907,7 +882,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public List<String> get_databases(String pattern) throws MetaException,
       TException {
-     return Lists.newArrayList(client.getDatabases(pattern));
+     return client.getDatabases(pattern);
   }
 
   @Override
@@ -918,7 +893,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
   @Override
   public Device get_device(String devid) throws MetaException, NoSuchObjectException, TException {
-    return rs.getDevice(devid);
+    return client.getDevice(devid);
   }
 
   @Override
@@ -1054,7 +1029,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public List<String> get_partition_names(String dbName, String tableName, short maxPart)
       throws MetaException, TException {
-    
+
     return client.get_partition_names(dbName, tableName, maxPart);
   }
 
