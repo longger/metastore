@@ -5,7 +5,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,8 @@ import org.apache.commons.logging.Log;
 import org.apache.hadoop.hive.common.metrics.Metrics;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionContext;
+import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionListener;
 import org.apache.hadoop.hive.metastore.MetaStoreUtils;
 import org.apache.hadoop.hive.metastore.RawStore;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
@@ -93,7 +97,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	private final long startTimeMillis;
 	public static Long file_creation_lock = 0L;
   public static Long file_reopen_lock = 0L;
-  
+  private List<MetaStoreEndFunctionListener> endFunctionListeners;
 	public ThriftRPC(NewMSConf conf)
 	{
 		this.conf = conf;
@@ -101,7 +105,11 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		startTimeMillis = System.currentTimeMillis();
 		try {
 			client = MsgProcessing.createMetaStoreClient();
-			dm = new DiskManager(new HiveConf(DiskManager.class), LOG);
+			HiveConf hc = new HiveConf(DiskManager.class);
+			dm = new DiskManager(hc, LOG);
+			endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
+          MetaStoreEndFunctionListener.class, hc,
+          hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
 		} catch (MetaException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -131,8 +139,16 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
 	@Override
 	public Map<String, Long> getCounters() throws TException {
-		// TODO Auto-generated method stub
-		return null;
+		AbstractMap<String, Long> counters = new HashMap<String, Long>();
+
+    // Allow endFunctionListeners to add any counters they have collected
+    if (endFunctionListeners != null) {
+      for (MetaStoreEndFunctionListener listener : endFunctionListeners) {
+        listener.exportCounters(counters);
+      }
+    }
+
+    return counters;
 	}
 
 	@Override
@@ -546,6 +562,22 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     }
     return function;
   }
+	public void endFunction(String function, boolean successful, Exception e) {
+    endFunction(function, new MetaStoreEndFunctionContext(successful, e));
+  }
+
+  public void endFunction(String function, MetaStoreEndFunctionContext context) {
+    try {
+      Metrics.endScope(function);
+    } catch (IOException e) {
+      LOG.debug("Exception when closing metrics scope" + e);
+    }
+
+    for (MetaStoreEndFunctionListener listener : endFunctionListeners) {
+      listener.onEndFunction(function, context);
+    }
+  }
+
 	
 	@Override
 	public int createBusitype(Busitype arg0) throws InvalidObjectException,
@@ -1981,17 +2013,34 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 	}
 
 	@Override
-	public boolean offline_filelocation(SFileLocation arg0)
-			throws MetaException, TException {
-		// TODO Auto-generated method stub
-		return false;
+	public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException {
+	// try to update the OFFLINE flag immediately
+    startFunction("offline_filelocation:", "dev " + sfl.getDevid() + " loc " + sfl.getLocation());
+    sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+    rs.updateSFileLocation(sfl);
+    endFunction("offline_filelocation", true, null);
+
+    return true;
 	}
 
 	@Override
-	public boolean online_filelocation(SFile arg0) throws MetaException,
-			TException {
-		// TODO Auto-generated method stub
-		return false;
+	public boolean online_filelocation(SFile file) throws MetaException, TException {
+	// reget the file now
+    SFile stored_file = get_file_by_id(file.getFid());
+
+    if (stored_file.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
+      throw new MetaException("online filelocation can only do on INCREATE file " + file.getFid() +
+          " STATE: " + stored_file.getStore_status());
+    }
+    if (stored_file.getLocationsSize() != 1) {
+      throw new MetaException("Invalid file location in SFile fid: " + stored_file.getFid());
+    }
+    SFileLocation sfl = stored_file.getLocations().get(0);
+    assert sfl != null;
+    sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
+    rs.updateSFileLocation(sfl);
+
+    return true;
 	}
 
 	@Override
@@ -2219,10 +2268,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 		return false;
 	}
 	@Override
-	public boolean del_filelocation(SFileLocation slf) throws MetaException,
+	public boolean del_filelocation(SFileLocation sfl) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return false;
+		return rs.delSFileLocation(sfl.getDevid(), sfl.getLocation());
 	}
 	@Override
 	public List<SFile> get_files_by_ids(List<Long> fids)
