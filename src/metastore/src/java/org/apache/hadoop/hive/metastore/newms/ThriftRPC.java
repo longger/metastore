@@ -235,18 +235,17 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public boolean add_datawarehouse_sql(int arg0, String arg1)
+  public boolean add_datawarehouse_sql(int dwNum, String sql)
       throws InvalidObjectException, MetaException, TException {
-
-    return false;
+    return client.addDatawareHouseSql(dwNum, sql);
   }
 
   @Override
-  public Index add_index(Index arg0, Table arg1)
+  public Index add_index(Index index, Table indexTable)
       throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
-
-    return null;
+    client.createIndex(index, indexTable);
+    return index;
   }
 
   @Override
@@ -276,7 +275,6 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean add_partition_index(Index index, Partition partition)
       throws MetaException, AlreadyExistsException, TException {
-
     return client.add_partition_index(checkNotNull(index), checkNotNull(partition));
   }
 
@@ -1042,19 +1040,20 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       String tableName, String partitionName, String colName)
       throws NoSuchObjectException, MetaException, InvalidInputException,
       InvalidObjectException, TException {
+
     return client.getPartitionColumnStatistics(dbName, tableName, partitionName, colName);
   }
 
   @Override
   public List<SFileRef> get_partition_index_files(Index index, Partition part)
       throws MetaException, TException {
-    return client.get_partition_index_files(index, part);
+    return rs.getPartitionIndexFiles(index, part);
   }
 
   @Override
   public List<String> get_partition_names(String dbName, String tableName, short maxPart)
       throws MetaException, TException {
-    return client.get_partition_names(dbName, tableName, maxPart);
+    return rs.listPartitionNames(dbName,tableName, maxPart);
   }
 
   @Override
@@ -1062,46 +1061,41 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       List<String> arg2, short arg3) throws MetaException,
       NoSuchObjectException, TException {
     //TODO implement this method
-    return Lists.newArrayList();
+    return  Lists.newArrayList();
   }
 
   @Override
   public Partition get_partition_with_auth(String dbName, String tableName,
       List<String> pvals, String userName, List<String> groupNames)
       throws MetaException, NoSuchObjectException, TException {
-    return client.getPartitionWithAuthInfo(dbName, tableName, pvals, userName, groupNames);
+    return rs.getPartitionWithAuth(dbName, tableName, pvals, userName, groupNames);
   }
 
   @Override
   public List<Partition> get_partitions(String dbName, String tableName, short maxParts)
       throws NoSuchObjectException, MetaException, TException {
-    List<String> list = client.get_partition_names(dbName, tableName,maxParts);
-    List<Partition> plist = Lists.newArrayList();
-    for(String str:list){
-      plist.add(client.getPartition(dbName, tableName, str));
-    }
-    return plist;
+        return rs.getPartitions(dbName, tableName, maxParts);
   }
 
   @Override
-  public List<Partition> get_partitions_by_filter(String arg0, String arg1,
-      String arg2, short arg3) throws MetaException,
+  public List<Partition> get_partitions_by_filter(String dbName, String tblName,
+      String filter, short maxParts) throws MetaException,
       NoSuchObjectException, TException {
-    //TODO to implement this method
-    return Lists.newArrayList();
+    return rs.getPartitionsByFilter(dbName, tblName, filter, maxParts);
   }
 
   @Override
   public List<Partition> get_partitions_by_names(String tblName, String dbName,
       List<String> partVals) throws MetaException, NoSuchObjectException,
       TException {
-    return Lists.newArrayList(client.getPartition(tblName, dbName, partVals));
+    return rs.getPartitionsByNames(dbName, tblName, partVals);
   }
 
   @Override
   public List<Partition> get_partitions_ps(String arg0, String arg1,
       List<String> arg2, short arg3) throws MetaException,
       NoSuchObjectException, TException {
+    //TODO implement this method
     return null;
   }
 
@@ -1110,7 +1104,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       String arg1, List<String> arg2, short arg3, String arg4,
       List<String> arg5) throws NoSuchObjectException, MetaException,
       TException {
-    // TODO Auto-generated method stub
+    // TODO implement this method
     return null;
   }
 
@@ -1118,21 +1112,20 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public List<Partition> get_partitions_with_auth(String arg0, String arg1,
       short arg2, String arg3, List<String> arg4)
       throws NoSuchObjectException, MetaException, TException {
-    // TODO Auto-generated method stub
+    // TODO implement this method
     return null;
   }
 
   @Override
-  public PrincipalPrivilegeSet get_privilege_set(HiveObjectRef arg0,
-      String arg1, List<String> arg2) throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+  public PrincipalPrivilegeSet get_privilege_set(HiveObjectRef hiveObject,
+      String userName, List<String> groupNames) throws MetaException, TException {
+    return client.get_privilege_set(hiveObject, userName, groupNames);
   }
 
   @Override
   public List<String> get_role_names() throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+    // TODO implement this method
+    return Lists.newArrayList();
   }
 
   @Override
@@ -1158,17 +1151,16 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public List<SFileRef> get_subpartition_index_files(Index arg0,
-      Subpartition arg1) throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+  public List<SFileRef> get_subpartition_index_files(Index index,
+      Subpartition subpart) throws MetaException, TException {
+    return client.get_subpartition_index_files(index, subpart);
   }
 
   @Override
-  public List<Subpartition> get_subpartitions(String arg0, String arg1,
-      Partition arg2) throws TException {
-    // TODO Auto-generated method stub
-    return null;
+  public List<Subpartition> get_subpartitions(String dbName, String tabName,
+      Partition part) throws TException {
+    List<String> list = null;
+    return rs.getSubpartitions(dbName, tabName, part);
   }
 
   @Override
@@ -1179,19 +1171,18 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public ColumnStatistics get_table_column_statistics(String arg0,
-      String arg1, String arg2) throws NoSuchObjectException,
+  public ColumnStatistics get_table_column_statistics(String dbName,
+      String tableName, String colName) throws NoSuchObjectException,
       MetaException, InvalidInputException, InvalidObjectException,
       TException {
-    // TODO Auto-generated method stub
-    return null;
+    return client.getTableColumnStatistics(dbName, tableName, colName);
   }
 
   @Override
   public List<String> get_table_names_by_filter(String dbName, String filter, short maxTables)
       throws MetaException, InvalidOperationException, UnknownDBException, TException {
-    // TODO Auto-generated method stub
-    return null;
+      // TODO implement this method
+    return Lists.newArrayList();
   }
 
   @Override
@@ -1208,16 +1199,15 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public List<String> get_tables(String arg0, String arg1)
+  public List<String> get_tables(String dbName, String tablePattern)
       throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+    return Lists.newArrayList(client.getTables(dbName, tablePattern));
   }
 
   @Override
   public Type get_type(String arg0) throws MetaException,
       NoSuchObjectException, TException {
-    // TODO Auto-generated method stub
+    //TODO implement this method
     return null;
   }
 
