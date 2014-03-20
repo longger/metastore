@@ -388,7 +388,6 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public SFile updateSFile(SFile newfile) throws MetaException {
 		SFile sf = this.getSFile(newfile.getFid());
-		System.out.println("In RawStoreImp: "+sf);
 		if(sf == null)
 			throw new MetaException("Invalid SFile object provided!");
 		try {
@@ -488,6 +487,14 @@ public class RawStoreImp implements RawStore {
 	public boolean delSFileLocation(String devid, String location) throws MetaException {
 		String sflkey = SFileImage.generateSflkey(location, devid);
 		try {
+			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
+			if(sfl == null)
+				return true;
+			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
+			if(sf == null)
+				throw new MetaException("no sfile found by id:"+sfl.getFid());
+			sf.getLocations().remove(sfl);
+			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
 			cs.removeObject(ObjectType.SFILELOCATION, sflkey);
 			return true;
 		}catch(Exception e){

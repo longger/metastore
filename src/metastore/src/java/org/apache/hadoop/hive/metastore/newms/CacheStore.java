@@ -201,37 +201,48 @@ public class CacheStore {
   public Object readObject(ObjectType.TypeDesc key, String field)throws JedisConnectionException, IOException,ClassNotFoundException {
     Object o = null;
     if(key.equals(ObjectType.SFILE)) {
-      o = sFileHm.get(field);
+      SFile temp =(SFile) sFileHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.SFILELOCATION)) {
-      o = sflHm.get(field);
+      SFileLocation temp = (SFileLocation)sflHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.DATABASE)) {
-      o = databaseHm.get(field);
+      Database temp = databaseHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.TABLE)) {
-      o = tableHm.get(field);
+      Table temp  = tableHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.INDEX)) {
-      o = indexHm.get(field);
+      Index temp = indexHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.NODE)) {
-      o = nodeHm.get(field);
+      Node temp = nodeHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.NODEGROUP)) {
-      o = nodeGroupHm.get(field);
+      NodeGroup temp = nodeGroupHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.GLOBALSCHEMA)) {
-      o = globalSchemaHm.get(field);
+      GlobalSchema temp = globalSchemaHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.PRIVILEGE)) {
-      o = privilegeBagHm.get(field);
+      PrivilegeBag temp = privilegeBagHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.PARTITION)) {
-      o = partitionHm.get(field);
+      Partition temp = partitionHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     else if(key.equals(ObjectType.DEVICE)) {
-      o = deviceHm.get(field);
+      Device temp = deviceHm.get(field);
+      o = temp == null?null:temp.deepCopy();
     }
     if(o != null)
     {
