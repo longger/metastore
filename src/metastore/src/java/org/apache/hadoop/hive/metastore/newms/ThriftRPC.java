@@ -7,6 +7,7 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -30,6 +31,8 @@ import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
+import org.apache.hadoop.hive.metastore.api.ColumnStatisticsDesc;
+import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
 import org.apache.hadoop.hive.metastore.api.CreateOperation;
 import org.apache.hadoop.hive.metastore.api.CreatePolicy;
@@ -84,6 +87,7 @@ import org.apache.thrift.TException;
 
 import com.facebook.fb303.fb_status;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 
 /*
  * 没缓存的对象，但是rpc里要得到的
@@ -91,37 +95,39 @@ import com.google.common.collect.Lists;
  */
 
 
-public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface{
+public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface {
 
-	private final NewMSConf conf;
-	private final RawStore rs;
-	private IMetaStoreClient client;
-	private static final Log LOG= NewMS.LOG;
-	private DiskManager dm;
-	private final long startTimeMillis;
-	public static Long file_creation_lock = 0L;
+  private final NewMSConf conf;
+  private final RawStore rs;
+  private IMetaStoreClient client;
+  private static final Log LOG = NewMS.LOG;
+  private DiskManager dm;
+  private final long startTimeMillis;
+  public static Long file_creation_lock = 0L;
   public static Long file_reopen_lock = 0L;
   private List<MetaStoreEndFunctionListener> endFunctionListeners;
-	public ThriftRPC(NewMSConf conf)
-	{
-		this.conf = conf;
-		rs = new RawStoreImp(conf);
-		startTimeMillis = System.currentTimeMillis();
-		try {
-			client = MsgProcessing.createMetaStoreClient();
-			HiveConf hc = new HiveConf(DiskManager.class);
-			dm = new DiskManager(hc, LOG);
-			endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
+
+  public ThriftRPC(NewMSConf conf)
+  {
+    this.conf = conf;
+    rs = new RawStoreImp(conf);
+    startTimeMillis = System.currentTimeMillis();
+    try {
+      client = MsgProcessing.createMetaStoreClient();
+      HiveConf hc = new HiveConf(DiskManager.class);
+      dm = new DiskManager(hc, LOG);
+      endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
-		} catch (MetaException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
-	/**
+    } catch (MetaException e) {
+      e.printStackTrace();
+    } catch (IOException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+  }
+
+  /**
    * return the alive timemillis since last set up
    * the {@code startTimeMillis} is inited in the constructor method {@link #ThriftRPC(NewMSConf)}
    *
@@ -142,9 +148,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
 
-	@Override
-	public Map<String, Long> getCounters() throws TException {
-		AbstractMap<String, Long> counters = new HashMap<String, Long>();
+  @Override
+  public Map<String, Long> getCounters() throws TException {
+    AbstractMap<String, Long> counters = new HashMap<String, Long>();
 
     // Allow endFunctionListeners to add any counters they have collected
     if (endFunctionListeners != null) {
@@ -154,82 +160,90 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     }
 
     return counters;
-	}
+  }
 
-	@Override
-	public String getCpuProfile(int profileDurationInSec) throws TException {
-		return "";
-	}
+  @Override
+  public String getCpuProfile(int profileDurationInSec) throws TException {
+    //TODO HiveMetaStore just return ""
+    // HiveMetaStoreClient didn't call this method
+    return "";
+  }
 
-	@Override
-	public String getName() throws TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public String getName() throws TException {
+ // TODO HiveMetaStore didn't implement this method
+    //HiveMetaStoreClient didn't call this method
+    return "";
+  }
 
-	@Override
-	public String getOption(String arg0) throws TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public String getOption(String arg0) throws TException {
+ // TODO HiveMetaStore didn't implement this method
+    //HiveMetaStoreClient didn't call this method
+    return "";
+  }
 
-	@Override
-	public Map<String, String> getOptions() throws TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public Map<String, String> getOptions() throws TException {
+    // TODO HiveMetaStore didn't implement this method
+    //HiveMetaStoreClient didn't call this method
+    return Maps.newHashMap();
+  }
 
-	@Override
-	public fb_status getStatus() throws TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public fb_status getStatus() throws TException {
+      return fb_status.ALIVE;
+  }
 
-	@Override
-	public String getStatusDetails() throws TException {
-		// TODO Auto-generated method stub
-		return null;
-	}
+  @Override
+  public String getStatusDetails() throws TException {
+    //TODO implement this method HiveMetaStore didn't call this method
+    return "";
+  }
 
-	@Override
-	public String getVersion() throws TException {
-		return "0.1";
-	}
+  @Override
+  public String getVersion() throws TException {
+    endFunction(startFunction("getVersion",""),true,null);
+    return "3.0";
+  }
 
-	@Override
-	public void reinitialize() throws TException {
-		// TODO Auto-generated method stub
+  @Override
+  public void reinitialize() throws TException {
+    // TODO Auto-generated method stub
 
-	}
+  }
 
-	@Override
-	public void setOption(String arg0, String arg1) throws TException {
-		// TODO Auto-generated method stub
+  @Override
+  public void setOption(String arg0, String arg1) throws TException {
+    // TODO implement this method HiveMetaStore didn't implement this method and HiveMetaStoreClient
+    // didn't call it yet
+  }
 
-	}
+  @Override
+  public void shutdown() throws TException {
+    LOG.info("Shutting down the object store...");
+    if (rs != null) {
+      rs.shutdown();
+    }
+    LOG.info("Metastore shutdown complete.");
+  }
 
-	@Override
-	public void shutdown() throws TException {
-		// TODO Auto-generated method stub
+  @Override
+  public boolean addEquipRoom(EquipRoom arg0) throws MetaException,
+      TException {
+    return arg0 != null && client.addEquipRoom(arg0);
+  }
 
-	}
+  @Override
+  public boolean addGeoLocation(GeoLocation arg0) throws MetaException,
+      TException {
+    return arg0 != null && client.addGeoLocation(arg0);
+  }
 
-	@Override
-	public boolean addEquipRoom(EquipRoom arg0) throws MetaException,
-			TException {
-		return arg0 != null && client.addEquipRoom(arg0);
-	}
-
-	@Override
-	public boolean addGeoLocation(GeoLocation arg0) throws MetaException,
-			TException {
-		return arg0 != null && client.addGeoLocation(arg0);
-	}
-
-	@Override
-	public boolean addNodeAssignment(String nodeName, String dbName)
-			throws MetaException, NoSuchObjectException, TException {
-		final boolean expr = isNullOrEmpty(nodeName) || isNullOrEmpty(dbName);
+  @Override
+  public boolean addNodeAssignment(String nodeName, String dbName)
+      throws MetaException, NoSuchObjectException, TException {
+    final boolean expr = isNullOrEmpty(nodeName) || isNullOrEmpty(dbName);
     return !expr && client.addNodeAssignment(nodeName, dbName);
   }
 
@@ -417,7 +431,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public void alter_table_with_environment_context(String arg0, String arg1,
       Table arg2, EnvironmentContext arg3)
       throws InvalidOperationException, MetaException, TException {
-    // TODO implement this method
+    // TODO implement this method HiveMetaStoreClient didn't call this method
   }
 
   @Override
@@ -460,9 +474,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     client.cancelDelegationToken(tokenStrForm);
   }
 
-	@Override
-public int close_file(SFile file) throws FileOperationException, MetaException, TException {
-startFunction("close_file ", "fid: " + file.getFid());
+  @Override
+  public int close_file(SFile file) throws FileOperationException, MetaException, TException {
+    startFunction("close_file ", "fid: " + file.getFid());
     DMProfile.fcloseR.incrementAndGet();
 
     FileOperationException e = null;
@@ -470,12 +484,14 @@ startFunction("close_file ", "fid: " + file.getFid());
 
     try {
       if (saved == null) {
-        throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
+        throw new FileOperationException("Can not find SFile by FID" + file.getFid(),
+            FOFailReason.INVALID_FILE);
       }
 
       if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
         LOG.error("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").");
-        throw new FileOperationException("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").",
+        throw new FileOperationException("File StoreStatus is not in INCREATE (vs "
+            + saved.getStore_status() + ").",
             FOFailReason.INVALID_STATE);
       }
 
@@ -490,12 +506,16 @@ startFunction("close_file ", "fid: " + file.getFid());
           }
         }
         if (valid_nr > 1) {
-          LOG.error("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]");
-          throw new FileOperationException("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]",
+          LOG.error("Too many file locations provided, expect 1 provided " + valid_nr
+              + " [NOT CLOSED]");
+          throw new FileOperationException("Too many file locations provided, expect 1 provided "
+              + valid_nr + " [NOT CLOSED]",
               FOFailReason.INVALID_FILE);
         } else if (valid_nr < 1) {
-          LOG.error("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]");
-          e = new FileOperationException("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]",
+          LOG.error("Too little file locations provided, expect 1 provided " + valid_nr
+              + " [CLOSED]");
+          e = new FileOperationException("Too little file locations provided, expect 1 provided "
+              + valid_nr + " [CLOSED]",
               FOFailReason.INVALID_FILE);
         }
         // finally, do it
@@ -515,9 +535,11 @@ startFunction("close_file ", "fid: " + file.getFid());
           file.getLocations().removeAll(sflToDel);
         }
       } else {
-        LOG.error("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]");
-        e = new FileOperationException("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]",
-              FOFailReason.INVALID_FILE);
+        LOG.error("Too little file locations provided, expect 1 provided "
+            + file.getLocationsSize() + " [CLOSED]");
+        e = new FileOperationException("Too little file locations provided, expect 1 provided "
+            + file.getLocationsSize() + " [CLOSED]",
+            FOFailReason.INVALID_FILE);
       }
 
       file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
@@ -537,11 +559,12 @@ startFunction("close_file ", "fid: " + file.getFid());
       DMProfile.fcloseSuccRS.incrementAndGet();
     }
     return 0;
-}
+  }
 
-	public String startFunction(String function, String extraLogInfo) {
-//    incrementCounter(function);
-//    logInfo((getIpAddress() == null ? "" : "source:" + getIpAddress() + " ") + function + extraLogInfo);
+  public String startFunction(String function, String extraLogInfo) {
+    // incrementCounter(function);
+    // logInfo((getIpAddress() == null ? "" : "source:" + getIpAddress() + " ") + function +
+    // extraLogInfo);
     try {
       Metrics.startScope(function);
     } catch (IOException e) {
@@ -551,7 +574,8 @@ startFunction("close_file ", "fid: " + file.getFid());
     }
     return function;
   }
-	public void endFunction(String function, boolean successful, Exception e) {
+
+  public void endFunction(String function, boolean successful, Exception e) {
     endFunction(function, new MetaStoreEndFunctionContext(successful, e));
   }
 
@@ -602,11 +626,14 @@ startFunction("close_file ", "fid: " + file.getFid());
   }
 
   @Override
-  public SFile create_file(String node_name, int repnr, String db_name, String table_name, List<SplitValue> values)
+  public SFile create_file(String node_name, int repnr, String db_name, String table_name,
+      List<SplitValue> values)
       throws FileOperationException, TException {
     DMProfile.fcreate1R.incrementAndGet();
     if (!fileSplitValuesCheck(values)) {
-      throw new FileOperationException("Invalid File Split Values: inconsistent version among values?", FOFailReason.INVALID_FILE);
+      throw new FileOperationException(
+          "Invalid File Split Values: inconsistent version among values?",
+          FOFailReason.INVALID_FILE);
     }
     // TODO: if repnr less than 1, we should increase it to replicate to BACKUP-STORE
     if (repnr <= 1) {
@@ -633,16 +660,19 @@ startFunction("close_file ", "fid: " + file.getFid());
           }
         }
       } catch (MetaException me) {
-        throw new FileOperationException("getTable:" + db_name + "." + table_name + " + " + me.getMessage(), FOFailReason.INVALID_TABLE);
+        throw new FileOperationException("getTable:" + db_name + "." + table_name + " + "
+            + me.getMessage(), FOFailReason.INVALID_TABLE);
       }
     }
     // do not select the backup/shared device for the first entry
     FileLocatingPolicy flp;
 
     if (spec_node.size() > 0) {
-      flp = new FileLocatingPolicy(spec_node, excl_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
+      flp = new FileLocatingPolicy(spec_node, excl_dev, FileLocatingPolicy.SPECIFY_NODES,
+          FileLocatingPolicy.RANDOM_DEVS, false);
     } else {
-      flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
+      flp = new FileLocatingPolicy(null, excl_dev, FileLocatingPolicy.EXCLUDE_NODES,
+          FileLocatingPolicy.RANDOM_DEVS, false);
     }
 
     SFile rf = create_file(flp, node_name, repnr, db_name, table_name, values);
@@ -650,7 +680,8 @@ startFunction("close_file ", "fid: " + file.getFid());
 
     return rf;
   }
-//copy from HiveMetaStore
+
+  // copy from HiveMetaStore
   public boolean fileSplitValuesCheck(List<SplitValue> values) {
     long version = -1;
 
@@ -669,121 +700,137 @@ startFunction("close_file ", "fid: " + file.getFid());
 
     return true;
   }
- //copy from HiveMetaStore
- private SFile create_file(FileLocatingPolicy flp, String node_name, int repnr, String db_name, String table_name, List<SplitValue> values)
-     throws FileOperationException, TException {
-   Random rand = new Random();
-   String table_path = null;
 
-   if (node_name == null) {
-     // this means we should select Best Available Node and Best Available Device;
-     try {
-       node_name = dm.findBestNode(flp);
-       if (node_name == null) {
-         throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
-       }
-     } catch (IOException e) {
-       LOG.error(e, e);
-       throw new FileOperationException("Can not find any Best Available Node now, please retry", FOFailReason.SAFEMODE);
-     }
-   }
+  // copy from HiveMetaStore
+  private SFile create_file(FileLocatingPolicy flp, String node_name, int repnr, String db_name,
+      String table_name, List<SplitValue> values)
+      throws FileOperationException, TException {
+    Random rand = new Random();
+    String table_path = null;
 
-   SFile cfile = null;
+    if (node_name == null) {
+      // this means we should select Best Available Node and Best Available Device;
+      try {
+        node_name = dm.findBestNode(flp);
+        if (node_name == null) {
+          throw new IOException("Folloing the FLP(" + flp
+              + "), we can't find any available node now.");
+        }
+      } catch (IOException e) {
+        LOG.error(e, e);
+        throw new FileOperationException("Can not find any Best Available Node now, please retry",
+            FOFailReason.SAFEMODE);
+      }
+    }
 
-   // Step 1: find best device to put a file
-   if (dm == null) {
-     return null;
-   }
-   try {
-     if (flp == null) {
-       flp = new FileLocatingPolicy(null, null, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, true);
-     }
-     String devid = dm.findBestDevice(node_name, flp);
+    SFile cfile = null;
 
-     if (devid == null) {
-       throw new FileOperationException("Can not find any available device on node '" + node_name + "' now", FOFailReason.NOTEXIST);
-     }
-     // try to parse table_name
-     if (db_name != null && table_name != null) {
-       Table tbl;
-       try {
-         tbl = rs.getTable(db_name, table_name);
-       } catch (MetaException me) {
-         throw new FileOperationException("Invalid DB or Table name:" + db_name + "." + table_name + " + " + me.getMessage(), FOFailReason.INVALID_TABLE);
-       }
-       if (tbl == null) {
-         throw new FileOperationException("Invalid DB or Table name:" + db_name + "." + table_name, FOFailReason.INVALID_TABLE);
-       }
-       table_path = tbl.getDbName() + "/" + tbl.getTableName();
-     }
+    // Step 1: find best device to put a file
+    if (dm == null) {
+      return null;
+    }
+    try {
+      if (flp == null) {
+        flp = new FileLocatingPolicy(null, null, FileLocatingPolicy.EXCLUDE_NODES,
+            FileLocatingPolicy.EXCLUDE_DEVS_SHARED, true);
+      }
+      String devid = dm.findBestDevice(node_name, flp);
 
-     // how to convert table_name to tbl_id?
-     cfile = new SFile(0, db_name, table_name, MetaStoreConst.MFileStoreStatus.INCREATE, repnr,
-         "SFILE_DEFALUT", 0, 0, null, 0, null, values, MetaStoreConst.MFileLoadStatus.OK);
-     cfile = rs.createFile(cfile);
-     //cfile = getMS().getSFile(cfile.getFid());
-     if (cfile == null) {
-       throw new FileOperationException("Creating file with internal error, metadata inconsistent?", FOFailReason.INVALID_FILE);
-     }
+      if (devid == null) {
+        throw new FileOperationException("Can not find any available device on node '" + node_name
+            + "' now", FOFailReason.NOTEXIST);
+      }
+      // try to parse table_name
+      if (db_name != null && table_name != null) {
+        Table tbl;
+        try {
+          tbl = rs.getTable(db_name, table_name);
+        } catch (MetaException me) {
+          throw new FileOperationException("Invalid DB or Table name:" + db_name + "." + table_name
+              + " + " + me.getMessage(), FOFailReason.INVALID_TABLE);
+        }
+        if (tbl == null) {
+          throw new FileOperationException(
+              "Invalid DB or Table name:" + db_name + "." + table_name, FOFailReason.INVALID_TABLE);
+        }
+        table_path = tbl.getDbName() + "/" + tbl.getTableName();
+      }
 
-     do {
-       String location = "/data/";
+      // how to convert table_name to tbl_id?
+      cfile = new SFile(0, db_name, table_name, MetaStoreConst.MFileStoreStatus.INCREATE, repnr,
+          "SFILE_DEFALUT", 0, 0, null, 0, null, values, MetaStoreConst.MFileLoadStatus.OK);
+      cfile = rs.createFile(cfile);
+      // cfile = getMS().getSFile(cfile.getFid());
+      if (cfile == null) {
+        throw new FileOperationException(
+            "Creating file with internal error, metadata inconsistent?", FOFailReason.INVALID_FILE);
+      }
 
-       if (table_path == null) {
-         location += "UNNAMED-DB/UNNAMED-TABLE/" + rand.nextInt(Integer.MAX_VALUE);
-       } else {
-         location += table_path + "/" + rand.nextInt(Integer.MAX_VALUE);
-       }
-       SFileLocation sfloc = new SFileLocation(node_name, cfile.getFid(), devid, location, 0, System.currentTimeMillis(),
-           MetaStoreConst.MFileLocationVisitStatus.OFFLINE, "SFL_DEFAULT");
-       if (!rs.createFileLocation(sfloc)) {
-         continue;
-       }
-       List<SFileLocation> sfloclist = new ArrayList<SFileLocation>();
-       sfloclist.add(sfloc);
-       cfile.setLocations(sfloclist);
-       break;
-     } while (true);
-   } catch (IOException e) {
-     throw new FileOperationException("System might in Safe Mode, please wait ... {" + e + "}", FOFailReason.SAFEMODE);
-   } catch (InvalidObjectException e) {
-     throw new FileOperationException("Internal error: " + e.getMessage(), FOFailReason.INVALID_FILE);
-   }
+      do {
+        String location = "/data/";
 
-   return cfile;
- }
+        if (table_path == null) {
+          location += "UNNAMED-DB/UNNAMED-TABLE/" + rand.nextInt(Integer.MAX_VALUE);
+        } else {
+          location += table_path + "/" + rand.nextInt(Integer.MAX_VALUE);
+        }
+        SFileLocation sfloc = new SFileLocation(node_name, cfile.getFid(), devid, location, 0,
+            System.currentTimeMillis(),
+            MetaStoreConst.MFileLocationVisitStatus.OFFLINE, "SFL_DEFAULT");
+        if (!rs.createFileLocation(sfloc)) {
+          continue;
+        }
+        List<SFileLocation> sfloclist = new ArrayList<SFileLocation>();
+        sfloclist.add(sfloc);
+        cfile.setLocations(sfloclist);
+        break;
+      } while (true);
+    } catch (IOException e) {
+      throw new FileOperationException("System might in Safe Mode, please wait ... {" + e + "}",
+          FOFailReason.SAFEMODE);
+    } catch (InvalidObjectException e) {
+      throw new FileOperationException("Internal error: " + e.getMessage(),
+          FOFailReason.INVALID_FILE);
+    }
 
- @Override
- public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name, String table_name, List<SplitValue> values)
-     throws FileOperationException, TException {
-   DMProfile.fcreate2R.incrementAndGet();
-   Table tbl = null;
-   List<NodeGroup> ngs = null;
-   Set<String> ngnodes = new HashSet<String>();
+    return cfile;
+  }
 
-   // Step 1: parse the policy and check arguments
-   switch (policy.getOperation()) {
-   case CREATE_NEW_IN_NODEGROUPS:
-   case CREATE_NEW:
-   case CREATE_NEW_RANDOM:
-   case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
-     // check db, table now
-     try {
-       tbl = rs.getTable(db_name, table_name);
-     } catch (MetaException me) {
-       throw new FileOperationException("getTable:" + db_name + "." + table_name + " + " + me.getMessage(), FOFailReason.INVALID_TABLE);
-     }
-     if (tbl == null) {
-         throw new FileOperationException("Invalid DB or Table name:" + db_name + "." + table_name, FOFailReason.INVALID_TABLE);
-     }
+  @Override
+  public SFile create_file_by_policy(CreatePolicy policy, int repnr, String db_name,
+      String table_name, List<SplitValue> values)
+      throws FileOperationException, TException {
+    DMProfile.fcreate2R.incrementAndGet();
+    Table tbl = null;
+    List<NodeGroup> ngs = null;
+    Set<String> ngnodes = new HashSet<String>();
 
-     // check nodegroups now
-     if (policy.getOperation() == CreateOperation.CREATE_NEW_IN_NODEGROUPS) {
-       if (policy.getArgumentsSize() <= 0) {
-         throw new FileOperationException("Invalid arguments in CreatePolicy.", FOFailReason.INVALID_NODE_GROUPS);
-       }
-       ngs = tbl.getNodeGroups();
-       if (ngs != null && ngs.size() > 0) {
+    // Step 1: parse the policy and check arguments
+    switch (policy.getOperation()) {
+    case CREATE_NEW_IN_NODEGROUPS:
+    case CREATE_NEW:
+    case CREATE_NEW_RANDOM:
+    case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
+      // check db, table now
+      try {
+        tbl = rs.getTable(db_name, table_name);
+      } catch (MetaException me) {
+        throw new FileOperationException("getTable:" + db_name + "." + table_name + " + "
+            + me.getMessage(), FOFailReason.INVALID_TABLE);
+      }
+      if (tbl == null) {
+        throw new FileOperationException("Invalid DB or Table name:" + db_name + "." + table_name,
+            FOFailReason.INVALID_TABLE);
+      }
+
+      // check nodegroups now
+      if (policy.getOperation() == CreateOperation.CREATE_NEW_IN_NODEGROUPS) {
+        if (policy.getArgumentsSize() <= 0) {
+          throw new FileOperationException("Invalid arguments in CreatePolicy.",
+              FOFailReason.INVALID_NODE_GROUPS);
+        }
+        ngs = tbl.getNodeGroups();
+        if (ngs != null && ngs.size() > 0) {
           for (NodeGroup ng : ngs) {
             if (ng.getNodesSize() > 0) {
               for (Node n : ng.getNodes()) {
@@ -791,226 +838,252 @@ startFunction("close_file ", "fid: " + file.getFid());
               }
             }
           }
-       }
-       for (String ng : policy.getArguments()) {
-         if (!ngnodes.contains(ng)) {
-           throw new FileOperationException("Invalid node groups set in CreatePolicy.", FOFailReason.INVALID_NODE_GROUPS);
-         }
-       }
-     } else {
-       ngs = tbl.getNodeGroups();
-     }
-     // check values now
-     if (values == null || values.size() == 0) {
-       throw new FileOperationException("Invalid file split values.", FOFailReason.INVALID_SPLIT_VALUES);
-     }
-     List<PartitionInfo> allpis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl.getFileSplitKeys());
-     List<PartitionInfo> pis = new ArrayList<PartitionInfo>();
-     // find the max version
-     long version = 0;
-     for (PartitionInfo pi : allpis) {
-       if (pi.getP_version() > version) {
-         version = pi.getP_version();
-       }
-     }
-     if (values.get(0).getVerison() > version) {
-       throw new FileOperationException("Invalid Version specified, provide " + values.get(0).getVerison() + " expected " + version, FOFailReason.INVALID_SPLIT_VALUES);
-     } else {
-       version = values.get(0).getVerison();
-     }
-     // remove non-max versions
-     for (PartitionInfo pi : allpis) {
-       if (pi.getP_version() == version) {
-         pis.add(pi);
-       }
-     }
-     int vlen = 0;
-     for (PartitionInfo pi : pis) {
-       switch (pi.getP_type()) {
-       case none:
-       case roundrobin:
-       case list:
-       case range:
-         break;
-       case interval:
-         vlen += 2;
-         break;
-       case hash:
-         vlen += 1;
-         break;
-       }
-     }
-     if (vlen != values.size()) {
-       throw new FileOperationException("File split value should be " + vlen + " entries.", FOFailReason.INVALID_SPLIT_VALUES);
-     }
-     long low = -1, high = -1;
-     for (int i = 0, j = 0; i < values.size(); i++) {
-       SplitValue sv = values.get(i);
-       PartitionInfo pi = pis.get(j);
+        }
+        for (String ng : policy.getArguments()) {
+          if (!ngnodes.contains(ng)) {
+            throw new FileOperationException("Invalid node groups set in CreatePolicy.",
+                FOFailReason.INVALID_NODE_GROUPS);
+          }
+        }
+      } else {
+        ngs = tbl.getNodeGroups();
+      }
+      // check values now
+      if (values == null || values.size() == 0) {
+        throw new FileOperationException("Invalid file split values.",
+            FOFailReason.INVALID_SPLIT_VALUES);
+      }
+      List<PartitionInfo> allpis = PartitionFactory.PartitionInfo.getPartitionInfo(tbl
+          .getFileSplitKeys());
+      List<PartitionInfo> pis = new ArrayList<PartitionInfo>();
+      // find the max version
+      long version = 0;
+      for (PartitionInfo pi : allpis) {
+        if (pi.getP_version() > version) {
+          version = pi.getP_version();
+        }
+      }
+      if (values.get(0).getVerison() > version) {
+        throw new FileOperationException("Invalid Version specified, provide "
+            + values.get(0).getVerison() + " expected " + version,
+            FOFailReason.INVALID_SPLIT_VALUES);
+      } else {
+        version = values.get(0).getVerison();
+      }
+      // remove non-max versions
+      for (PartitionInfo pi : allpis) {
+        if (pi.getP_version() == version) {
+          pis.add(pi);
+        }
+      }
+      int vlen = 0;
+      for (PartitionInfo pi : pis) {
+        switch (pi.getP_type()) {
+        case none:
+        case roundrobin:
+        case list:
+        case range:
+          break;
+        case interval:
+          vlen += 2;
+          break;
+        case hash:
+          vlen += 1;
+          break;
+        }
+      }
+      if (vlen != values.size()) {
+        throw new FileOperationException("File split value should be " + vlen + " entries.",
+            FOFailReason.INVALID_SPLIT_VALUES);
+      }
+      long low = -1,
+      high = -1;
+      for (int i = 0, j = 0; i < values.size(); i++) {
+        SplitValue sv = values.get(i);
+        PartitionInfo pi = pis.get(j);
 
-       switch (pi.getP_type()) {
-       case none:
-       case roundrobin:
-       case list:
-       case range:
-         throw new FileOperationException("Split type " + pi.getP_type() + " shouldn't be set values.", FOFailReason.INVALID_SPLIT_VALUES);
-       case interval:
-         if (low == -1) {
-           try {
-             low = Long.parseLong(sv.getValue());
-           } catch (NumberFormatException e) {
-             throw new FileOperationException("Split value expect Long for interval: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
-           }
-           break;
-         }
-         if (high == -1) {
-           try {
-             high = Long.parseLong(sv.getValue());
-           } catch (NumberFormatException e) {
-             throw new FileOperationException("Split value expect Long for interval: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
-           }
-           // check range
-           String interval_unit = pi.getArgs().get(0);
-           Double d = Double.parseDouble(pi.getArgs().get(1));
-           Long interval_seconds = 0L;
-           try {
-             interval_seconds = PartitionFactory.getIntervalSeconds(interval_unit, d);
-           } catch (Exception e) {
-             throw new FileOperationException("Handle interval split: internal error.", FOFailReason.INVALID_SPLIT_VALUES);
-           }
-           if (high - low != interval_seconds) {
-             throw new FileOperationException("Invalid interval range specified: [" + low + ", " + high +
-                 "), expect range length: " + interval_seconds + ".", FOFailReason.INVALID_SPLIT_VALUES);
-           }
-           // unit check
-           Long iu = 1L;
-           try {
-             iu = PartitionFactory.getIntervalUnit(interval_unit);
-           } catch (Exception e) {
-             throw new FileOperationException("Handle interval split unit: interval error.", FOFailReason.INVALID_SPLIT_VALUES);
-           }
-           if (low % iu != 0) {
-             throw new FileOperationException("The low limit of interval split should be MODed by unit " +
-                 interval_unit + "(" + iu + ").", FOFailReason.INVALID_SPLIT_VALUES);
-           }
-           j++;
-           break;
-         }
-         break;
-       case hash:
-         low = high = -1;
-         long v;
-         try {
-           // Format: "num-value"
-           String[] hv = sv.getValue().split("-");
-           if (hv == null || hv.length != 2) {
-             throw new FileOperationException("Split value for hash except format: 'bucket_size-value' : " + sv.getValue(),
-                 FOFailReason.INVALID_SPLIT_VALUES);
-           }
-           v = Long.parseLong(hv[0]);
-           if (v != pi.getP_num()) {
-             throw new FileOperationException("Split value of hash bucket_size mismatch: expect " + pi.getP_num() + " but provided " + v,
-                 FOFailReason.INVALID_SPLIT_VALUES);
-           }
-           v = Long.parseLong(hv[1]);
-         } catch (NumberFormatException e) {
-           throw new FileOperationException("Split value expect Long for hash: " + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
-         }
-         if (v < 0 && v >= pi.getP_num()) {
-           throw new FileOperationException("Hash value exceeds valid range: [0, " + pi.getP_num() + ").", FOFailReason.INVALID_SPLIT_VALUES);
-         }
-         break;
-       }
-       // check version, column name here
-       if (sv.getVerison() != pi.getP_version() ||
-           !pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
-         throw new FileOperationException("SplitKeyName mismatch, please check your metadata.", FOFailReason.INVALID_SPLIT_VALUES);
-       }
+        switch (pi.getP_type()) {
+        case none:
+        case roundrobin:
+        case list:
+        case range:
+          throw new FileOperationException("Split type " + pi.getP_type()
+              + " shouldn't be set values.", FOFailReason.INVALID_SPLIT_VALUES);
+        case interval:
+          if (low == -1) {
+            try {
+              low = Long.parseLong(sv.getValue());
+            } catch (NumberFormatException e) {
+              throw new FileOperationException("Split value expect Long for interval: "
+                  + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            break;
+          }
+          if (high == -1) {
+            try {
+              high = Long.parseLong(sv.getValue());
+            } catch (NumberFormatException e) {
+              throw new FileOperationException("Split value expect Long for interval: "
+                  + sv.getValue(), FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            // check range
+            String interval_unit = pi.getArgs().get(0);
+            Double d = Double.parseDouble(pi.getArgs().get(1));
+            Long interval_seconds = 0L;
+            try {
+              interval_seconds = PartitionFactory.getIntervalSeconds(interval_unit, d);
+            } catch (Exception e) {
+              throw new FileOperationException("Handle interval split: internal error.",
+                  FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            if (high - low != interval_seconds) {
+              throw new FileOperationException("Invalid interval range specified: [" + low + ", "
+                  + high +
+                  "), expect range length: " + interval_seconds + ".",
+                  FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            // unit check
+            Long iu = 1L;
+            try {
+              iu = PartitionFactory.getIntervalUnit(interval_unit);
+            } catch (Exception e) {
+              throw new FileOperationException("Handle interval split unit: interval error.",
+                  FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            if (low % iu != 0) {
+              throw new FileOperationException(
+                  "The low limit of interval split should be MODed by unit " +
+                      interval_unit + "(" + iu + ").", FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            j++;
+            break;
+          }
+          break;
+        case hash:
+          low = high = -1;
+          long v;
+          try {
+            // Format: "num-value"
+            String[] hv = sv.getValue().split("-");
+            if (hv == null || hv.length != 2) {
+              throw new FileOperationException(
+                  "Split value for hash except format: 'bucket_size-value' : " + sv.getValue(),
+                  FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            v = Long.parseLong(hv[0]);
+            if (v != pi.getP_num()) {
+              throw new FileOperationException("Split value of hash bucket_size mismatch: expect "
+                  + pi.getP_num() + " but provided " + v,
+                  FOFailReason.INVALID_SPLIT_VALUES);
+            }
+            v = Long.parseLong(hv[1]);
+          } catch (NumberFormatException e) {
+            throw new FileOperationException("Split value expect Long for hash: " + sv.getValue(),
+                FOFailReason.INVALID_SPLIT_VALUES);
+          }
+          if (v < 0 && v >= pi.getP_num()) {
+            throw new FileOperationException("Hash value exceeds valid range: [0, " + pi.getP_num()
+                + ").", FOFailReason.INVALID_SPLIT_VALUES);
+          }
+          break;
+        }
+        // check version, column name here
+        if (sv.getVerison() != pi.getP_version() ||
+            !pi.getP_col().equalsIgnoreCase(sv.getSplitKeyName())) {
+          throw new FileOperationException("SplitKeyName mismatch, please check your metadata.",
+              FOFailReason.INVALID_SPLIT_VALUES);
+        }
 
-     }
-     break;
-   case CREATE_AUX_IDX_FILE:
-     // ignore db, table, and values check
-     break;
-   }
+      }
+      break;
+    case CREATE_AUX_IDX_FILE:
+      // ignore db, table, and values check
+      break;
+    }
 
-   // Step 2: do file creation or file gets now
-   boolean do_create = true;
-   SFile r = null;
+    // Step 2: do file creation or file gets now
+    boolean do_create = true;
+    SFile r = null;
 
-   if (policy.getOperation() == CreateOperation.CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST) {
-     // get files by value firstly
-     List<SFile> gfs = rs.filterTableFiles(db_name, table_name, values);
-     if (gfs != null && gfs.size() > 0) {
-       // this means there are many files with this same split value, check if there exists INCREATE file
-       for (SFile f : gfs) {
-         if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
-           // ok, we should return this INCREATE file
-           r = f;
-           do_create = false;
-           break;
-         }
-       }
-     }
-   }
-   if (do_create) {
-     FileLocatingPolicy flp = null;
+    if (policy.getOperation() == CreateOperation.CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST) {
+      // get files by value firstly
+      List<SFile> gfs = rs.filterTableFiles(db_name, table_name, values);
+      if (gfs != null && gfs.size() > 0) {
+        // this means there are many files with this same split value, check if there exists
+        // INCREATE file
+        for (SFile f : gfs) {
+          if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+            // ok, we should return this INCREATE file
+            r = f;
+            do_create = false;
+            break;
+          }
+        }
+      }
+    }
+    if (do_create) {
+      FileLocatingPolicy flp = null;
 
-     // do not select the backup/shared device for the first entry
-     switch (policy.getOperation()) {
-     case CREATE_NEW_IN_NODEGROUPS:
-       flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
-       break;
-     case CREATE_NEW:
-     case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
-     case CREATE_NEW_RANDOM:
-       if (ngs != null) {
-         // use all available node group's nodes
-         for (NodeGroup ng : ngs) {
-           if (ng.getNodesSize() > 0) {
-             for (Node n : ng.getNodes()) {
-               ngnodes.add(n.getNode_name());
-             }
-           }
-         }
-         if (policy.getOperation() == CreateOperation.CREATE_NEW_RANDOM) {
-           // TODO: Do we need random dev selection here?
-           flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.RANDOM_NODES, FileLocatingPolicy.RANDOM_DEVS, false);
-         } else {
-           flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
-         }
-       }
-       break;
-     case CREATE_AUX_IDX_FILE:
-       // use all available ndoes
-       flp = new FileLocatingPolicy(null, dm.backupDevs, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
-       break;
-     default:
-         throw new FileOperationException("Invalid create operation provided!", FOFailReason.INVALID_FILE);
-     }
+      // do not select the backup/shared device for the first entry
+      switch (policy.getOperation()) {
+      case CREATE_NEW_IN_NODEGROUPS:
+        flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES,
+            FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+        break;
+      case CREATE_NEW:
+      case CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST:
+      case CREATE_NEW_RANDOM:
+        if (ngs != null) {
+          // use all available node group's nodes
+          for (NodeGroup ng : ngs) {
+            if (ng.getNodesSize() > 0) {
+              for (Node n : ng.getNodes()) {
+                ngnodes.add(n.getNode_name());
+              }
+            }
+          }
+          if (policy.getOperation() == CreateOperation.CREATE_NEW_RANDOM) {
+            // TODO: Do we need random dev selection here?
+            flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.RANDOM_NODES,
+                FileLocatingPolicy.RANDOM_DEVS, false);
+          } else {
+            flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES,
+                FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+          }
+        }
+        break;
+      case CREATE_AUX_IDX_FILE:
+        // use all available ndoes
+        flp = new FileLocatingPolicy(null, dm.backupDevs, FileLocatingPolicy.EXCLUDE_NODES,
+            FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
+        break;
+      default:
+        throw new FileOperationException("Invalid create operation provided!",
+            FOFailReason.INVALID_FILE);
+      }
 
-     if (policy.getOperation() == CreateOperation.CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST) {
-       synchronized (file_creation_lock) {
-         // final check here
-         List<SFile> gfs = rs.filterTableFiles(db_name, table_name, values);
-         if (gfs != null && gfs.size() > 0) {
-           for (SFile f : gfs) {
-             if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
-               // oh, we should return now
-               return f;
-             }
-           }
-         }
-         // ok, it means there is no INCREATE files, create one
-         r = create_file(flp, null, repnr, db_name, table_name, values);
-       }
-     } else {
-       r = create_file(flp, null, repnr, db_name, table_name, values);
-     }
-   }
-   DMProfile.fcreate2SuccR.incrementAndGet();
-   return r;
- }
+      if (policy.getOperation() == CreateOperation.CREATE_IF_NOT_EXIST_AND_GET_IF_EXIST) {
+        synchronized (file_creation_lock) {
+          // final check here
+          List<SFile> gfs = rs.filterTableFiles(db_name, table_name, values);
+          if (gfs != null && gfs.size() > 0) {
+            for (SFile f : gfs) {
+              if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+                // oh, we should return now
+                return f;
+              }
+            }
+          }
+          // ok, it means there is no INCREATE files, create one
+          r = create_file(flp, null, repnr, db_name, table_name, values);
+        }
+      } else {
+        r = create_file(flp, null, repnr, db_name, table_name, values);
+      }
+    }
+    DMProfile.fcreate2SuccR.incrementAndGet();
+    return r;
+  }
 
 
   @Override
@@ -1208,7 +1281,7 @@ startFunction("close_file ", "fid: " + file.getFid());
   public int drop_partition_files(Partition part, List<SFile> files)
       throws TException {
     // TODO zy
-    return 0;// client.drop_partition_files(part, files);
+    return client.drop_partition_files(part, files);
   }
 
   @Override
@@ -1221,7 +1294,7 @@ startFunction("close_file ", "fid: " + file.getFid());
   public boolean drop_partition_index_files(Index index, Partition part,
       List<SFile> file) throws MetaException, TException {
     // TODO zy
-    return false;// client.drop_partition_index_files(index, part, file);
+    return client.drop_partition_index_files(index, part, file);
   }
 
   @Override
@@ -1245,7 +1318,7 @@ startFunction("close_file ", "fid: " + file.getFid());
   public boolean drop_subpartition_index_files(Index index, Subpartition subpart,
       List<SFile> file) throws MetaException, TException {
     // TODO zy
-    return false;// client.drop_subpartition_index_files(index, subpart, file);
+    return client.drop_subpartition_index_files(index, subpart, file);
   }
 
   @Override
@@ -1255,10 +1328,30 @@ startFunction("close_file ", "fid: " + file.getFid());
   }
 
   @Override
-  public boolean drop_type(String type) throws MetaException,
+  public boolean drop_type(String name) throws MetaException,
       NoSuchObjectException, TException {
-    // TODO mzy
-    return rs.dropType(type);
+    startFunction("drop_type", ": " + name);
+
+    boolean success = false;
+    Exception ex = null;
+    try {
+      // TODO:pc validate that there are no types that refer to this
+      success = rs.dropType(name);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("drop_type", success, ex);
+    }
+    return success;
   }
 
   @Override
@@ -1276,20 +1369,57 @@ startFunction("close_file ", "fid: " + file.getFid());
   @Override
   public List<Node> find_best_nodes(int nr) throws MetaException,
       TException {
-    try {
-      List<Node> list = dm.findBestNodes(nr);
-      return list;
-    } catch (IOException e) {
-      return Lists.newArrayList();
+    if (nr > 0) {
+      try {
+        return dm.findBestNodes(nr);
+      } catch (IOException e) {
+        throw new MetaException(e.getMessage());
+      }
+    } else if (nr < 0) {
+      // call findBestNodesBySingleDev
+      try {
+        return dm.findBestNodesBySingleDev(-nr);
+      } catch (IOException e) {
+        throw new MetaException(e.getMessage());
+      }
     }
+    return new ArrayList<Node>();
   }
 
   @Override
-  public List<Node> find_best_nodes_in_groups(String arg0, String arg1,
-      int arg2, FindNodePolicy arg3) throws MetaException, TException {
-    // return Lists.newArrayList(d);
-    // TODO to know how to find the best nodes in grops
-    return Lists.newArrayList();
+  public List<Node> find_best_nodes_in_groups(String dbName, String tableName,
+      int nr, FindNodePolicy fnp) throws MetaException, TException {
+    List<Node> r = new ArrayList<Node>();
+    Set<String> fromSet = new TreeSet<String>();
+    Table tbl = null;
+
+    tbl = this.get_table(dbName, tableName);
+    if (tbl.getNodeGroupsSize() > 0) {
+      for (NodeGroup ng : tbl.getNodeGroups()) {
+        if (ng.getNodesSize() > 0) {
+          switch (fnp) {
+          case SINGLE_NG:
+          case ALL_NGS:
+            for (Node n : ng.getNodes()) {
+              fromSet.add(n.getNode_name());
+            }
+            break;
+          }
+          if (fnp == FindNodePolicy.SINGLE_NG) {
+            break;
+          }
+        }
+      }
+    }
+    if (fromSet.size() > 0) {
+      try {
+        r = dm.findBestNodes(fromSet, nr);
+      } catch (IOException e) {
+        throw new MetaException(e.getMessage());
+      }
+    }
+    return r;
+
   }
 
   @Override
@@ -1323,8 +1453,10 @@ startFunction("close_file ", "fid: " + file.getFid());
 
   @Override
   public String getNodeInfo() throws MetaException, TException {
-    // TODO rs doesn't implement this method
-    return client.getNodeInfo();
+    if (dm != null) {
+      return dm.getNodeInfo();
+    }
+    return "+FAIL: No DiskManger!\n";
   }
 
   @Override
@@ -1336,6 +1468,7 @@ startFunction("close_file ", "fid: " + file.getFid());
 
   @Override
   public long getSessionId() throws MetaException, TException {
+    // TODO just do this need msss
     return 0L;
   }
 
@@ -1396,14 +1529,14 @@ startFunction("close_file ", "fid: " + file.getFid());
   @Override
   public Database get_attribution(String name) throws NoSuchObjectException,
       MetaException, TException {
-    // zy
+    // TODO zy
     return get_database(name);
   }
 
   @Override
   public String get_config_value(String name, String defaultValue)
       throws ConfigValSecurityException, TException {
-    // TODO rs doesn't implement this method
+    // TODO rs doesn't implement this method need HiveConf
     return client.getConfigValue(name, defaultValue);
   }
 
@@ -1423,7 +1556,7 @@ startFunction("close_file ", "fid: " + file.getFid());
   @Override
   public String get_delegation_token(String owner, String renewerKerberosPrincipalName)
       throws MetaException, TException {
-    // TODO rs doesn't impelement this method
+    // TODO rs doesn't impelement this method need HiveConf
     return client.getDelegationToken(owner, renewerKerberosPrincipalName);
   }
 
@@ -1647,6 +1780,7 @@ startFunction("close_file ", "fid: " + file.getFid());
     }
     return null;
   }
+
   private String getPartName(HiveObjectRef hiveObject) throws MetaException {
     String partName = null;
     List<String> partValue = hiveObject.getPartValues();
@@ -1658,6 +1792,7 @@ startFunction("close_file ", "fid: " + file.getFid());
     }
     return partName;
   }
+
   @Override
   public List<String> get_role_names() throws MetaException, TException {
     return rs.listRoleNames();
@@ -1746,7 +1881,7 @@ startFunction("close_file ", "fid: " + file.getFid());
   @Override
   public Map<String, Type> get_type_all(String arg0) throws MetaException,
       TException {
-    //FIXME HiveMetaStore just do this
+    // FIXME HiveMetaStore just do this
     throw new MetaException("not yet implemented");
   }
 
@@ -1760,7 +1895,8 @@ startFunction("close_file ", "fid: " + file.getFid());
   public boolean grant_role(String role, String userName, PrincipalType principalType,
       String grantor, PrincipalType grantorType, boolean grantOption)
       throws MetaException, TException {
-    return rs.grantRole(rs.getRole(role), userName, principalType, grantor, grantorType, grantOption);
+    return rs.grantRole(rs.getRole(role), userName, principalType, grantor, grantorType,
+        grantOption);
   }
 
   @Override
@@ -1875,11 +2011,10 @@ startFunction("close_file ", "fid: " + file.getFid());
   }
 
   @Override
-  public List<HiveObjectPrivilege> list_privileges(String arg0,
-      PrincipalType arg1, HiveObjectRef arg2) throws MetaException,
+  public List<HiveObjectPrivilege> list_privileges(String principalName,
+      PrincipalType principalType, HiveObjectRef hiveObject) throws MetaException,
       TException {
-    //TODO implement this method
-    return null;
+    return client.list_privileges(principalName, principalType, hiveObject);
   }
 
   @Override
@@ -1945,7 +2080,8 @@ startFunction("close_file ", "fid: " + file.getFid());
   public boolean migrate_stage2(String dbName, String tableName, List<Long> files,
       String from_db, String to_db, String to_devid, String user, String password)
       throws MetaException, TException {
-    return client.migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid, user, password);
+    return client
+        .migrate_stage2(dbName, tableName, files, from_db, to_db, to_devid, user, password);
   }
 
   @Override
@@ -1986,7 +2122,7 @@ startFunction("close_file ", "fid: " + file.getFid());
 
   @Override
   public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException {
-  // try to update the OFFLINE flag immediately
+    // try to update the OFFLINE flag immediately
     startFunction("offline_filelocation:", "dev " + sfl.getDevid() + " loc " + sfl.getLocation());
     sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
     rs.updateSFileLocation(sfl);
@@ -1997,7 +2133,7 @@ startFunction("close_file ", "fid: " + file.getFid());
 
   @Override
   public boolean online_filelocation(SFile file) throws MetaException, TException {
-  // reget the file now
+    // reget the file now
     SFile stored_file = get_file_by_id(file.getFid());
 
     if (stored_file.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
@@ -2046,7 +2182,7 @@ startFunction("close_file ", "fid: " + file.getFid());
   public void rename_partition(String dbname, String name, List<String> part_vals,
       Partition newPart) throws InvalidOperationException, MetaException,
       TException {
-    //FIXME just use client
+    // FIXME just use client
     client.renamePartition(dbname, name, part_vals, newPart);
   }
 
@@ -2065,14 +2201,17 @@ startFunction("close_file ", "fid: " + file.getFid());
     boolean success = false;
 
     if (saved == null) {
-      throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
+      throw new FileOperationException("Can not find SFile by FID " + fid,
+          FOFailReason.INVALID_FILE);
     }
     // check if this file is in REPLICATED state, otherwise, complain about that.
     switch (saved.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.INCREATE:
-      throw new FileOperationException("SFile " + fid + " has already been in INCREATE state.", FOFailReason.INVALID_STATE);
+      throw new FileOperationException("SFile " + fid + " has already been in INCREATE state.",
+          FOFailReason.INVALID_STATE);
     case MetaStoreConst.MFileStoreStatus.CLOSED:
-      throw new FileOperationException("SFile " + fid + " is in CLOSE state, please wait.", FOFailReason.INVALID_STATE);
+      throw new FileOperationException("SFile " + fid + " is in CLOSE state, please wait.",
+          FOFailReason.INVALID_STATE);
     case MetaStoreConst.MFileStoreStatus.REPLICATED:
       // FIXME: seq reopenSFiles
       synchronized (file_reopen_lock) {
@@ -2081,7 +2220,8 @@ startFunction("close_file ", "fid: " + file.getFid());
       break;
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
-      throw new FileOperationException("SFile " + fid + " is in RM-* state, reject all reopens.", FOFailReason.INVALID_STATE);
+      throw new FileOperationException("SFile " + fid + " is in RM-* state, reject all reopens.",
+          FOFailReason.INVALID_STATE);
     }
     return success;
   }
@@ -2091,11 +2231,13 @@ startFunction("close_file ", "fid: " + file.getFid());
     DMProfile.frestoreR.incrementAndGet();
     SFile saved = rs.getSFile(file.getFid());
     if (saved == null) {
-      throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
+      throw new FileOperationException("Can not find SFile by FID" + file.getFid(),
+          FOFailReason.INVALID_FILE);
     }
 
     if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.RM_LOGICAL) {
-      throw new FileOperationException("File StoreStatus is not in RM_LOGICAL.", FOFailReason.INVALID_STATE);
+      throw new FileOperationException("File StoreStatus is not in RM_LOGICAL.",
+          FOFailReason.INVALID_STATE);
     }
     saved.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
     rs.updateSFile(saved);
@@ -2111,7 +2253,7 @@ startFunction("close_file ", "fid: " + file.getFid());
   @Override
   public boolean revoke_role(String role, String userName, PrincipalType principalType)
       throws MetaException, TException {
-        return rs.revokeRole(rs.getRole(role), userName, principalType);
+    return rs.revokeRole(rs.getRole(role), userName, principalType);
   }
 
   @Override
@@ -2120,12 +2262,14 @@ startFunction("close_file ", "fid: " + file.getFid());
     DMProfile.frmlR.incrementAndGet();
     SFile saved = rs.getSFile(file.getFid());
     if (saved == null) {
-      throw new FileOperationException("Can not find SFile by FID" + file.getFid(), FOFailReason.INVALID_FILE);
+      throw new FileOperationException("Can not find SFile by FID" + file.getFid(),
+          FOFailReason.INVALID_FILE);
     }
 
     // only in REPLICATED state can step into RM_LOGICAL
     if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.REPLICATED) {
-      throw new FileOperationException("File StoreStatus is not in REPLICATED.", FOFailReason.INVALID_STATE);
+      throw new FileOperationException("File StoreStatus is not in REPLICATED.",
+          FOFailReason.INVALID_STATE);
     }
     saved.setStore_status(MetaStoreConst.MFileStoreStatus.RM_LOGICAL);
     rs.updateSFile(saved);
@@ -2138,13 +2282,15 @@ startFunction("close_file ", "fid: " + file.getFid());
     DMProfile.frmpR.incrementAndGet();
     SFile saved = rs.getSFile(file.getFid());
     if (saved == null) {
-      throw new FileOperationException("Can not find SFile by FID " + file.getFid(), FOFailReason.INVALID_FILE);
+      throw new FileOperationException("Can not find SFile by FID " + file.getFid(),
+          FOFailReason.INVALID_FILE);
     }
 
     if (!(saved.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE ||
-        saved.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED ||
-        saved.getStore_status() == MetaStoreConst.MFileStoreStatus.RM_LOGICAL)) {
-      throw new FileOperationException("File StoreStatus is not in INCREATE/REPLICATED/RM_LOGICAL.", FOFailReason.INVALID_STATE);
+        saved.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED || saved
+          .getStore_status() == MetaStoreConst.MFileStoreStatus.RM_LOGICAL)) {
+      throw new FileOperationException(
+          "File StoreStatus is not in INCREATE/REPLICATED/RM_LOGICAL.", FOFailReason.INVALID_STATE);
     }
     saved.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);
     file = rs.updateSFile(saved);
@@ -2158,11 +2304,12 @@ startFunction("close_file ", "fid: " + file.getFid());
 
   @Override
   public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException {
-//    startFunction("set_file_repnr", "fid " + fid + " repnr " + repnr);
+    // startFunction("set_file_repnr", "fid " + fid + " repnr " + repnr);
     SFile f = get_file_by_id(fid);
     if (f != null) {
       f.setRep_nr(repnr);
-      // FIXME: Caution, this might be a conflict code section for concurrent sfile field modification.
+      // FIXME: Caution, this might be a conflict code section for concurrent sfile field
+      // modification.
       rs.updateSFile(f);
     }
   }
@@ -2171,7 +2318,8 @@ startFunction("close_file ", "fid: " + file.getFid());
   public boolean set_loadstatus_bad(long fid) throws MetaException, TException {
     SFile saved = rs.getSFile(fid);
     if (saved == null) {
-      throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
+      throw new FileOperationException("Can not find SFile by FID " + fid,
+          FOFailReason.INVALID_FILE);
     }
 
     saved.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
@@ -2180,69 +2328,151 @@ startFunction("close_file ", "fid: " + file.getFid());
   }
 
   @Override
-  public List<String> set_ugi(String arg0, List<String> arg1)
+  public List<String> set_ugi(String username, List<String> list)
       throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+    Collections.addAll(list, username);
+    return list;
   }
 
   @Override
   public List<Busitype> showBusitypes() throws InvalidObjectException,
       MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
+    return rs.showBusitypes();
   }
 
   @Override
-  public statfs statFileSystem(long arg0, long arg1) throws MetaException,
+  public statfs statFileSystem(long from, long to) throws MetaException,
       TException {
-    // TODO Auto-generated method stub
-    return null;
+    // TODO zy
+    return rs.statFileSystem(from, to);
   }
 
   @Override
   public boolean toggle_safemode() throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+    if (dm != null) {
+      synchronized (dm) {
+        dm.safeMode = !dm.safeMode;
+      }
+    }
+    return true;
   }
 
   @Override
   public void truncTableFiles(String dbName, String tabName) throws MetaException, TException {
-//    startFunction("truncTableFiles", "DB: " + dbName + " Table: " + tabName);
-//    try {
-      rs.truncTableFiles(dbName, tabName);
-//    } finally {
-//      endFunction("truncTableFiles", true, null);
-//    }
+    // startFunction("truncTableFiles", "DB: " + dbName + " Table: " + tabName);
+    // try {
+    rs.truncTableFiles(dbName, tabName);
+    // } finally {
+    // endFunction("truncTableFiles", true, null);
+    // }
   }
 
   @Override
-  public void update_attribution(Database arg0) throws NoSuchObjectException,
+  public void update_attribution(Database db) throws NoSuchObjectException,
       InvalidOperationException, MetaException, TException {
-    // TODO Auto-generated method stub
-
+    rs.alterDatabase(db.getName(), db);
   }
 
   @Override
-  public boolean update_partition_column_statistics(ColumnStatistics arg0)
+  public boolean update_partition_column_statistics(ColumnStatistics colStats)
       throws NoSuchObjectException, InvalidObjectException,
       MetaException, InvalidInputException, TException {
-    // TODO Auto-generated method stub
-    return false;
+    String dbName = null;
+    String tableName = null;
+    String partName = null;
+    String colName = null;
+
+    ColumnStatisticsDesc statsDesc = colStats.getStatsDesc();
+    dbName = statsDesc.getDbName().toLowerCase();
+    tableName = statsDesc.getTableName().toLowerCase();
+    partName = lowerCaseConvertPartName(statsDesc.getPartName());
+
+    statsDesc.setDbName(dbName);
+    statsDesc.setTableName(tableName);
+    statsDesc.setPartName(partName);
+
+    long time = System.currentTimeMillis() / 1000;
+    statsDesc.setLastAnalyzed(time);
+
+    List<ColumnStatisticsObj> statsObjs = colStats.getStatsObj();
+
+    for (ColumnStatisticsObj statsObj : statsObjs) {
+      colName = statsObj.getColName().toLowerCase();
+      statsObj.setColName(colName);
+      startFunction("write_partition_column_statistics:  db=" + dbName + " table=" + tableName +
+          " part=" + partName + "column=" + colName, "");
+    }
+
+    colStats.setStatsDesc(statsDesc);
+    colStats.setStatsObj(statsObjs);
+
+    boolean ret = false;
+
+    try {
+      List<String> partVals = getPartValsFromName(rs, dbName,
+          tableName, partName);
+      ret = rs.updatePartitionColumnStatistics(colStats, partVals);
+      return ret;
+    } finally {
+      endFunction("write_partition_column_statistics: ", ret != false, null);
+    }
+  }
+
+  private String lowerCaseConvertPartName(String partName) throws MetaException {
+    boolean isFirst = true;
+    Map<String, String> partSpec = Warehouse.makeEscSpecFromName(partName);
+    String convertedPartName = new String();
+
+    for (Map.Entry<String, String> entry : partSpec.entrySet()) {
+      String partColName = entry.getKey();
+      String partColVal = entry.getValue();
+
+      if (!isFirst) {
+        convertedPartName += "/";
+      } else {
+        isFirst = false;
+      }
+      convertedPartName += partColName.toLowerCase() + "=" + partColVal;
+    }
+    return convertedPartName;
+  }
+
+  private List<String> getPartValsFromName(RawStore ms, String dbName, String tblName,
+      String partName) throws MetaException, InvalidObjectException {
+    // Unescape the partition name
+    LinkedHashMap<String, String> hm = Warehouse.makeSpecFromName(partName);
+
+    // getPartition expects partition values in a list. use info from the
+    // table to put the partition column values in order
+    Table t = ms.getTable(dbName, tblName);
+    if (t == null) {
+      throw new InvalidObjectException(dbName + "." + tblName
+          + " table not found");
+    }
+
+    List<String> partVals = new ArrayList<String>();
+    for (FieldSchema field : t.getPartitionKeys()) {
+      String key = field.getName();
+      String val = hm.get(key);
+      if (val == null) {
+        throw new InvalidObjectException("incomplete partition name - missing " + key);
+      }
+      partVals.add(val);
+    }
+    return partVals;
   }
 
   @Override
-  public boolean update_table_column_statistics(ColumnStatistics arg0)
+  public boolean update_table_column_statistics(ColumnStatistics colStats)
       throws NoSuchObjectException, InvalidObjectException,
       MetaException, InvalidInputException, TException {
-    // TODO Auto-generated method stub
-    return false;
+    return rs.updateTableColumnStatistics(colStats);
   }
 
   @Override
-  public boolean user_authority_check(User arg0, Table arg1,
-      List<MSOperation> arg2) throws MetaException, TException {
-    // TODO Auto-generated method stub
+  public boolean user_authority_check(User user, Table tbl,
+      List<MSOperation> ops) throws MetaException, TException {
+    // TODO implement this method
     return false;
   }
 
