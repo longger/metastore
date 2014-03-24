@@ -98,7 +98,7 @@ import com.google.common.collect.Maps;
 public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface {
 
   private final NewMSConf conf;
-  private final RawStore rs;
+  private final RawStoreImp rs;
   private IMetaStoreClient client;
   private static final Log LOG = NewMS.LOG;
   private DiskManager dm;
@@ -478,10 +478,10 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public int close_file(SFile file) throws FileOperationException, MetaException, TException {
     startFunction("close_file ", "fid: " + file.getFid());
     DMProfile.fcloseR.incrementAndGet();
-
+    
     FileOperationException e = null;
     SFile saved = rs.getSFile(file.getFid());
-
+    
     try {
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID" + file.getFid(),
@@ -545,8 +545,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
       // keep repnr unchanged
       file.setRep_nr(saved.getRep_nr());
-      rs.updateSFile(file);
-
+      rs.updateSFile(file,true);
+      
       if (e != null) {
         throw e;
       }
@@ -556,6 +556,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
         dm.repQ.notify();
       }
     } finally {
+    	endFunction("close_file", true, e);
       DMProfile.fcloseSuccRS.incrementAndGet();
     }
     return 0;
