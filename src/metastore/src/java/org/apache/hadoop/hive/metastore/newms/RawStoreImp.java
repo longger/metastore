@@ -408,6 +408,32 @@ public class RawStoreImp implements RawStore {
 		}
 
 	}
+	
+	//为了不改变原有的updatesfile的语义，添加一个是否连sfl一起更新的方法
+	public SFile updateSFile(SFile newfile, boolean isWithSfl) throws MetaException {
+		SFile sf = this.getSFile(newfile.getFid());
+		if(sf == null)
+			throw new MetaException("Invalid SFile object provided!");
+		try {
+			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
+			sf.setRep_nr(newfile.getRep_nr());
+      sf.setDigest(newfile.getDigest());
+      sf.setRecord_nr(newfile.getRecord_nr());
+      sf.setAll_record_nr(newfile.getAll_record_nr());
+      sf.setStore_status(newfile.getStore_status());
+      sf.setLoad_status(newfile.getLoad_status());
+      sf.setLength(newfile.getLength());
+      sf.setRef_files(newfile.getRef_files());
+      if(isWithSfl)
+      	sf.setLocations(newfile.getLocations());
+      cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+      return sf;
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
+
+	}
 
 	@Override
 	public boolean createFileLocation(SFileLocation location)	throws InvalidObjectException, MetaException {
@@ -469,6 +495,12 @@ public class RawStoreImp implements RawStore {
 	public SFileLocation updateSFileLocation(SFileLocation newsfl) throws MetaException {
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
+			//防止缓存中的sfile的location与更新之后的sfl不一致。。。。
+			// FIXME 这样手动维护sfile与sfilelocation的关系很麻烦，很容易出错。。。
+			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
+			sf.getLocations().remove(sfl);
+			sf.addToLocations(newsfl);
+			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
 			//状态改变的话，还需要改变更新关于visit status的索引
 			cs.removeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
 			sfl.setUpdate_time(System.currentTimeMillis());
