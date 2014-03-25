@@ -5236,6 +5236,9 @@ public class ObjectStore implements RawStore, Configurable {
       ArrayList<String>  ps = new ArrayList<String>();
       ps.addAll(oldi.getParameters().keySet());
       params.put("param_name", ps);
+      params.put("db_name", dbname);
+      params.put("table_name", baseTblName.toLowerCase());
+      params.put("index_name", name);
       if(success) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_INDEX_PARAM, db_id, -1, pm, oldi, params));
       }
@@ -5580,6 +5583,8 @@ public class ObjectStore implements RawStore, Configurable {
         long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(tmpOrigTable.getDatabase()).toString()));
         HashMap<String,Object> params = new HashMap<String,Object>();
         params.put("index_name", indexName);
+        params.put("db_name",dbName);
+        params.put("table_name", origTableName);
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_DEL_INDEX, db_id, -1, pm, index, params));
       }
     } finally {
