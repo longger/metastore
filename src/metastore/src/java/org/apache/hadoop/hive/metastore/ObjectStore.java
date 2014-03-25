@@ -9145,7 +9145,9 @@ public MUser getMUser(String userName) {
       }
       success = commitTransaction();
       if(success) {
-        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_DEL_NODE,-1,-1,pm,mnode,null));
+      	HashMap<String,Object> params = new HashMap<String,Object>();
+      	params.put("node_name", node_name);
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_DEL_NODE,-1,-1,pm,mnode,params));
       }
     } finally {
       if (!success) {

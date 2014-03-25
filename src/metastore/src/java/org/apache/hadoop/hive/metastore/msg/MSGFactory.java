@@ -815,8 +815,8 @@ public class MSGFactory {
           break;
       case MSGType.MSG_DEL_NODE :
             //删除节点
-          MNode del_node = (MNode)msg.getEventObject();
-          params.put("node_name",del_node.getNode_name());
+//          MNode del_node = (MNode)msg.getEventObject();
+          params.put("node_name",msg.getOld_object_params().get("node_name"));
           break;
       case MSGType.MSG_FAIL_NODE :
             //节点故障
