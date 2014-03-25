@@ -113,8 +113,18 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     rs = new RawStoreImp(conf);
     startTimeMillis = System.currentTimeMillis();
     try {
+    	HiveConf hc = new HiveConf(DiskManager.class);
       client = MsgProcessing.createMetaStoreClient();
-      HiveConf hc = new HiveConf(DiskManager.class);
+      try {
+      	if(client != null)
+				client.authentication(hc.getVar(HiveConf.ConfVars.HIVE_USER),hc.getVar(HiveConf.ConfVars.HIVE_USERPWD));
+			} catch (NoSuchObjectException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (TException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
       dm = new DiskManager(hc, LOG);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,

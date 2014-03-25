@@ -3,11 +3,11 @@ package org.apache.hadoop.hive.metastore.newms;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaHook;
 import org.apache.hadoop.hive.metastore.HiveMetaHookLoader;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
@@ -214,6 +214,8 @@ public class MsgProcessing {
 				String tableName = (String) msg.getMsg_data().get("table_name");
 				String key = dbName + "." + tableName;
 				Table tbl = client.getTable(dbName, tableName);
+				cs.writeObject(ObjectType.TABLE, key, tbl);
+				/*
 				TableImage ti = TableImage.generateTableImage(tbl);
 				CacheStore.getTableHm().put(key, tbl);
 				cs.writeObject(ObjectType.TABLE, key, ti);
@@ -238,6 +240,7 @@ public class MsgProcessing {
 						}
 					}
 				}
+				*/
 				break;
 			}
 			case MSGType.MSG_DROP_TABLE:
@@ -316,6 +319,7 @@ public class MsgProcessing {
 				String tblName = (String)msg.getMsg_data().get("table_name");
 				String indexName = (String)msg.getMsg_data().get("index_name");
 				//Index ind = client.getIndex(dbName, tblName, indexName);
+				
 				String key = dbName + "." + tblName + "." + indexName;
 				if(CacheStore.getIndexHm().remove(key) != null)
 					cs.removeObject(ObjectType.INDEX, key);
@@ -336,6 +340,8 @@ public class MsgProcessing {
 			{
 				String nodename = (String)msg.getMsg_data().get("node_name");
 				cs.removeObject(ObjectType.NODE, nodename);
+				cs.updateCache(ObjectType.NODEGROUP);
+				cs.updateCache(ObjectType.TABLE);
 				break;
 			}
 			
@@ -396,6 +402,8 @@ public class MsgProcessing {
 				if(ngs == null || ngs.size() == 0)
 					break;
 				NodeGroup ng = ngs.get(0);
+				cs.writeObject(ObjectType.NODEGROUP, nodeGroupName, ng);
+				/*
 				NodeGroupImage ngi = NodeGroupImage.generateNodeGroupImage(ng);
 				CacheStore.getNodeGroupHm().put(ng.getNode_group_name(), ng);
 				cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ngi);
@@ -405,12 +413,14 @@ public class MsgProcessing {
 						cs.writeObject(ObjectType.NODE, ngi.getNodeKeys().get(i), node);
 					}
 				}
+				*/
 				break;
 			}
 			//case MSGType.MSG_ALTER_NODEGROUP:
 			case MSGType.MSG_DEL_NODEGROUP:{
 				String nodeGroupName = (String)msg.getMsg_data().get("nodegroup_name");
 				cs.removeObject(ObjectType.NODEGROUP, nodeGroupName);
+				cs.updateCache(ObjectType.TABLE);
 				break;
 			}
 			

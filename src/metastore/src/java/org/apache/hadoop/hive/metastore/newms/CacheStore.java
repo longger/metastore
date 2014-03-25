@@ -164,17 +164,29 @@ public class CacheStore {
       else if(key.equals(ObjectType.DATABASE)) {
         databaseHm.put(field, (Database)o);
       }
-  //    if(key.equals(ObjectType.TABLE))
-  //      tableHm.put(field, (Table)o);
-  //    对于sfile，函数参数是sfileimage
-      if(key.equals(ObjectType.INDEX)) {
+      else if(key.equals(ObjectType.TABLE)){
+      	tableHm.put(field, (Table)o);
+      	//table里面有nodegroup，但是并不每次写入一个table时都把它的nodegroup都写入一遍，
+      	//table和nodegroup之间的关系通过ngkeys关联
+      	// FIXME 如果某个nodegroup被删除了，table里与它关联的键不会被删除。不过读取table，按ngkeys读取nodegroup时，
+      	//如果结果是null就跳过，因此最终可以在table里体现出nodegroup被删除，只是冗余了一个键。nodegroup里的node也是这样处理的。
+      	Table tbl = (Table)o;
+      	TableImage ti = TableImage.generateTableImage(tbl);
+      	o = ti;
+      }
+      else if(key.equals(ObjectType.INDEX)) {
         indexHm.put(field, (Index)o);
       }
       else if(key.equals(ObjectType.NODE)) {
         nodeHm.put(field, (Node)o);
       }
-  //    if(key.equals(ObjectType.NODEGROUP))
-  //      nodeGroupHm.put(field, (NodeGroup)o);
+      if(key.equals(ObjectType.NODEGROUP)){
+      	nodeGroupHm.put(field, (NodeGroup)o);
+      	
+      	NodeGroup ng = (NodeGroup)o;
+      	NodeGroupImage ngi = NodeGroupImage.generateNodeGroupImage(ng);
+      	o = ngi;
+      }
       else if(key.equals(ObjectType.GLOBALSCHEMA)) {
         globalSchemaHm.put(field, (GlobalSchema)o);
       }
@@ -202,51 +214,68 @@ public class CacheStore {
   }
 
   public Object readObject(ObjectType.TypeDesc key, String field)throws JedisConnectionException, IOException,ClassNotFoundException {
+  	return readObject(key, field, false);
+  }
+  
+  /**
+   * 有些时候为了保持redis中存储的对象和内存缓存中的一致，需要刷新内存缓存，可以通过一次读取操作完成
+   * @param key
+   * @param field
+   * @param isRefreshCache	是否通过这次读操作来刷新内存缓存，true的话就忽略缓存，直接从redis中读取对象，然后put到缓存中，达到刷新缓存的效果
+   * @return
+   * @throws JedisConnectionException
+   * @throws IOException
+   * @throws ClassNotFoundException
+   */
+  public Object readObject(ObjectType.TypeDesc key, String field, boolean isRefreshCache)throws JedisConnectionException, IOException,ClassNotFoundException {
     Object o = null;
-    if(key.equals(ObjectType.SFILE)) {
-      SFile temp =(SFile) sFileHm.get(field);
-      o = temp == null?null:temp.deepCopy();
+    if(!isRefreshCache){
+    	if(key.equals(ObjectType.SFILE)) {
+        SFile temp =(SFile) sFileHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.SFILELOCATION)) {
+        SFileLocation temp = (SFileLocation)sflHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.DATABASE)) {
+        Database temp = databaseHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.TABLE)) {
+        Table temp  = tableHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.INDEX)) {
+        Index temp = indexHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.NODE)) {
+        Node temp = nodeHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.NODEGROUP)) {
+        NodeGroup temp = nodeGroupHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.GLOBALSCHEMA)) {
+        GlobalSchema temp = globalSchemaHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.PRIVILEGE)) {
+        PrivilegeBag temp = privilegeBagHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.PARTITION)) {
+        Partition temp = partitionHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
+      else if(key.equals(ObjectType.DEVICE)) {
+        Device temp = deviceHm.get(field);
+        o = temp == null?null:temp.deepCopy();
+      }
     }
-    else if(key.equals(ObjectType.SFILELOCATION)) {
-      SFileLocation temp = (SFileLocation)sflHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
-    else if(key.equals(ObjectType.DATABASE)) {
-      Database temp = databaseHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
-    else if(key.equals(ObjectType.TABLE)) {
-      Table temp  = tableHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
-    else if(key.equals(ObjectType.INDEX)) {
-      Index temp = indexHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
-    else if(key.equals(ObjectType.NODE)) {
-      Node temp = nodeHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
-    else if(key.equals(ObjectType.NODEGROUP)) {
-      NodeGroup temp = nodeGroupHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
-    else if(key.equals(ObjectType.GLOBALSCHEMA)) {
-      GlobalSchema temp = globalSchemaHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
-    else if(key.equals(ObjectType.PRIVILEGE)) {
-      PrivilegeBag temp = privilegeBagHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
-    else if(key.equals(ObjectType.PARTITION)) {
-      Partition temp = partitionHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
-    else if(key.equals(ObjectType.DEVICE)) {
-      Device temp = deviceHm.get(field);
-      o = temp == null?null:temp.deepCopy();
-    }
+    
     if(o != null)
     {
 //      System.out.println("in function readObject: read "+key.getName()+":"+field+" from cache.");
@@ -477,7 +506,7 @@ public class CacheStore {
         System.out.println("read "+fields.size()+" "+key.getName()+" from redis into cache.");
         for(String field : fields)
         {
-          readObject(key, field);
+          readObject(key, field, true);
         }
       }
     }catch(JedisConnectionException e){
@@ -489,6 +518,14 @@ public class CacheStore {
     }
   }
 
+  public void updateCache(ObjectType.TypeDesc key) throws JedisConnectionException, IOException, ClassNotFoundException
+  {
+  	this.readAll(key);
+  }
+  public void updateCache(ObjectType.TypeDesc key, String field) throws JedisConnectionException, IOException, ClassNotFoundException
+  {
+  	this.readObject(key, field, true);
+  }
 
   public List<Long> listTableFiles(String dbName, String tabName, int from, int to)
   {
