@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
@@ -77,20 +78,22 @@ public class CacheStore {
           sha = jedis.scriptLoad(script);
           
           //每次系统启动时，从redis中读取已经持久化的对象到内存缓存中(SFile和SFileLocation除外)
-          long start = System.currentTimeMillis();
-          readAll(ObjectType.DATABASE);
-          readAll(ObjectType.GLOBALSCHEMA);
-          readAll(ObjectType.INDEX);
-          readAll(ObjectType.NODE);
-          readAll(ObjectType.NODEGROUP);
-          readAll(ObjectType.PARTITION);
-          readAll(ObjectType.PRIVILEGE);
-          readAll(ObjectType.TABLE);
-          readAll(ObjectType.DEVICE);
-          readAll(ObjectType.SFILE);
-          readAll(ObjectType.SFILELOCATION);
-          long end = System.currentTimeMillis();
-          System.out.println("loading objects from redis into cache takes "+(end-start)+" ms");
+          if(new HiveConf().get("isGetAllObjects").equals("false")){
+	          long start = System.currentTimeMillis();
+	          readAll(ObjectType.DATABASE);
+	          readAll(ObjectType.GLOBALSCHEMA);
+	          readAll(ObjectType.INDEX);
+	          readAll(ObjectType.NODE);
+	          readAll(ObjectType.NODEGROUP);
+	          readAll(ObjectType.PARTITION);
+	          readAll(ObjectType.PRIVILEGE);
+	          readAll(ObjectType.TABLE);
+	          readAll(ObjectType.DEVICE);
+	          readAll(ObjectType.SFILE);
+	          readAll(ObjectType.SFILELOCATION);
+	          long end = System.currentTimeMillis();
+	          System.out.println("loading objects from redis into cache takes "+(end-start)+" ms");
+          }
           
         } catch (JedisConnectionException e) {
           // TODO Auto-generated catch block

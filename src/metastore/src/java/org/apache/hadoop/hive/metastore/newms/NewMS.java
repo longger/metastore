@@ -7,6 +7,7 @@ import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore;
 import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisInstance;
 import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisMode;
@@ -92,12 +93,15 @@ public class NewMS {
 			LOG.info("RPCServer start at port:" + conf.getRpcport());
 
 			TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
+			HiveConf hc = new HiveConf();
 			try {
 				TServerTransport tt = new TServerSocket(conf.getRpcport());
 				TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(tt)
 						.transportFactory(new TTransportFactory())
-						.protocolFactory(new TBinaryProtocol.Factory()).minWorkerThreads(5)
-						.processor(tprocessor).maxWorkerThreads(100);
+						.protocolFactory(new TBinaryProtocol.Factory())
+						.processor(tprocessor)
+						.minWorkerThreads(hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS))
+						.maxWorkerThreads(hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS));
 				TServer server = new TThreadPoolServer(sargs);
 				server.serve();
 			} catch (TTransportException e) {
@@ -246,6 +250,27 @@ public class NewMS {
 			// System.exit(0);
 		}
 
+		//get g_fid from redis
+		Jedis jedis = null;
+    try{
+    	jedis = new RedisFactory(conf).getDefaultInstance();
+    	String fid = jedis.get("g_fid");
+    	if(fid != null){
+    		long id = Long.parseLong(fid);
+    		synchronized (RawStoreImp.class) {
+					if(RawStoreImp.getFid() < id)
+						RawStoreImp.setFID(Long.parseLong(fid));
+				}    		
+    	}
+    	
+    }catch(JedisConnectionException e){
+    	LOG.warn(e,e);
+    	RedisFactory.putBrokenInstance(jedis);
+    	jedis = null;
+    }finally{
+    	RedisFactory.putInstance(jedis);
+    }
+		
 		new Thread(new RPCServer(conf)).start();
 		MsgServer.setConf(conf);
 		RawStoreImp.setNewMSConf(conf);
@@ -256,23 +281,6 @@ public class NewMS {
 			e.printStackTrace();
 		}
 		
-		//get g_fid from redis
-		Jedis jedis = null;
-    try{
-    	jedis = new RedisFactory(conf).getDefaultInstance();
-    	String fid = jedis.get("g_fid");
-    	if(fid == null)
-    		RawStoreImp.setFID(0l);
-    	else
-    		RawStoreImp.setFID(Long.parseLong(fid));
-    	
-    }catch(JedisConnectionException e){
-    	LOG.warn(e,e);
-    	RedisFactory.putBrokenInstance(jedis);
-    	jedis = null;
-    }finally{
-    	RedisFactory.putInstance(jedis);
-    }
 		 // Add shutdown hook.
 		final NewMSConf co = conf; 
     Runtime.getRuntime().addShutdownHook(new Thread() {
