@@ -6,9 +6,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Semaphore;
 
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
-
 
 import com.taobao.metamorphosis.Message;
 import com.taobao.metamorphosis.client.MessageSessionFactory;
@@ -266,7 +266,9 @@ public class MsgServer {
 
 			// 生成处理线程
 			ConsumerConfig cc = new ConsumerConfig(group);
-//			cc.setConsumeFromMaxOffset();
+			HiveConf hc = new HiveConf();
+			if(hc.get("isGetAllObjects").equals("true"))
+				cc.setConsumeFromMaxOffset();
 			MessageConsumer consumer = sessionFactory.createConsumer(cc);
 			
 			// 订阅事件，MessageListener是事件处理接口

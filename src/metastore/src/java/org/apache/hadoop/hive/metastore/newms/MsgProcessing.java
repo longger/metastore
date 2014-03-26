@@ -3,6 +3,8 @@ package org.apache.hadoop.hive.metastore.newms;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -39,23 +41,83 @@ public class MsgProcessing {
 		try {
 			client = createMetaStoreClient();
 			cs = new CacheStore(conf);
-			if(client == null)
+			this.conf.setLocalDbName(hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION));
+			if(client != null && hiveConf.get("isGetAllObjects").equals("true"))
 			{
-				this.conf.setLocalDbName(hiveConf.get("hive.attribution.local"));
-			}
-			else{
-	      Database localdb = client.get_local_attribution();
-	      cs.writeObject(ObjectType.DATABASE, localdb.getName(), localdb);
-	      this.conf.setLocalDbName(localdb.getName());
-	      List<Database> dbs = client.get_all_attributions();
+				long start = System.currentTimeMillis();
+			//device
+	      List<Device> dl = client.listDevice();
+	      for(Device de : dl)
+	      	cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+	      long end = System.currentTimeMillis();
+	      System.out.println("get devices in "+(end-start)+" ms");
+	      start = end;
+	      //db
+				List<Database> dbs = client.get_all_attributions();
 	      for(Database db : dbs)
 	      {
 	        cs.writeObject(ObjectType.DATABASE, db.getName(), db);
 	      }
+	      end = System.currentTimeMillis();
+	      System.out.println("get databases in "+(end-start)+" ms");
+	      start = end;
 	      
-	      List<Device> dl = client.listDevice();
-	      for(Device de : dl)
-	      	cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+	      //table  index
+	      for(Database db : dbs)
+	      {
+	        for(String tn : client.getAllTables(db.getName()))
+	        {
+	        	Table t = client.getTable(db.getName(), tn);
+	        	cs.writeObject(ObjectType.TABLE, t.getDbName()+"."+t.getTableName(), t);
+	        	for(Index in : client.listIndexes(db.getName(), tn,(short) 127))
+	        		cs.writeObject(ObjectType.INDEX, db.getName()+"."+tn+"."+in.getIndexName(), in);
+	        }
+	      }
+	      end = System.currentTimeMillis();
+	      System.out.println("get tables and indexes in "+(end-start)+" ms");
+	      start = end;
+	      //partition    no partition so far
+	      
+	      //node
+	      for(Node n : client.listNodes())
+	      	cs.writeObject(ObjectType.NODE, n.getNode_name(),n);
+	      end = System.currentTimeMillis();
+	      System.out.println("get nodes in "+(end-start)+" ms");
+	      start = end;
+	      //globalschema
+	      for(GlobalSchema gs : client.listSchemas())
+	      	cs.writeObject(ObjectType.GLOBALSCHEMA, gs.getSchemaName(), gs);
+	      end = System.currentTimeMillis();
+	      System.out.println("get globalschema in "+(end-start)+" ms");
+	      start = end;
+	      //nodegroup
+	      for(NodeGroup ng : client.listNodeGroups())
+	      	cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ng);
+	      end = System.currentTimeMillis();
+	      System.out.println("get nodegroup in "+(end-start)+" ms");
+	      start = end;
+	      //sfile  sfilelocation
+	      //把所有的sfile得到应该就不需要再拉取sfilelocation了
+	      long maxid = client.getMaxFid();
+	      synchronized (RawStoreImp.class) {
+	      	if(RawStoreImp.getFid() < maxid)
+	      		RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
+				}
+	      long num = 1000;
+	      for(long id = 0;id < maxid; id+= num)
+	      {
+	      	LinkedList<Long> ids = new LinkedList<Long>();
+	      	for(long fid = id; fid < num + id && fid < maxid; fid++)
+	      		ids.add(fid);
+	      	for(SFile sf : client.get_files_by_ids(ids))
+	      	{
+	      		cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+	      	}
+	      }
+	      end = System.currentTimeMillis();
+	      System.out.println("get sfile and sfilelocation in "+(end-start)+" ms");
+	      start = end;
+	      
 			}
 		} catch (MetaException e) {
 			// TODO Auto-generated catch block
@@ -95,7 +157,10 @@ public class MsgProcessing {
 	public void handleMsg(DDLMsg msg) throws JedisConnectionException, IOException, NoSuchObjectException, TException, ClassNotFoundException {
 		
 		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
+		{
+			System.out.println("property isUseMetaStoreClient is set to false, so nothing to do here.");
 			return;
+		}
 		int eventid = (int) msg.getEvent_id();
 		switch (eventid) {
 			case MSGType.MSG_NEW_DATABESE: 
@@ -149,6 +214,8 @@ public class MsgProcessing {
 				String tableName = (String) msg.getMsg_data().get("table_name");
 				String key = dbName + "." + tableName;
 				Table tbl = client.getTable(dbName, tableName);
+				cs.writeObject(ObjectType.TABLE, key, tbl);
+				/*
 				TableImage ti = TableImage.generateTableImage(tbl);
 				CacheStore.getTableHm().put(key, tbl);
 				cs.writeObject(ObjectType.TABLE, key, ti);
@@ -173,6 +240,7 @@ public class MsgProcessing {
 						}
 					}
 				}
+				*/
 				break;
 			}
 			case MSGType.MSG_DROP_TABLE:
@@ -251,6 +319,7 @@ public class MsgProcessing {
 				String tblName = (String)msg.getMsg_data().get("table_name");
 				String indexName = (String)msg.getMsg_data().get("index_name");
 				//Index ind = client.getIndex(dbName, tblName, indexName);
+				
 				String key = dbName + "." + tblName + "." + indexName;
 				if(CacheStore.getIndexHm().remove(key) != null)
 					cs.removeObject(ObjectType.INDEX, key);
@@ -271,6 +340,8 @@ public class MsgProcessing {
 			{
 				String nodename = (String)msg.getMsg_data().get("node_name");
 				cs.removeObject(ObjectType.NODE, nodename);
+				cs.updateCache(ObjectType.NODEGROUP);
+				cs.updateCache(ObjectType.TABLE);
 				break;
 			}
 			
@@ -331,6 +402,8 @@ public class MsgProcessing {
 				if(ngs == null || ngs.size() == 0)
 					break;
 				NodeGroup ng = ngs.get(0);
+				cs.writeObject(ObjectType.NODEGROUP, nodeGroupName, ng);
+				/*
 				NodeGroupImage ngi = NodeGroupImage.generateNodeGroupImage(ng);
 				CacheStore.getNodeGroupHm().put(ng.getNode_group_name(), ng);
 				cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ngi);
@@ -340,12 +413,14 @@ public class MsgProcessing {
 						cs.writeObject(ObjectType.NODE, ngi.getNodeKeys().get(i), node);
 					}
 				}
+				*/
 				break;
 			}
 			//case MSGType.MSG_ALTER_NODEGROUP:
 			case MSGType.MSG_DEL_NODEGROUP:{
 				String nodeGroupName = (String)msg.getMsg_data().get("nodegroup_name");
 				cs.removeObject(ObjectType.NODEGROUP, nodeGroupName);
+				cs.updateCache(ObjectType.TABLE);
 				break;
 			}
 			
