@@ -336,15 +336,13 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public boolean add_partition_index_files(Index arg0, Partition arg1,
-      List<SFile> arg2, List<Long> arg3) throws MetaException, TException {
-    // TODO zy
-    return false;
+  public boolean add_partition_index_files(Index index, Partition part, List<SFile> file,
+      List<Long> originfid) throws MetaException, TException {
+  	return client.add_partition_index_files(index, part, file, originfid);
   }
 
   @Override
-  public Partition add_partition_with_environment_context(Partition arg0,
-      EnvironmentContext arg1) throws InvalidObjectException,
+  public Partition add_partition_with_environment_context(Partition part, EnvironmentContext envContext) throws InvalidObjectException,
       AlreadyExistsException, MetaException, TException {
     // TODO mzy
     return null;
@@ -369,24 +367,21 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public int add_subpartition_files(Subpartition arg0, List<SFile> arg1)
+  public int add_subpartition_files(Subpartition subpart, List<SFile> files)
       throws TException {
-    // TODO Auto-generated method stub
-    return 0;
+    return client.add_subpartition_files(subpart, files);
   }
 
   @Override
   public boolean add_subpartition_index(Index index, Subpartition subpart)
       throws MetaException, AlreadyExistsException, TException {
-    // TODO Auto-generated method stub
     return client.add_subpartition_index(index, subpart);
   }
 
   @Override
-  public boolean add_subpartition_index_files(Index arg0, Subpartition arg1,
-      List<SFile> arg2, List<Long> arg3) throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+  public boolean add_subpartition_index_files(Index index, Subpartition subpart,
+      List<SFile> file, List<Long> originfid) throws MetaException, TException {
+    return client.add_subpartition_index_files(index, subpart, file, originfid);
   }
 
   @Override
@@ -439,8 +434,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public void alter_table_with_environment_context(String arg0, String arg1,
-      Table arg2, EnvironmentContext arg3)
+  public void alter_table_with_environment_context(final String dbname,
+      final String name, final Table newTable,
+      final EnvironmentContext envContext)
       throws InvalidOperationException, MetaException, TException {
     // TODO implement this method HiveMetaStoreClient didn't call this method
   }
@@ -1118,11 +1114,12 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public void create_table_with_environment_context(Table arg0,
-      EnvironmentContext arg1) throws AlreadyExistsException,
+  public void create_table_with_environment_context(final Table tbl,
+      final EnvironmentContext envContext) throws AlreadyExistsException,
       InvalidObjectException, MetaException, NoSuchObjectException,
       TException {
     // TODO implement this method
+  	throw new MetaException("not implemented yet.");
   }
 
   @Override
@@ -1238,7 +1235,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     final boolean expr = isNullOrEmpty(userName) || isNullOrEmpty(dbName);
     return !expr && client.deleteUserAssignment(userName, dbName);
   }
-
+  // FIXME kandaozhe
   @Override
   public boolean delete_partition_column_statistics(String dbName, String tableName,
       String partName, String colName) throws NoSuchObjectException,
@@ -1342,8 +1339,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean drop_type(String name) throws MetaException,
       NoSuchObjectException, TException {
+  	/*
     startFunction("drop_type", ": " + name);
-
+    
     boolean success = false;
     Exception ex = null;
     try {
@@ -1364,6 +1362,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       endFunction("drop_type", success, ex);
     }
     return success;
+    */
+  	// FIXME can not be sent to old metastore
+  	return false;
   }
 
   @Override
@@ -1443,13 +1444,15 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public GeoLocation getGeoLocationByName(String geoLocName) throws MetaException,
       NoSuchObjectException, TException {
-    return rs.getGeoLocationByName(geoLocName);
+//    return rs.getGeoLocationByName(geoLocName);
+  	return client.getGeoLocationByName(geoLocName);
   }
 
   @Override
   public List<GeoLocation> getGeoLocationByNames(List<String> geoLocNames)
       throws MetaException, TException {
-    return rs.getGeoLocationByNames(geoLocNames);
+//    return rs.getGeoLocationByNames(geoLocNames);
+  	return client.getGeoLocationByNames(geoLocNames);
   }
 
   @Override
@@ -1509,13 +1512,15 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public List<BusiTypeColumn> get_all_busi_type_cols() throws MetaException,
       TException {
-    return rs.getAllBusiTypeCols();
+//    return rs.getAllBusiTypeCols();
+  	return client.get_all_busi_type_cols();
   }
 
   @Override
   public List<BusiTypeDatacenter> get_all_busi_type_datacenters()
       throws MetaException, TException {
-    return rs.get_all_busi_type_datacenters();
+//    return rs.get_all_busi_type_datacenters();
+  	return client.get_all_busi_type_datacenters();
   }
 
   @Override
@@ -1668,10 +1673,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public List<String> get_lucene_index_names(String arg0, String arg1,
-      short arg2) throws MetaException, TException {
-    // TODO HiveMetaStore doesn't implement this method
-    return Lists.newArrayList();
+  public List<String> get_lucene_index_names(String db_name, String tbl_name, short max_indexes) throws MetaException, TException {
+  	throw new MetaException("Not implemented yet!");
   }
 
   @Override
@@ -1698,13 +1701,15 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       throws NoSuchObjectException, MetaException, InvalidInputException,
       InvalidObjectException, TException {
     // TODO copy from HiveMetaStore
-    return rs.getPartitionColumnStatistics(dbName, tableName, partitionName, null, colName);
+//    return rs.getPartitionColumnStatistics(dbName, tableName, partitionName, null, colName);
+  	return client.getPartitionColumnStatistics(dbName, tableName, partitionName, colName);
   }
 
   @Override
   public List<SFileRef> get_partition_index_files(Index index, Partition part)
       throws MetaException, TException {
-    return rs.getPartitionIndexFiles(index, part);
+//    return rs.getPartitionIndexFiles(index, part);
+  	return client.get_partition_index_files(index, part);
   }
 
   @Override
@@ -1772,6 +1777,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public PrincipalPrivilegeSet get_privilege_set(HiveObjectRef hiveObject,
       String userName, List<String> groupNames) throws MetaException, TException {
+  	/*
     if (hiveObject.getObjectType() == HiveObjectType.COLUMN) {
       String partName = getPartName(hiveObject);
       return rs.getColumnPrivilegeSet(hiveObject.getDbName(), hiveObject
@@ -1790,7 +1796,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     } else if (hiveObject.getObjectType() == HiveObjectType.GLOBAL) {
       return rs.getUserPrivilegeSet(userName, groupNames);
     }
-    return null;
+    */
+    return client.get_privilege_set(hiveObject, userName, groupNames);
   }
 
   private String getPartName(HiveObjectRef hiveObject) throws MetaException {
@@ -1807,7 +1814,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
   @Override
   public List<String> get_role_names() throws MetaException, TException {
-    return rs.listRoleNames();
+//    return rs.listRoleNames();
+  	return client.listRoleNames();
   }
 
   @Override
@@ -1835,7 +1843,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public List<SFileRef> get_subpartition_index_files(Index index,
       Subpartition subpart) throws MetaException, TException {
-    return rs.getSubpartitionIndexFiles(index, subpart);
+//    return rs.getSubpartitionIndexFiles(index, subpart);
+  	return client.get_subpartition_index_files(index, subpart);
   }
 
   @Override
@@ -1848,6 +1857,10 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public Table get_table(String dbname, String tablename) throws MetaException,
       NoSuchObjectException, TException {
     Table t = rs.getTable(dbname, tablename);
+    if(t == null)
+    {
+    	throw new NoSuchObjectException(dbname + "." + tablename + " table not found");
+    }
     return t;
   }
 
@@ -1856,7 +1869,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       String tableName, String colName) throws NoSuchObjectException,
       MetaException, InvalidInputException, InvalidObjectException,
       TException {
-    return rs.getTableColumnStatistics(dbName, tableName, colName);
+//    return rs.getTableColumnStatistics(dbName, tableName, colName);
+  	return client.getTableColumnStatistics(dbName, tableName, colName);
   }
 
   @Override
@@ -1887,7 +1901,9 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public Type get_type(String typeName) throws MetaException,
       NoSuchObjectException, TException {
-    return rs.getType(typeName);
+//    return rs.getType(typeName);
+  	// FIXME can not be sent to old metastore
+  	return null;
   }
 
   @Override
@@ -1900,15 +1916,16 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean grant_privileges(PrivilegeBag privileges) throws MetaException,
       TException {
-    return rs.grantPrivileges(privileges);
+//    return rs.grantPrivileges(privileges);
+  	return client.grant_privileges(privileges);
   }
 
   @Override
   public boolean grant_role(String role, String userName, PrincipalType principalType,
       String grantor, PrincipalType grantorType, boolean grantOption)
       throws MetaException, TException {
-    return rs.grantRole(rs.getRole(role), userName, principalType, grantor, grantorType,
-        grantOption);
+//    return rs.grantRole(rs.getRole(role), userName, principalType, grantor, grantorType,grantOption);
+  	return client.grant_role(role, userName, principalType, grantor, grantorType, grantOption);
   }
 
   @Override
@@ -1917,18 +1934,22 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       throws MetaException, NoSuchObjectException, UnknownDBException,
       UnknownTableException, UnknownPartitionException,
       InvalidPartitionException, TException {
-    return rs.isPartitionMarkedForEvent(dbName, tblName, partName, evtType);
+//    return rs.isPartitionMarkedForEvent(dbName, tblName, partName, evtType);
+  	return client.isPartitionMarkedForEvent(dbName, tblName, partName, evtType);
   }
 
   @Override
   public List<NodeGroup> listDBNodeGroups(String dbName) throws MetaException,
       TException {
-    return rs.listDBNodeGroups(dbName);
+//    return rs.listDBNodeGroups(dbName);
+  	//缓存的database对象中没有nodegroup的信息
+  	return client.listDBNodeGroups(dbName);
   }
 
   @Override
   public List<EquipRoom> listEquipRoom() throws MetaException, TException {
-    return rs.listEquipRoom();
+//    return rs.listEquipRoom();
+  	return client.listEquipRoom();
   }
 
   @Override
@@ -1940,7 +1961,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
   @Override
   public List<GeoLocation> listGeoLocation() throws MetaException, TException {
-    return rs.listGeoLocation();
+//    return rs.listGeoLocation();
+  	return client.listGeoLocation();
   }
 
   @Override
@@ -1965,7 +1987,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
   @Override
   public List<Role> listRoles() throws MetaException, TException {
-    return rs.listRoles();
+//    return rs.listRoles();
+  	return client.listRoles();
   }
 
   @Override
@@ -2014,7 +2037,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
   @Override
   public List<User> listUsers() throws MetaException, TException {
-    return rs.listUsers();
+//    return rs.listUsers();
+  	return client.listUsers();
   }
 
   @Override
@@ -2030,20 +2054,23 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public List<Role> list_roles(String arg0, PrincipalType arg1)
+  public List<Role> list_roles(String principalName, PrincipalType principalType)
       throws MetaException, TException {
-    return rs.listRoles();
+//    return rs.listRoles();
+  	return client.list_roles(principalName, principalType);
   }
 
   @Override
   public List<String> list_users(Database dbName) throws MetaException,
       TException {
-    return rs.listUsersNames(dbName.getName());
+//    return rs.listUsersNames(dbName.getName());
+  	return client.list_users(dbName);
   }
 
   @Override
   public List<String> list_users_names() throws MetaException, TException {
-    return rs.listUsersNames();
+//    return rs.listUsersNames();
+  	return client.list_users_names();
   }
 
   @Override
@@ -2052,7 +2079,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       throws MetaException, NoSuchObjectException, UnknownDBException,
       UnknownTableException, UnknownPartitionException,
       InvalidPartitionException, TException {
-    rs.markPartitionForEvent(dbName, tblName, partVals, evtType);
+//    rs.markPartitionForEvent(dbName, tblName, partVals, evtType);
+  	client.markPartitionForEvent(dbName, tblName, partVals, evtType);
   }
 
   @Override
@@ -2099,37 +2127,43 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean modifyEquipRoom(EquipRoom er) throws MetaException,
       TException {
-    return rs.modifyEquipRoom(er);
+//    return rs.modifyEquipRoom(er);
+  	return client.modifyEquipRoom(er);
   }
 
   @Override
   public boolean modifyGeoLocation(GeoLocation gl) throws MetaException,
       TException {
-    return rs.modifyGeoLocation(gl);
+//    return rs.modifyGeoLocation(gl);
+  	return client.modifyGeoLocation(gl);
   }
 
   @Override
   public boolean modifyNodeGroup(String schemaName, NodeGroup ng)
       throws MetaException, TException {
-    return rs.modifyNodeGroup(schemaName, ng);
+//    return rs.modifyNodeGroup(schemaName, ng);
+  	return client.modifyNodeGroup(schemaName, ng);
   }
 
   @Override
   public boolean modifySchema(String schemaName, GlobalSchema schema)
       throws MetaException, TException {
-    return rs.modifySchema(schemaName, schema);
+//    return rs.modifySchema(schemaName, schema);
+  	return client.modifySchema(schemaName, schema);
   }
 
   @Override
   public Device modify_device(Device dev, Node node) throws MetaException,
       TException {
-    return rs.modifyDevice(dev, node);
+//    return rs.modifyDevice(dev, node);
+  	return client.changeDeviceLocation(dev, node);
   }
 
   @Override
   public boolean modify_user(User user) throws NoSuchObjectException,
       MetaException, TException {
-    return rs.modifyUser(user);
+//    return rs.modifyUser(user);
+  	return client.modify_user(user);
   }
 
   @Override
@@ -2167,22 +2201,24 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public Map<String, String> partition_name_to_spec(String part_name)
       throws MetaException, TException {
-    if (part_name.length() == 0) {
-      return new HashMap<String, String>();
-    }
-    return Warehouse.makeSpecFromName(part_name);
+//    if (part_name.length() == 0) {
+//      return new HashMap<String, String>();
+//    }
+//    return Warehouse.makeSpecFromName(part_name);
+    return client.partitionNameToSpec(part_name);
   }
 
   @Override
   public List<String> partition_name_to_vals(String part_name)
       throws MetaException, TException {
-    if (part_name.length() == 0) {
-      return new ArrayList<String>();
-    }
-    LinkedHashMap<String, String> map = Warehouse.makeSpecFromName(part_name);
-    List<String> part_vals = new ArrayList<String>();
-    part_vals.addAll(map.values());
-    return part_vals;
+//    if (part_name.length() == 0) {
+//      return new ArrayList<String>();
+//    }
+//    LinkedHashMap<String, String> map = Warehouse.makeSpecFromName(part_name);
+//    List<String> part_vals = new ArrayList<String>();
+//    part_vals.addAll(map.values());
+//    return part_vals;
+  	return client.partitionNameToVals(part_name);
   }
 
   @Override
@@ -2259,13 +2295,15 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean revoke_privileges(PrivilegeBag privileges) throws MetaException,
       TException {
-    return rs.revokePrivileges(privileges);
+//    return rs.revokePrivileges(privileges);
+  	return client.revoke_privileges(privileges);
   }
 
   @Override
   public boolean revoke_role(String role, String userName, PrincipalType principalType)
       throws MetaException, TException {
-    return rs.revokeRole(rs.getRole(role), userName, principalType);
+//    return rs.revokeRole(rs.getRole(role), userName, principalType);
+  	return client.revoke_role(role, userName, principalType);
   }
 
   @Override
@@ -2349,14 +2387,16 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public List<Busitype> showBusitypes() throws InvalidObjectException,
       MetaException, TException {
-    return rs.showBusitypes();
+//    return rs.showBusitypes();
+  	return client.showBusitypes();
   }
 
   @Override
   public statfs statFileSystem(long from, long to) throws MetaException,
       TException {
     // TODO zy
-    return rs.statFileSystem(from, to);
+//    return rs.statFileSystem(from, to);
+  	return client.statFileSystem(from, to);
   }
 
   @Override
@@ -2382,13 +2422,16 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public void update_attribution(Database db) throws NoSuchObjectException,
       InvalidOperationException, MetaException, TException {
-    rs.alterDatabase(db.getName(), db);
+//    rs.alterDatabase(db.getName(), db);
+  	client.update_attribution(db);
   }
 
   @Override
   public boolean update_partition_column_statistics(ColumnStatistics colStats)
       throws NoSuchObjectException, InvalidObjectException,
       MetaException, InvalidInputException, TException {
+  	return client.updatePartitionColumnStatistics(colStats);
+  	/*
     String dbName = null;
     String tableName = null;
     String partName = null;
@@ -2428,6 +2471,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     } finally {
       endFunction("write_partition_column_statistics: ", ret != false, null);
     }
+    */
   }
 
   private String lowerCaseConvertPartName(String partName) throws MetaException {
@@ -2478,14 +2522,14 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public boolean update_table_column_statistics(ColumnStatistics colStats)
       throws NoSuchObjectException, InvalidObjectException,
       MetaException, InvalidInputException, TException {
-    return rs.updateTableColumnStatistics(colStats);
+//    return rs.updateTableColumnStatistics(colStats);
+  	return client.updateTableColumnStatistics(colStats);
   }
 
   @Override
   public boolean user_authority_check(User user, Table tbl,
       List<MSOperation> ops) throws MetaException, TException {
-    // TODO implement this method
-    return false;
+    return client.user_authority_check(user, tbl, ops);
   }
 
   @Override

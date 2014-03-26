@@ -3,6 +3,8 @@ package org.apache.hadoop.hive.metastore.newms;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -176,8 +178,7 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public List<String> getDatabases(String pattern) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		return cs.getDatabases(pattern);
 	}
 
 	@Override
@@ -643,8 +644,18 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<String> getTables(String dbName, String pattern)
 			throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		Iterator<String> iter = CacheStore.getTableHm().keySet().iterator();
+		List<String> tn = new LinkedList<String>();
+		while(iter.hasNext()){
+			String key = iter.next();
+			if(key.startsWith(dbName))
+			{
+				String tabname = key.split("\\.")[1];
+				if(tabname.matches(pattern))
+					tn.add(tabname);
+			}
+		}
+		return tn;
 	}
 
 	@Override
