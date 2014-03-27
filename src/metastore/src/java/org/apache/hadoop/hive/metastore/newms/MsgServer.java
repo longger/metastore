@@ -2,9 +2,13 @@ package org.apache.hadoop.hive.metastore.newms;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Semaphore;
+
+import javax.jdo.PersistenceManager;
 
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory;
@@ -30,6 +34,7 @@ public class MsgServer {
 	private static boolean initalized = false;
 	private static SendThread send = new SendThread();
 	private static boolean zkfailed = false;
+	private static long max_msg_id = 0;
 	private static ConcurrentLinkedQueue<DDLMsg> queue = new ConcurrentLinkedQueue<DDLMsg>();
 	private static ConcurrentLinkedQueue<DDLMsg> failed_queue = new ConcurrentLinkedQueue<DDLMsg>();
 
@@ -320,6 +325,12 @@ public class MsgServer {
 		
 	}
 
+	public static DDLMsg generateDDLMsg(long event_id,long db_id,long node_id ,PersistenceManager pm , Object eventObject,HashMap<String,Object> old_object_params){
+    Long id = -1l;
+    long now = new Date().getTime()/1000;
+    return new MSGFactory.DDLMsg(event_id, id, old_object_params, eventObject, max_msg_id++, db_id, node_id, now, null,old_object_params);
+  }
+	
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 	}

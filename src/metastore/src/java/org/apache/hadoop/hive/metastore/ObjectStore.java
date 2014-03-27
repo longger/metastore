@@ -1678,6 +1678,30 @@ public class ObjectStore implements RawStore, Configurable {
       return null;
     }
   }
+  
+  /**
+   * 与createfile方法功能基本一致，区别在于不会重新设置参数的fid，不发消息
+   * @param file
+   * @throws InvalidObjectException 
+   */
+  public boolean persistFile(SFile file) throws InvalidObjectException
+  {
+  	boolean commited = false;
+  	MFile f = getMFile(file.getFid());
+  	if(f != null)
+  		throw new InvalidObjectException("file(fid="+file.getFid()+") already exists.");
+    try {
+      openTransaction();
+      MFile mfile = convertToMFile(file);
+      pm.makePersistent(mfile);
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    return commited;
+  }
 
   public boolean createFileLocation(SFileLocation location) throws InvalidObjectException, MetaException {
     boolean r = true;
