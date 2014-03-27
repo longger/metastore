@@ -212,6 +212,8 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual bool assiginSchematoDB(const std::string& dbName, const std::string& schemaName, const std::vector<FieldSchema> & fileSplitKeys, const std::vector<FieldSchema> & part_keys, const std::vector<NodeGroup> & ngs) = 0;
   virtual void statFileSystem(statfs& _return, const int64_t begin_time, const int64_t end_time) = 0;
   virtual int64_t getMaxFid() = 0;
+  virtual bool offlineDevicePhysically(const std::string& devid) = 0;
+  virtual bool flSelectorWatch(const std::string& table, const int32_t op) = 0;
 };
 
 class ThriftHiveMetastoreIfFactory : virtual public  ::facebook::fb303::FacebookServiceIfFactory {
@@ -907,6 +909,14 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   }
   int64_t getMaxFid() {
     int64_t _return = 0;
+    return _return;
+  }
+  bool offlineDevicePhysically(const std::string& /* devid */) {
+    bool _return = false;
+    return _return;
+  }
+  bool flSelectorWatch(const std::string& /* table */, const int32_t /* op */) {
+    bool _return = false;
     return _return;
   }
 };
@@ -26824,6 +26834,251 @@ class ThriftHiveMetastore_getMaxFid_presult {
 
 };
 
+typedef struct _ThriftHiveMetastore_offlineDevicePhysically_args__isset {
+  _ThriftHiveMetastore_offlineDevicePhysically_args__isset() : devid(false) {}
+  bool devid;
+} _ThriftHiveMetastore_offlineDevicePhysically_args__isset;
+
+class ThriftHiveMetastore_offlineDevicePhysically_args {
+ public:
+
+  ThriftHiveMetastore_offlineDevicePhysically_args() : devid() {
+  }
+
+  virtual ~ThriftHiveMetastore_offlineDevicePhysically_args() throw() {}
+
+  std::string devid;
+
+  _ThriftHiveMetastore_offlineDevicePhysically_args__isset __isset;
+
+  void __set_devid(const std::string& val) {
+    devid = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_offlineDevicePhysically_args & rhs) const
+  {
+    if (!(devid == rhs.devid))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_offlineDevicePhysically_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_offlineDevicePhysically_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_offlineDevicePhysically_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_offlineDevicePhysically_pargs() throw() {}
+
+  const std::string* devid;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_offlineDevicePhysically_result__isset {
+  _ThriftHiveMetastore_offlineDevicePhysically_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_offlineDevicePhysically_result__isset;
+
+class ThriftHiveMetastore_offlineDevicePhysically_result {
+ public:
+
+  ThriftHiveMetastore_offlineDevicePhysically_result() : success(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_offlineDevicePhysically_result() throw() {}
+
+  bool success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_offlineDevicePhysically_result__isset __isset;
+
+  void __set_success(const bool val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_offlineDevicePhysically_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_offlineDevicePhysically_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_offlineDevicePhysically_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_offlineDevicePhysically_presult__isset {
+  _ThriftHiveMetastore_offlineDevicePhysically_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_offlineDevicePhysically_presult__isset;
+
+class ThriftHiveMetastore_offlineDevicePhysically_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_offlineDevicePhysically_presult() throw() {}
+
+  bool* success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_offlineDevicePhysically_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _ThriftHiveMetastore_flSelectorWatch_args__isset {
+  _ThriftHiveMetastore_flSelectorWatch_args__isset() : table(false), op(false) {}
+  bool table;
+  bool op;
+} _ThriftHiveMetastore_flSelectorWatch_args__isset;
+
+class ThriftHiveMetastore_flSelectorWatch_args {
+ public:
+
+  ThriftHiveMetastore_flSelectorWatch_args() : table(), op(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_flSelectorWatch_args() throw() {}
+
+  std::string table;
+  int32_t op;
+
+  _ThriftHiveMetastore_flSelectorWatch_args__isset __isset;
+
+  void __set_table(const std::string& val) {
+    table = val;
+  }
+
+  void __set_op(const int32_t val) {
+    op = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_flSelectorWatch_args & rhs) const
+  {
+    if (!(table == rhs.table))
+      return false;
+    if (!(op == rhs.op))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_flSelectorWatch_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_flSelectorWatch_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_flSelectorWatch_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_flSelectorWatch_pargs() throw() {}
+
+  const std::string* table;
+  const int32_t* op;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_flSelectorWatch_result__isset {
+  _ThriftHiveMetastore_flSelectorWatch_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_flSelectorWatch_result__isset;
+
+class ThriftHiveMetastore_flSelectorWatch_result {
+ public:
+
+  ThriftHiveMetastore_flSelectorWatch_result() : success(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_flSelectorWatch_result() throw() {}
+
+  bool success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_flSelectorWatch_result__isset __isset;
+
+  void __set_success(const bool val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_flSelectorWatch_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_flSelectorWatch_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_flSelectorWatch_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_flSelectorWatch_presult__isset {
+  _ThriftHiveMetastore_flSelectorWatch_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_flSelectorWatch_presult__isset;
+
+class ThriftHiveMetastore_flSelectorWatch_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_flSelectorWatch_presult() throw() {}
+
+  bool* success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_flSelectorWatch_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  ::facebook::fb303::FacebookServiceClient {
  public:
   ThriftHiveMetastoreClient(boost::shared_ptr< ::apache::thrift::protocol::TProtocol> prot) :
@@ -27424,6 +27679,12 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   int64_t getMaxFid();
   void send_getMaxFid();
   int64_t recv_getMaxFid();
+  bool offlineDevicePhysically(const std::string& devid);
+  void send_offlineDevicePhysically(const std::string& devid);
+  bool recv_offlineDevicePhysically();
+  bool flSelectorWatch(const std::string& table, const int32_t op);
+  void send_flSelectorWatch(const std::string& table, const int32_t op);
+  bool recv_flSelectorWatch();
 };
 
 class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceProcessor {
@@ -27630,6 +27891,8 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_assiginSchematoDB(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_statFileSystem(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_getMaxFid(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_offlineDevicePhysically(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_flSelectorWatch(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
  public:
   ThriftHiveMetastoreProcessor(boost::shared_ptr<ThriftHiveMetastoreIf> iface) :
      ::facebook::fb303::FacebookServiceProcessor(iface),
@@ -27830,6 +28093,8 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["assiginSchematoDB"] = &ThriftHiveMetastoreProcessor::process_assiginSchematoDB;
     processMap_["statFileSystem"] = &ThriftHiveMetastoreProcessor::process_statFileSystem;
     processMap_["getMaxFid"] = &ThriftHiveMetastoreProcessor::process_getMaxFid;
+    processMap_["offlineDevicePhysically"] = &ThriftHiveMetastoreProcessor::process_offlineDevicePhysically;
+    processMap_["flSelectorWatch"] = &ThriftHiveMetastoreProcessor::process_flSelectorWatch;
   }
 
   virtual ~ThriftHiveMetastoreProcessor() {}
@@ -29719,6 +29984,24 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
       ifaces_[i]->getMaxFid();
     }
     return ifaces_[i]->getMaxFid();
+  }
+
+  bool offlineDevicePhysically(const std::string& devid) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->offlineDevicePhysically(devid);
+    }
+    return ifaces_[i]->offlineDevicePhysically(devid);
+  }
+
+  bool flSelectorWatch(const std::string& table, const int32_t op) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->flSelectorWatch(table, op);
+    }
+    return ifaces_[i]->flSelectorWatch(table, op);
   }
 
 };

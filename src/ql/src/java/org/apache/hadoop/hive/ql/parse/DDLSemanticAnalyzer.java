@@ -3535,7 +3535,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     }
     List<FieldSchema> fieldSchemas = tab.getFileSplitKeys();
     for(FieldSchema fs : fieldSchemas){
-      if(oldColName.equals(newColName)){
+      if (oldColName.equalsIgnoreCase(newColName)) {
         continue;
       }
       if (fs.getName().equals(oldColName)){
