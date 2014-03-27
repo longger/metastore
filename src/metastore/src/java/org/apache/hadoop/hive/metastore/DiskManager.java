@@ -560,9 +560,9 @@ public class DiskManager {
     }
 
     // Node -> Device Map
-    private final Map<String, NodeInfo> ndmap;
+    private final ConcurrentHashMap<String, NodeInfo> ndmap;
     // Active Device Map
-    private final Map<String, DeviceInfo> admap;
+    private final ConcurrentHashMap<String, DeviceInfo> admap;
 
     public class BackupTimerTask extends TimerTask {
       private long last_backupTs = System.currentTimeMillis();
@@ -1401,11 +1401,12 @@ public class DiskManager {
         sb.append("\n");
 
         // generate report file
+        FileWriter fw = null;
         try {
           if (!reportFile.exists()) {
             reportFile.createNewFile();
           }
-          FileWriter fw = new FileWriter(reportFile.getAbsoluteFile(), true);
+          fw = new FileWriter(reportFile.getAbsoluteFile(), true);
           BufferedWriter bw = new BufferedWriter(fw);
           bw.write(sb.toString());
           bw.close();

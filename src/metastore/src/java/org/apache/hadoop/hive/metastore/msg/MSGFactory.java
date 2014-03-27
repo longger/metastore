@@ -598,9 +598,6 @@ public class MSGFactory {
         if(msg.getOld_object_params().containsKey("parent_partition_name")){
           params.put("parent_partition_name",msg.getOld_object_params().get("parent_partition_name"));
         }
-        if(msg.getOld_object_params().containsKey("parent_partition_name")){
-          params.put("parent_partition_name",msg.getOld_object_params().get("parent_partition_name"));
-        }
         if(msg.getOld_object_params().containsKey("db_name")){
           params.put("db_name",msg.getOld_object_params().get("db_name"));
         }
@@ -609,6 +606,9 @@ public class MSGFactory {
         }
         if (msg.getOld_object_params().containsKey("new_repnr")) {
           params.put("new_repnr", msg.getOld_object_params().get("new_repnr"));
+        }
+        if (msg.getOld_object_params().containsKey("op")) {
+          params.put("op", msg.getOld_object_params().get("op"));
         }
           break;
       case MSGType.MSG_STA_FILE_CHANGE :
