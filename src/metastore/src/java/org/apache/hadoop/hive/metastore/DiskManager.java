@@ -58,7 +58,7 @@ import org.apache.thrift.TException;
 public class DiskManager {
     public static long startupTs = System.currentTimeMillis();
     public RawStore rs;
-    //private String rsType;
+    private String rsType;
     public Log LOG;
     private final HiveConf hiveConf;
     public final int bsize = 64 * 1024;
@@ -934,10 +934,6 @@ public class DiskManager {
       private boolean useVoidCheck = false;
 
       public void init(HiveConf conf) throws MetaException {
-        this.init(conf,"RawStore");
-      }
-      
-      public void init(HiveConf conf, String rsType) throws MetaException {
         timeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_INVALIDATE_TIMEOUT);
         repDelCheck = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_REPDELCHECK_INTERVAL);
         voidFileCheck = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_VOIDFILECHECK);
@@ -1790,13 +1786,17 @@ public class DiskManager {
     public DiskManager(HiveConf conf, Log LOG, String rsType) throws IOException, MetaException {
       this.hiveConf = conf;
       this.LOG = LOG;
+      this.rsType = rsType;
+      
       if(rsType.equalsIgnoreCase("RawStoreImp")){
         rs = new RawStoreImp();
-      }else{
+      } else if (rsType.equalsIgnoreCase("RawStore")){
         String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
         Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
           rawStoreClassName);
         this.rs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+      } else{
+        throw new IOException("Wrong RawStore Type!");
       }
       
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
@@ -2999,11 +2999,6 @@ public class DiskManager {
       }
 
       public void init(HiveConf conf) throws MetaException {
-        this.init(conf, "RawStore");
-      }
-      
-      public void init(HiveConf conf, String rsType) throws MetaException {
-        
         if(rsType.equalsIgnoreCase("RawStoreImp")){
           this.rrs = new RawStoreImp();
         }else{
