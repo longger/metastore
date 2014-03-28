@@ -1678,6 +1678,30 @@ public class ObjectStore implements RawStore, Configurable {
       return null;
     }
   }
+  
+  /**
+   * 与createfile方法功能基本一致，区别在于不会重新设置参数的fid，不发消息
+   * @param file
+   * @throws InvalidObjectException 
+   */
+  public boolean persistFile(SFile file) throws InvalidObjectException
+  {
+  	boolean commited = false;
+  	MFile f = getMFile(file.getFid());
+  	if(f != null)
+  		throw new InvalidObjectException("file(fid="+file.getFid()+") already exists.");
+    try {
+      openTransaction();
+      MFile mfile = convertToMFile(file);
+      pm.makePersistent(mfile);
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    return commited;
+  }
 
   public boolean createFileLocation(SFileLocation location) throws InvalidObjectException, MetaException {
     boolean r = true;
@@ -1719,6 +1743,7 @@ public class ObjectStore implements RawStore, Configurable {
       old_params.put("location", location.getLocation());
       old_params.put("db_name", dbName);
       old_params.put("table_name", tableName);
+      old_params.put("op", "add");
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfloc.getFile(), old_params));
     }
     return r && commited;
@@ -9221,10 +9246,19 @@ public MUser getMUser(String userName) {
 
   public boolean delSFileLocation(String devid, String location) throws MetaException {
     boolean success = false;
+    MFileLocation mfl = null;
+    long fid = 0;
+    String db_name = null, table_name = null;
+
     try {
       openTransaction();
-      MFileLocation mfl = getMFileLocation(devid, location);
+      mfl = getMFileLocation(devid, location);
       if (mfl != null) {
+        fid = mfl.getFile().getFid();
+        if (mfl.getFile().getTable() != null) {
+          db_name = mfl.getFile().getTable().getDatabase().getName();
+          table_name = mfl.getFile().getTable().getTableName();
+        }
         pm.deletePersistent(mfl);
       }
       success = commitTransaction();
@@ -9234,6 +9268,17 @@ public MUser getMUser(String userName) {
       } else {
         DMProfile.sfldelR.incrementAndGet();
       }
+    }
+    if (mfl != null && success) {
+      // send the sfile rep change message
+      HashMap<String, Object> old_params = new HashMap<String, Object>();
+      old_params.put("f_id", fid);
+      old_params.put("devid", devid);
+      old_params.put("location", location);
+      old_params.put("db_name", db_name);
+      old_params.put("table_name", table_name);
+      old_params.put("op", "del");
+      MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfl.getFile(), old_params));
     }
     return success;
   }

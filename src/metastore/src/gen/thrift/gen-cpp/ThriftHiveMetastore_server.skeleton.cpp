@@ -1002,6 +1002,16 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("getMaxFid\n");
   }
 
+  bool offlineDevicePhysically(const std::string& devid) {
+    // Your implementation goes here
+    printf("offlineDevicePhysically\n");
+  }
+
+  bool flSelectorWatch(const std::string& table, const int32_t op) {
+    // Your implementation goes here
+    printf("flSelectorWatch\n");
+  }
+
 };
 
 int main(int argc, char **argv) {

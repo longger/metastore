@@ -4491,12 +4491,31 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throws FileOperationException, TException {
       String table_path = null;
 
+      if (dm == null) {
+        return null;
+      }
       if (node_name == null) {
         // this means we should select Best Available Node and Best Available Device;
+        // FIXME: add FLSelector here, filter already used nodes, update will used nodes;
         try {
           node_name = dm.findBestNode(flp);
           if (node_name == null) {
             throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
+          }
+          if (db_name != null && table_name != null && values.size() == 3) {
+            try {
+              String l2keys[] = values.get(2).getValue().split("-");
+              if (l2keys.length == 2) {
+                LOG.info("FLSelector will choose " + DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
+                    Long.parseLong(values.get(0).getValue()),
+                    Long.parseLong(l2keys[1])) + " for " + db_name + "." + table_name +
+                    " L1Key=" + values.get(0).getValue() +
+                    " L2Key=" + l2keys[1] + ", vs " + node_name);
+              }
+            }
+            catch (NumberFormatException nfe) {
+              LOG.error(nfe, nfe);
+            }
           }
         } catch (IOException e) {
           LOG.error(e, e);
@@ -4507,9 +4526,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       SFile cfile = null;
 
       // Step 1: find best device to put a file
-      if (dm == null) {
-        return null;
-      }
       try {
         if (flp == null) {
           flp = new FileLocatingPolicy(null, null, FileLocatingPolicy.EXCLUDE_NODES, FileLocatingPolicy.EXCLUDE_DEVS_SHARED, true);
@@ -4583,7 +4599,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
 
         if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-          LOG.error("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").");
+          LOG.error("File " + file.getFid() + " StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").");
           throw new FileOperationException("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").",
               FOFailReason.INVALID_STATE);
         }
@@ -4599,11 +4615,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             }
           }
           if (valid_nr > 1) {
-            LOG.error("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]");
+            LOG.error("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED] " + file.getFid());
             throw new FileOperationException("Too many file locations provided, expect 1 provided " + valid_nr + " [NOT CLOSED]",
                 FOFailReason.INVALID_FILE);
           } else if (valid_nr < 1) {
-            LOG.error("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]");
+            LOG.error("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED] " + file.getFid());
             e = new FileOperationException("Too little file locations provided, expect 1 provided " + valid_nr + " [CLOSED]",
                 FOFailReason.INVALID_FILE);
           }
@@ -4624,7 +4640,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             file.getLocations().removeAll(sflToDel);
           }
         } else {
-          LOG.error("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]");
+          LOG.error("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED] " + file.getFid());
           e = new FileOperationException("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED]",
                 FOFailReason.INVALID_FILE);
         }
@@ -7013,6 +7029,33 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
       }
       return r;
+    }
+
+    @Override
+    public boolean offlineDevicePhysically(String devid) throws MetaException, TException {
+      List<SFileLocation> sfls = getMS().getSFileLocations(devid, System.currentTimeMillis(), 0);
+      LOG.info("Offline Device " + devid + " physically, hit " + sfls.size() + " SFLs.");
+      for (SFileLocation f : sfls) {
+        boolean r = getMS().delSFileLocation(devid, f.getLocation());
+        if (r) {
+          dm.asyncDelSFL(f);
+        }
+      }
+      return true;
+    }
+
+    @Override
+    public boolean flSelectorWatch(String table, int op) throws MetaException, TException {
+      switch (op) {
+      case 0:
+        return DiskManager.flselector.watched(table);
+      case 1:
+        return DiskManager.flselector.unWatched(table);
+      case 2:
+        return DiskManager.flselector.flushWatched(table);
+      default:
+        return false;
+      }
     }
 
   }

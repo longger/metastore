@@ -11,8 +11,20 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.ObjectStore;
+import org.apache.hadoop.hive.metastore.api.FileOperationException;
+import org.apache.hadoop.hive.metastore.api.InvalidObjectException;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.SFile;
+import org.apache.hadoop.hive.metastore.api.SFileLocation;
+import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.hadoop.hive.metastore.tools.HiveMetaTool;
+import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.TTransportException;
 
 import com.taobao.metamorphosis.Message;
 import com.taobao.metamorphosis.client.MessageSessionFactory;
@@ -43,6 +55,11 @@ public class MetaMsgServer {
 
   static{
     send.start();
+    try {
+			new AsyncConsumer("meta-newms","meta-metastore").consume();
+		} catch (MetaClientException e) {
+			LOG.error(e, e);
+		}
   }
 
 
@@ -198,33 +215,36 @@ public class MetaMsgServer {
   public static class AsyncConsumer {
     final MetaClientConfig metaClientConfig = new MetaClientConfig();
     final ZKConfig zkConfig = new ZKConfig();
-    String localhost_name;
-    private  ObjectStore.MsgHandler handler ;
+    private ThriftHiveMetastore.Client client = null;
+    private HiveConf hiveConf = new HiveConf(HiveMetaTool.class);
+    private ObjectStore ob;
+    final String topic ;
+    final String group ;
+    public AsyncConsumer(String topic, String group) {
+    	this.topic = topic;
+    	this.group = group;
+    	ob = new ObjectStore();
+    	ob.setConf(hiveConf);
+    }
+    private ThriftHiveMetastore.Client createNewMSClient() throws TTransportException
+    {
+    	String[] uri =hiveConf.get("newms.rpc.uri").split(":");
+    	TTransport tt = new TSocket(uri[0], Integer.parseInt(uri[1]));
+    	tt.open();
+    	TProtocol protocol = new TBinaryProtocol(tt);  
+    	client = new ThriftHiveMetastore.Client(protocol);
+    	
+    	return client;
+    }
+    
     public void consume() throws MetaClientException{
-      //init objectstore,handler
-      HiveConf hiveConf = new HiveConf(HiveMetaTool.class);
-      ObjectStore ob = new ObjectStore();
-      ob.setConf(hiveConf);
-      handler = ob.new MsgHandler();
-
-      try {
-        localhost_name = InetAddress.getLocalHost().getHostName();
-      } catch (UnknownHostException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
-      }
       //设置zookeeper地址
       zkConfig.zkConnect = MetaMsgServer.zkAddr;
 
-      //这个地址到底是怎么初始化的。。没看懂呢。。consumer可以放在producer类一样的地方启动
-//      zkConfig.zkConnect = "192.168.1.13:3181";
       metaClientConfig.setZkConfig(zkConfig);
       // New session factory,强烈建议使用单例
       MessageSessionFactory sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
-      // subscribed topic
-      final String topic = "meta-test";
-      // consumer group
-      final String group = "meta-example";
+      
       // create consumer,强烈建议使用单例
 
       //生成处理线程
@@ -241,12 +261,69 @@ public class MetaMsgServer {
 
         @Override
         public void recieveMessages(final Message message) {
-          DDLMsg msg = new DDLMsg();
+          try {
+          	if(client == null)
+          		client  = createNewMSClient();
+					} catch (TTransportException e) {
+						LOG.error(e, e);
+						client = null;
+						throw new RuntimeException(e.getMessage());
+					}
           String data = new String(message.getData());
-
           LOG.info("---zy--consume msg: " + data);
 //          System.out.println(data);
-//          msg = DDLMsg.fromJson(data);
+          DDLMsg msg = DDLMsg.fromJson(data);
+          
+          int event_id = (int) msg.getEvent_id();
+          switch(event_id){
+	          case MSGType.MSG_REP_FILE_CHANGE:
+	          case MSGType.MSG_STA_FILE_CHANGE:
+	          case MSGType.MSG_REP_FILE_ONOFF:
+	          	break;
+	          case MSGType.MSG_CREATE_FILE:
+	          {
+	          	long fid = Long.parseLong(msg.getMsg_data().get("f_id").toString());
+	          	try {
+								SFile sf = client.get_file_by_id(fid);
+								ob.persistFile(sf);
+							} catch(InvalidObjectException e){
+								LOG.error(e,e);
+							} catch (FileOperationException e) {
+								LOG.error(e,e);
+							} catch (MetaException e) {
+								LOG.error(e,e);
+								throw new RuntimeException(e.getMessage());
+							} catch (TException e) {
+								LOG.error(e,e);
+								throw new RuntimeException(e.getMessage());
+							}
+	          	
+	          	break;
+	          }
+	          case MSGType.MSG_DEL_FILE:
+	          {
+	          	long fid = Long.parseLong(msg.getMsg_data().get("f_id").toString());
+	          	try {
+	          		SFile sf = ob.getSFile(fid);
+	          		if(sf == null)
+	          			break;
+	          		if(sf.getLocations() != null)
+	          			for(SFileLocation sfl : sf.getLocations())
+	          				ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+								ob.delSFile(fid);
+							} catch (MetaException e) {
+								LOG.error(e,e);
+								throw new RuntimeException(e.getMessage());
+							}
+	          	break;
+	          }
+	          
+	          default:
+	          {
+	          	LOG.warn("unhandled msg:"+msg.getEvent_id());
+	          	break;
+	          }
+          }
 //          if(msg.getLocalhost_name().equals(localhost_name))
 //          {
 //            LOG.info("---zy--local msg,no need to refresh " );
@@ -260,6 +337,8 @@ public class MetaMsgServer {
       }
       );
       consumer.completeSubscribe();
+      
+      LOG.info("---zy-- consumer start at "+zkConfig.zkConnect);
     }
   }
 
@@ -332,13 +411,6 @@ public class MetaMsgServer {
 
   public static void main(String[] args){
 
-
-    try {
-      new AsyncConsumer().consume();
-    } catch (MetaClientException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
-    }
   }
 
 

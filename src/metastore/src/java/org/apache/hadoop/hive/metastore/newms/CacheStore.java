@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -623,6 +624,37 @@ public class CacheStore {
           rl.add(dt.split("\\.")[1]);
         }
       }
+      return rl;
+    }catch(JedisConnectionException e){
+      RedisFactory.putBrokenInstance(jedis);
+      jedis = null;
+      throw e;
+    }finally{
+      RedisFactory.putInstance(jedis);
+    }
+  }
+  
+  /**
+   * 获取database的名字
+   * @param pattern 匹配规则按照redis实现方式，应该是与old metastore的不一致
+   * @return
+   */
+  public List<String> getDatabases(String pattern) throws JedisConnectionException
+  {
+  	Jedis jedis = null;
+    try{
+      jedis = rf.getDefaultInstance();
+      ScanParams sp = new ScanParams();
+      sp.count(1000);
+      sp.match(pattern);
+      List<String> rl = new ArrayList<String>();
+      String cursor = "0";
+      do{
+      	ScanResult<Map.Entry<String, String>> result = jedis.hscan(ObjectType.DATABASE.getName(), cursor, sp);
+      	cursor = result.getStringCursor();
+      	for(Map.Entry<String, String> en : result.getResult())
+      		rl.add(en.getKey());
+      }while(!cursor.equals("0"));
       return rl;
     }catch(JedisConnectionException e){
       RedisFactory.putBrokenInstance(jedis);

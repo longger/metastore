@@ -1292,4 +1292,8 @@ public interface IMetaStoreClient {
   public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException;
 
   public long getMaxFid() throws MetaException, TException;
+
+  public boolean offlineDevicePhysically(String devid) throws MetaException, TException;
+
+  public boolean flSelectorWatch(String table, int op) throws MetaException, TException;
 }

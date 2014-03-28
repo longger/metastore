@@ -254,6 +254,7 @@ public class MsgProcessing {
 				break;
 			}
 			
+			/*
 			case MSGType.MSG_REP_FILE_CHANGE:
 			case MSGType.MSG_STA_FILE_CHANGE:
 			case MSGType.MSG_REP_FILE_ONOFF:
@@ -298,7 +299,7 @@ public class MsgProcessing {
 				}
 				break;
 			}
-			
+			*/
 			case MSGType.MSG_NEW_INDEX:
 			case MSGType.MSG_ALT_INDEX:
 			case MSGType.MSG_ALT_INDEX_PARAM:
@@ -447,7 +448,7 @@ public class MsgProcessing {
 		    }
 			default:
 			{
-				System.out.println("unhandled msg : "+msg.toJson());
+				System.out.println("unhandled msg : "+msg.getEvent_id());
 				break;
 			}
 		}

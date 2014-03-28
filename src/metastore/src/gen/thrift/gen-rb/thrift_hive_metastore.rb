@@ -3253,6 +3253,38 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'getMaxFid failed: unknown result')
     end
 
+    def offlineDevicePhysically(devid)
+      send_offlineDevicePhysically(devid)
+      return recv_offlineDevicePhysically()
+    end
+
+    def send_offlineDevicePhysically(devid)
+      send_message('offlineDevicePhysically', OfflineDevicePhysically_args, :devid => devid)
+    end
+
+    def recv_offlineDevicePhysically()
+      result = receive_message(OfflineDevicePhysically_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'offlineDevicePhysically failed: unknown result')
+    end
+
+    def flSelectorWatch(table, op)
+      send_flSelectorWatch(table, op)
+      return recv_flSelectorWatch()
+    end
+
+    def send_flSelectorWatch(table, op)
+      send_message('flSelectorWatch', FlSelectorWatch_args, :table => table, :op => op)
+    end
+
+    def recv_flSelectorWatch()
+      result = receive_message(FlSelectorWatch_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'flSelectorWatch failed: unknown result')
+    end
+
   end
 
   class Processor < ::FacebookService::Processor 
@@ -5654,6 +5686,28 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'getMaxFid', seqid)
+    end
+
+    def process_offlineDevicePhysically(seqid, iprot, oprot)
+      args = read_args(iprot, OfflineDevicePhysically_args)
+      result = OfflineDevicePhysically_result.new()
+      begin
+        result.success = @handler.offlineDevicePhysically(args.devid)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'offlineDevicePhysically', seqid)
+    end
+
+    def process_flSelectorWatch(seqid, iprot, oprot)
+      args = read_args(iprot, FlSelectorWatch_args)
+      result = FlSelectorWatch_result.new()
+      begin
+        result.success = @handler.flSelectorWatch(args.table, args.op)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'flSelectorWatch', seqid)
     end
 
   end
@@ -12979,6 +13033,76 @@ module ThriftHiveMetastore
 
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::I64, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class OfflineDevicePhysically_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    DEVID = 1
+
+    FIELDS = {
+      DEVID => {:type => ::Thrift::Types::STRING, :name => 'devid'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class OfflineDevicePhysically_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class FlSelectorWatch_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    TABLE = 1
+    OP = 2
+
+    FIELDS = {
+      TABLE => {:type => ::Thrift::Types::STRING, :name => 'table'},
+      OP => {:type => ::Thrift::Types::I32, :name => 'op'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class FlSelectorWatch_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
     }
 
