@@ -58,7 +58,22 @@ import org.apache.thrift.TException;
 public class DiskManager {
     public static long startupTs = System.currentTimeMillis();
     public RawStore rs;
-    private String rsType;
+    private RsStatus rst;
+    public static enum RsStatus{
+      NEWMS,OLDMS;
+//      public static RsStatus getRsStatus(String rsType){
+//        if(rsType.equalsIgnoreCase("RawStoreImp")){
+//          return NEWMS;
+//        } else if (rsType.equalsIgnoreCase("RawStore")) {
+//          return OLDMS;
+//        } else{
+//          return WRONG;
+//        }
+//      }
+    }
+    enum rsType{
+      
+    }
     public Log LOG;
     private final HiveConf hiveConf;
     public final int bsize = 64 * 1024;
@@ -944,7 +959,7 @@ public class DiskManager {
         offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
         ff_range = hiveConf.getLongVar(HiveConf.ConfVars.DM_FF_RANGE);
 
-        if(rsType.equalsIgnoreCase("RawStoreImp")){
+        if(rst == RsStatus.NEWMS){
           this.trs = new RawStoreImp();
         }else{
           String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
@@ -1781,16 +1796,15 @@ public class DiskManager {
     }
 
     public DiskManager(HiveConf conf, Log LOG) throws IOException, MetaException {
-      this(conf, LOG, "RawStore");
+      this(conf, LOG, RsStatus.OLDMS);
     }
-    public DiskManager(HiveConf conf, Log LOG, String rsType) throws IOException, MetaException {
+    public DiskManager(HiveConf conf, Log LOG, RsStatus rsType) throws IOException, MetaException {
       this.hiveConf = conf;
       this.LOG = LOG;
-      this.rsType = rsType;
       
-      if(rsType.equalsIgnoreCase("RawStoreImp")){
+      if(rsType == RsStatus.NEWMS){
         rs = new RawStoreImp();
-      } else if (rsType.equalsIgnoreCase("RawStore")){
+      } else if (rsType == RsStatus.OLDMS){
         String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
         Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
           rawStoreClassName);
@@ -1798,7 +1812,7 @@ public class DiskManager {
       } else{
         throw new IOException("Wrong RawStore Type!");
       }
-      
+      this.rst = rsType;
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
       closeRepLimit = hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT);
@@ -2999,7 +3013,7 @@ public class DiskManager {
       }
 
       public void init(HiveConf conf) throws MetaException {
-        if(rsType.equalsIgnoreCase("RawStoreImp")){
+        if(rst == RsStatus.NEWMS){
           this.rrs = new RawStoreImp();
         }else{
           String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
