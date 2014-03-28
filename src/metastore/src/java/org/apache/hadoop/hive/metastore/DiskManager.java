@@ -50,6 +50,7 @@ import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.api.Subpartition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.metastore.newms.RawStoreImp;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.thrift.TException;
@@ -57,6 +58,7 @@ import org.apache.thrift.TException;
 public class DiskManager {
     public static long startupTs = System.currentTimeMillis();
     public RawStore rs;
+    //private String rsType;
     public Log LOG;
     private final HiveConf hiveConf;
     public final int bsize = 64 * 1024;
@@ -932,6 +934,10 @@ public class DiskManager {
       private boolean useVoidCheck = false;
 
       public void init(HiveConf conf) throws MetaException {
+        this.init(conf,"RawStore");
+      }
+      
+      public void init(HiveConf conf, String rsType) throws MetaException {
         timeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_INVALIDATE_TIMEOUT);
         repDelCheck = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_REPDELCHECK_INTERVAL);
         voidFileCheck = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_VOIDFILECHECK);
@@ -942,10 +948,15 @@ public class DiskManager {
         offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
         ff_range = hiveConf.getLongVar(HiveConf.ConfVars.DM_FF_RANGE);
 
-        String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
-        Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
-            rawStoreClassName);
-        this.trs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+        if(rsType.equalsIgnoreCase("RawStoreImp")){
+          this.trs = new RawStoreImp();
+        }else{
+          String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
+          Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
+              rawStoreClassName);
+          this.trs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+        }
+        
       }
 
       public void do_delete(SFile f, int nr) {
@@ -1774,12 +1785,20 @@ public class DiskManager {
     }
 
     public DiskManager(HiveConf conf, Log LOG) throws IOException, MetaException {
+      this(conf, LOG, "RawStore");
+    }
+    public DiskManager(HiveConf conf, Log LOG, String rsType) throws IOException, MetaException {
       this.hiveConf = conf;
       this.LOG = LOG;
-      String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
-      Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
-        rawStoreClassName);
-      this.rs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+      if(rsType.equalsIgnoreCase("RawStoreImp")){
+        rs = new RawStoreImp();
+      }else{
+        String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
+        Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
+          rawStoreClassName);
+        this.rs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+      }
+      
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
       closeRepLimit = hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT);
@@ -2980,10 +2999,20 @@ public class DiskManager {
       }
 
       public void init(HiveConf conf) throws MetaException {
-        String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
-        Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
-            rawStoreClassName);
-        this.rrs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+        this.init(conf, "RawStore");
+      }
+      
+      public void init(HiveConf conf, String rsType) throws MetaException {
+        
+        if(rsType.equalsIgnoreCase("RawStoreImp")){
+          this.rrs = new RawStoreImp();
+        }else{
+          String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
+          Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
+              rawStoreClassName);
+          this.rrs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+        }
+        
       }
 
       public DMRepThread(String threadName) {
