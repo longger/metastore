@@ -3027,6 +3027,38 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'listFilesByDigest failed: unknown result')
     end
 
+    def listDevsByNode(nodeName)
+      send_listDevsByNode(nodeName)
+      return recv_listDevsByNode()
+    end
+
+    def send_listDevsByNode(nodeName)
+      send_message('listDevsByNode', ListDevsByNode_args, :nodeName => nodeName)
+    end
+
+    def recv_listDevsByNode()
+      result = receive_message(ListDevsByNode_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'listDevsByNode failed: unknown result')
+    end
+
+    def listFilesByDevs(devids)
+      send_listFilesByDevs(devids)
+      return recv_listFilesByDevs()
+    end
+
+    def send_listFilesByDevs(devids)
+      send_message('listFilesByDevs', ListFilesByDevs_args, :devids => devids)
+    end
+
+    def recv_listFilesByDevs()
+      result = receive_message(ListFilesByDevs_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'listFilesByDevs failed: unknown result')
+    end
+
     def filterTableFiles(dbName, tabName, values)
       send_filterTableFiles(dbName, tabName, values)
       return recv_filterTableFiles()
@@ -5526,6 +5558,28 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'listFilesByDigest', seqid)
+    end
+
+    def process_listDevsByNode(seqid, iprot, oprot)
+      args = read_args(iprot, ListDevsByNode_args)
+      result = ListDevsByNode_result.new()
+      begin
+        result.success = @handler.listDevsByNode(args.nodeName)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'listDevsByNode', seqid)
+    end
+
+    def process_listFilesByDevs(seqid, iprot, oprot)
+      args = read_args(iprot, ListFilesByDevs_args)
+      result = ListFilesByDevs_result.new()
+      begin
+        result.success = @handler.listFilesByDevs(args.devids)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'listFilesByDevs', seqid)
     end
 
     def process_filterTableFiles(seqid, iprot, oprot)
@@ -12521,6 +12575,74 @@ module ThriftHiveMetastore
   end
 
   class ListFilesByDigest_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::LIST, :name => 'success', :element => {:type => ::Thrift::Types::I64}},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class ListDevsByNode_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    NODENAME = 1
+
+    FIELDS = {
+      NODENAME => {:type => ::Thrift::Types::STRING, :name => 'nodeName'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class ListDevsByNode_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::LIST, :name => 'success', :element => {:type => ::Thrift::Types::STRING}},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class ListFilesByDevs_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    DEVIDS = 1
+
+    FIELDS = {
+      DEVIDS => {:type => ::Thrift::Types::LIST, :name => 'devids', :element => {:type => ::Thrift::Types::STRING}}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class ListFilesByDevs_result
     include ::Thrift::Struct, ::Thrift::Struct_Union
     SUCCESS = 0
     O1 = 1

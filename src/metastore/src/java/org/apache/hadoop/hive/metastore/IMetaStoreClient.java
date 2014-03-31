@@ -1296,4 +1296,8 @@ public interface IMetaStoreClient {
   public boolean offlineDevicePhysically(String devid) throws MetaException, TException;
 
   public boolean flSelectorWatch(String table, int op) throws MetaException, TException;
+
+  public List<String> listDevsByNode(String nodeName) throws MetaException, TException;
+
+  public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException;
 }

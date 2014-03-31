@@ -684,6 +684,10 @@ public interface RawStore extends Configurable {
 
   public abstract List<Device> listDevice() throws MetaException;
 
+  public abstract List<String> listDevsByNode(String nodeName) throws MetaException;
+
+  public abstract List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException;
+
   public abstract statfs statFileSystem(long from, long to) throws MetaException;
 
   public abstract long countDevice() throws MetaException;

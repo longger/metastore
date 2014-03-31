@@ -7058,6 +7058,16 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       }
     }
 
+    @Override
+    public List<String> listDevsByNode(String nodeName) throws MetaException, TException {
+      return getMS().listDevsByNode(nodeName);
+    }
+
+    @Override
+    public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException {
+      return getMS().listFilesByDevs(devids);
+    }
+
   }
 
   public static IHMSHandler newHMSHandler(String name, HiveConf hiveConf) throws MetaException {

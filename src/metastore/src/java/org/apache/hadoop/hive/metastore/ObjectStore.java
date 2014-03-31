@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -1000,6 +1001,38 @@ public class ObjectStore implements RawStore, Configurable {
     }
     return r;
   }
+
+  public List<Long> listFilesByDevs(List<String> devids) throws MetaException {
+    boolean commited = false;
+    List<Long> r = new ArrayList<Long>();
+    Set<Long> s = new TreeSet<Long>();
+
+    try {
+      openTransaction();
+      for (String devid : devids) {
+        Query q = pm.newQuery(MFileLocation.class, "dev.dev_name == devid");
+        q.declareParameters("java.lang.String devid");
+        Collection fls = (Collection)q.execute(devid);
+        Iterator iter = fls.iterator();
+        while (iter.hasNext()) {
+          MFileLocation mfl = (MFileLocation)iter.next();
+          if (mfl == null) {
+            continue;
+          }
+          pm.retrieveAll(mfl);
+          s.add(mfl.getFile().getFid());
+        }
+      }
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    r.addAll(s);
+    return r;
+  }
+
   public void findVoidFiles(List<SFile> voidFiles) throws MetaException {
     boolean commited = false;
 
@@ -1764,6 +1797,30 @@ public class ObjectStore implements RawStore, Configurable {
     return ds;
   }
 
+  @Override
+  public List<String> listDevsByNode(String nodeName) throws MetaException {
+    List<String> devs = new ArrayList<String>();
+    boolean success = false;
+
+    try {
+      openTransaction();
+      Query query = pm.newQuery(MDevice.class, "node.node_name == nodeName");
+      query.declareParameters("java.lang.String nodeName");
+      Collection cols = (Collection)query.execute(nodeName);
+      Iterator iter = cols.iterator();
+      while (iter.hasNext()) {
+        MDevice d = (MDevice)iter.next();
+        devs.add(d.getDev_name());
+      }
+      success = commitTransaction();
+    } finally {
+      if (!success) {
+        rollbackTransaction();
+      }
+    }
+    return devs;
+  }
+
   public Device modifyDevice(Device dev, Node node) throws MetaException, NoSuchObjectException, InvalidObjectException {
     MDevice md = getMDevice(dev.getDevid());
     MNode mn;
@@ -1958,8 +2015,6 @@ public class ObjectStore implements RawStore, Configurable {
         rollbackTransaction();
       }
     }
-
-
   }
 
   private void deleteBusiTypeCol(MTable mtbl) {
@@ -9032,7 +9087,8 @@ public MUser getMUser(String userName) {
       mfl = getMFileLocation(devid, location);
       if (mfl != null) {
         fid = mfl.getFile().getFid();
-        if (mfl.getFile().getTable() != null) {
+        if (mfl.getFile().getTable() != null &&
+            mfl.getFile().getTable().getDatabase() != null) {
           db_name = mfl.getFile().getTable().getDatabase().getName();
           table_name = mfl.getFile().getTable().getTableName();
         }
