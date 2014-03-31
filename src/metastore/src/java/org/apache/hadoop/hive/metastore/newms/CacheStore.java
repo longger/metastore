@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -35,10 +36,12 @@ import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.ScanParams;
 import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisException;
 
 public class CacheStore {
   private RedisFactory rf;
   private NewMSConf conf;
+  private String findFilesCursor = "0";
   private static boolean initialized = false;
   private static String sha = null;
  
@@ -746,9 +749,27 @@ public class CacheStore {
     if (underReplicated == null || overReplicated == null || lingering == null) {
       throw new MetaException("Invalid input List<SFile> collection. IS NULL");
     }
+    if(from < 0 || from > to)
+    {
+    	System.out.println("in cache store, findFiles() argument invalid: from:"+from+", to:"+to);
+    	return;
+    }
   	Jedis jedis = null;
     try {
     	jedis = rf.getDefaultInstance();
+    	ScanParams sp = new ScanParams();
+    	sp.count((int) (to - from));
+    	ScanResult<Entry<String, String>> re = jedis.hscan(ObjectType.SFILE.getName(), findFilesCursor, sp);
+    	findFilesCursor = re.getStringCursor();
+    	for(Entry<String, String> en : re.getResult())
+			{
+		     SFile sf = (SFile) this.readObject(ObjectType.SFILE, en.getKey());
+		     if(sf == null)
+		    	 System.out.println("in CacheStore findFiles(),a SFile("+en.getKey()+") is null, bad...");
+		     else if(sf.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE)
+		    	 temp.add(sf);
+			}
+    	/*
     	for(String key : jedis.keys(generateSfStatKey(-1)))
     	{
     		if(!key.equals(generateSfStatKey(MetaStoreConst.MFileStoreStatus.INCREATE)))
@@ -771,7 +792,7 @@ public class CacheStore {
       		}while(!cursor.equals("0"));
     		}
     	}
-    	
+    	*/
     }catch(JedisConnectionException e){
       RedisFactory.putBrokenInstance(jedis);
       jedis = null;
@@ -780,16 +801,15 @@ public class CacheStore {
       RedisFactory.putInstance(jedis);
     }
     System.out.println("in cache store, findFiles() consume "+(System.currentTimeMillis()-start)+"ms");  
-    if(to > temp.size() || from < 0 || from > to)
-    {
-    	System.out.println("in cache store, findFiles() argument invalid: from:"+from+", to:"+to);
-    	return;
-    }
-    List<SFile> files = temp.subList((int)from, (int)to);
-    for(SFile m : files)
+    
+    for(SFile m : temp)
     {
     	List<SFileLocation> l = m.getLocations();
-
+    	if(l == null)
+    	{
+    		System.out.println("In CacheStore, sfilelocation is null in fid"+m.getFid());
+    		continue;
+    	}
       // find under replicated files
       if (m.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
           m.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {

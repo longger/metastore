@@ -1625,7 +1625,7 @@ public class DiskManager {
     }
 
     public void init() throws IOException, MetaException {
-      int listenPort = hiveConf.getIntVar(HiveConf.ConfVars.NEWMSDISKMANAGERLISTENPORT);
+      int listenPort = hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
       LOG.info("Starting DiskManager on port " + listenPort);
       server = new DatagramSocket(listenPort);
       dmt = new DMThread("DiskManagerThread");

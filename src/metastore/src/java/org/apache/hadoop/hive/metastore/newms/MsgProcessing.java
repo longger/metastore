@@ -3,7 +3,6 @@ package org.apache.hadoop.hive.metastore.newms;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -15,7 +14,6 @@ import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
-import org.apache.hadoop.hive.metastore.api.FileOperationException;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
 import org.apache.hadoop.hive.metastore.api.Index;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -62,6 +60,29 @@ public class MsgProcessing {
 	      System.out.println("get databases in "+(end-start)+" ms");
 	      start = end;
 	      
+	      //sfile  sfilelocation
+	      //把所有的sfile得到应该就不需要再拉取sfilelocation了
+	      long maxid = client.getMaxFid();
+	      synchronized (RawStoreImp.class) {
+	      	if(RawStoreImp.getFid() < maxid)
+	      		RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
+				}
+	      long num = 10000;
+	      List<Thread> ths = new LinkedList<Thread>();
+	      for(long id = 0;id < maxid; id+= num)
+	      {
+	      	if(id + num >= maxid)
+	      		ths.add(new Thread(new GFThread(id, maxid)));
+	      	else
+	      		ths.add(new Thread(new GFThread(id, id+num-1)));
+	      	
+	      }
+	      for(Thread t : ths)
+	      	t.start();
+	      end = System.currentTimeMillis();
+	      System.out.println("get sfile and sfilelocation in "+(end-start)+" ms");
+	      start = end;
+	      
 	      //table  index
 	      for(Database db : dbs)
 	      {
@@ -96,28 +117,16 @@ public class MsgProcessing {
 	      end = System.currentTimeMillis();
 	      System.out.println("get nodegroup in "+(end-start)+" ms");
 	      start = end;
-	      //sfile  sfilelocation
-	      //把所有的sfile得到应该就不需要再拉取sfilelocation了
-	      long maxid = client.getMaxFid();
-	      synchronized (RawStoreImp.class) {
-	      	if(RawStoreImp.getFid() < maxid)
-	      		RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
+	     
+				try {
+					for(Thread t : ths)
+					t.join();
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
 				}
-	      long num = 1000;
-	      for(long id = 0;id < maxid; id+= num)
-	      {
-	      	LinkedList<Long> ids = new LinkedList<Long>();
-	      	for(long fid = id; fid < num + id && fid < maxid; fid++)
-	      		ids.add(fid);
-	      	for(SFile sf : client.get_files_by_ids(ids))
-	      	{
-	      		cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
-	      	}
-	      }
-	      end = System.currentTimeMillis();
-	      System.out.println("get sfile and sfilelocation in "+(end-start)+" ms");
-	      start = end;
-	      
+				
+				System.out.println("INFO: get all objects complete.");
 			}
 		} catch (MetaException e) {
 			// TODO Auto-generated catch block
@@ -134,6 +143,49 @@ public class MsgProcessing {
 		}
 	}
 
+	private class GFThread implements Runnable
+	{
+		private long from;
+		private long to;
+		private IMetaStoreClient cli;
+		public GFThread(long from, long to) {
+			this.from = from;
+			this.to = to;
+			try {
+				cli = createMetaStoreClient();
+			} catch (MetaException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		@Override
+		public void run() {
+			long start = System.currentTimeMillis();
+			try{
+				long num = 1000;
+				
+				for(long id = from; id<=to; id += num)
+				{
+					LinkedList<Long> ids = new LinkedList<Long>();
+		    	for(long fid = id; fid < num + id && fid <= to; fid++)
+		    	{
+		    		ids.add(fid);
+		    	}
+		    	List<SFile> files = cli.get_files_by_ids(ids);
+	    		System.out.println(Thread.currentThread().getId()+": in msgprocessing:"+ids.get(0)+" , "+ids.get(ids.size()-1) + ", get number:"+files.size());
+	    		for(SFile sf : files)
+	    		{
+	    			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+	    		}
+	    	}
+			}catch(Exception e){
+				e.printStackTrace();
+			}
+			cli.close();
+			System.out.println(("In GFThread "+Thread.currentThread().getId()+", get file from " + from + " to " + to + " consume " + (System.currentTimeMillis()-start) + " ms"));
+		}
+		
+	}
 	public static IMetaStoreClient createMetaStoreClient() throws MetaException
 	{
 		if(hiveConf == null)

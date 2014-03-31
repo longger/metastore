@@ -11,8 +11,16 @@ import java.util.concurrent.Semaphore;
 import javax.jdo.PersistenceManager;
 
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.ObjectStore;
+import org.apache.hadoop.hive.metastore.api.FileOperationException;
+import org.apache.hadoop.hive.metastore.api.InvalidObjectException;
+import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.SFile;
+import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
+import org.apache.hadoop.hive.metastore.msg.MSGType;
+import org.apache.thrift.TException;
 
 import com.taobao.metamorphosis.Message;
 import com.taobao.metamorphosis.client.MessageSessionFactory;
@@ -37,15 +45,33 @@ public class MsgServer {
 	private static long max_msg_id = 0;
 	private static ConcurrentLinkedQueue<DDLMsg> queue = new ConcurrentLinkedQueue<DDLMsg>();
 	private static ConcurrentLinkedQueue<DDLMsg> failed_queue = new ConcurrentLinkedQueue<DDLMsg>();
-
+	private static ConcurrentLinkedQueue<DDLMsg> localQueue = new ConcurrentLinkedQueue<DDLMsg>();
+	private static LocalConsumer lc = new LocalConsumer();
 	public static void setConf(NewMSConf conf)
 	{
 		MsgServer.conf = conf;
 	}
 	
 	public static void addMsg(DDLMsg msg) {
-		queue.add(msg);
-		send.release();
+		//通过发送线程发送到metaq的
+		if(initalized)		//启动了发送线程才往这个队列里加消息
+		{
+			queue.add(msg);
+			send.release();
+		}
+		
+		//用来给本地消费
+		int eventid = (int) msg.getEvent_id();
+		switch(eventid){
+		case MSGType.MSG_FILE_USER_SET_REP_CHANGE:
+		case MSGType.MSG_REP_FILE_CHANGE:
+		case MSGType.MSG_REP_FILE_ONOFF:
+		case MSGType.MSG_STA_FILE_CHANGE:
+		case MSGType.MSG_CREATE_FILE:
+		case MSGType.MSG_DEL_FILE:
+			localQueue.add(msg);
+			lc.release();
+		}
 	}
 
 	public static void startProducer() throws MetaClientException {
@@ -58,6 +84,11 @@ public class MsgServer {
 	public static void startConsumer(String zkaddr, String topic, String group) throws MetaClientException
 	{
 		new Consumer(zkaddr, topic, group).consume();
+	}
+	
+	public static void startLocalConsumer()
+	{
+		new Thread(lc).start();
 	}
 
 	private static void initalize() throws MetaClientException {
@@ -288,7 +319,7 @@ public class MsgServer {
 				@Override
 				public void recieveMessages(final Message message) {
 					String data = new String(message.getData());
-					System.out.println(data);
+//					System.out.println(data);
 					int time = 0;
 //					 if(data != null)
 //					 return;
@@ -330,6 +361,122 @@ public class MsgServer {
     long now = new Date().getTime()/1000;
     return new MSGFactory.DDLMsg(event_id, id, old_object_params, eventObject, max_msg_id++, db_id, node_id, now, null,old_object_params);
   }
+	
+	public static class LocalConsumer implements Runnable
+	{
+		private Semaphore lcsem  = new Semaphore(0);
+		private ObjectStore ob;
+		
+		public LocalConsumer()
+		{
+			ob = new ObjectStore();
+    	ob.setConf(new HiveConf());
+		}
+		public void release()
+		{
+			lcsem.release();
+		}
+		@Override
+		public void run() {
+			while(true)
+			{
+          try {
+						lcsem.acquire();
+					} catch (InterruptedException e1) {
+						e1.printStackTrace();
+					}
+          DDLMsg msg = localQueue.poll();
+          if(msg == null){
+              continue;
+          }
+          System.out.println("LocalConsumer, consume msg:"+msg.toJson());
+          if(msg.getEventObject() == null)
+          	System.out.println("ERROR: eventObject is null, event id is "+msg.getEvent_id());
+          int event_id = (int) msg.getEvent_id();
+          switch(event_id){
+	          case MSGType.MSG_REP_FILE_CHANGE:
+	          {
+	          	String op = msg.getMsg_data().get("op").toString();
+	          	SFileLocation sfl = (SFileLocation) msg.getEventObject();
+	          	if(op.equals("add"))
+	          	{
+	          		try {
+									ob.createFileLocation(sfl);
+								} catch (Exception e) {
+									e.printStackTrace();
+									System.out.println("handle msg failed:"+msg.toJson());
+								}
+	          	}
+	          	if(op.equals("del"))
+	          	{
+	          		try {
+									ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+								} catch (MetaException e) {
+									e.printStackTrace();
+									System.out.println("handle msg failed:"+msg.toJson());
+								}
+	          	}
+	          	break;
+	          }
+	          case MSGType.MSG_FILE_USER_SET_REP_CHANGE:
+	          case MSGType.MSG_STA_FILE_CHANGE:
+	          {
+	          	SFile sf = (SFile) msg.getEventObject();
+	          	try {
+								ob.updateSFile(sf);
+							} catch (MetaException e) {
+								e.printStackTrace();
+								System.out.println("handle msg failed:"+msg.toJson());
+							}
+	          	
+	          	break;
+	          }
+	          case MSGType.MSG_REP_FILE_ONOFF:
+	          {
+	          	SFileLocation sfl = (SFileLocation) msg.getEventObject();
+	          	try {
+								ob.updateSFileLocation(sfl);
+							} catch (MetaException e) {
+								e.printStackTrace();
+								System.out.println("handle msg failed:"+msg.toJson());
+							}
+	          	break;
+	          }
+	          case MSGType.MSG_CREATE_FILE:
+	          {
+	          	try {
+								SFile sf = (SFile) msg.getEventObject();
+								ob.persistFile(sf);
+								if(sf.getLocations() != null)
+	          			for(SFileLocation sfl : sf.getLocations())
+	          				ob.createFileLocation(sfl);
+							} catch (Exception e) {
+								e.printStackTrace();
+								System.out.println("handle msg failed:"+msg.toJson());
+							}
+	          	
+	          	break;
+	          }
+	          case MSGType.MSG_DEL_FILE:
+	          {
+	          	try {
+	          		SFile sf = (SFile) msg.getEventObject();
+	          		if(sf.getLocations() != null)
+	          			for(SFileLocation sfl : sf.getLocations())
+	          				ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+								ob.delSFile(sf.getFid());
+							} catch (MetaException e) {
+								e.printStackTrace();
+								System.out.println("handle msg failed:"+msg.toJson());
+							}
+	          	break;
+						}
+	        }//end of switch
+			}
+			
+		}
+		
+	}
 	
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub

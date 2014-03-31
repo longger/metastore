@@ -2554,4 +2554,18 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     return fl;
   }
 
+	@Override
+	public boolean offlineDevicePhysically(String devid) throws MetaException,
+			TException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+	@Override
+	public boolean flSelectorWatch(String table, int op) throws MetaException,
+			TException {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
 }

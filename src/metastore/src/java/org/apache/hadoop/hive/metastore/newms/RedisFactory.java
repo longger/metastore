@@ -5,6 +5,7 @@ import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisInstance;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.JedisSentinelPool;
 
 
@@ -13,8 +14,12 @@ public class RedisFactory {
 	private static JedisSentinelPool jsp = null;
 	private static JedisPool jp = null;
 	private static RedisInstance ri = null;
+	private JedisPoolConfig config;
 	public RedisFactory(NewMSConf conf) {
 		RedisFactory.conf = conf;
+		config = new JedisPoolConfig();
+		config.setBlockWhenExhausted(false);
+		config.setMaxTotal(2000);
 	}
 
 	// 从配置文件中读取redis的地址和端口,以此创建jedis对象
@@ -25,7 +30,7 @@ public class RedisFactory {
 			if(ri == null)
 			{
 				ri = conf.getRedisInstance();
-				jp = new JedisPool(ri.hostname,ri.port);
+				jp = new JedisPool(config,ri.hostname,ri.port);
 			}
 			return jp.getResource();
 		case SENTINEL:
@@ -35,7 +40,7 @@ public class RedisFactory {
         r = jsp.getResource();
       } else {
 
-				jsp = new JedisSentinelPool("mymaster", conf.getSentinels());
+				jsp = new JedisSentinelPool("mymaster", conf.getSentinels(),config);
 				r = jsp.getResource();
 			}
 			return r;

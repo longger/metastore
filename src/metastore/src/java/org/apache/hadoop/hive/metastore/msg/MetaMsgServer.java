@@ -55,11 +55,11 @@ public class MetaMsgServer {
 
   static{
     send.start();
-    try {
-			new AsyncConsumer("meta-newms","meta-metastore").consume();
-		} catch (MetaClientException e) {
-			LOG.error(e, e);
-		}
+//    try {
+//			new AsyncConsumer("meta-newms","meta-metastore").consume();
+//		} catch (MetaClientException e) {
+//			LOG.error(e, e);
+//		}
   }
 
 
