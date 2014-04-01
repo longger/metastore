@@ -1,6 +1,5 @@
 package org.apache.hadoop.hive.metastore.newms;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
@@ -20,6 +19,11 @@ import java.util.TreeSet;
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.hive.common.metrics.Metrics;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.DiskManager;
+import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
+import org.apache.hadoop.hive.metastore.DiskManager.DMRequest;
+import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
+import org.apache.hadoop.hive.metastore.DiskManager.RsStatus;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionContext;
 import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionListener;
@@ -31,8 +35,6 @@ import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
-import org.apache.hadoop.hive.metastore.api.ColumnStatisticsDesc;
-import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
 import org.apache.hadoop.hive.metastore.api.CreateOperation;
 import org.apache.hadoop.hive.metastore.api.CreatePolicy;
@@ -48,7 +50,6 @@ import org.apache.hadoop.hive.metastore.api.GeoLocation;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
 import org.apache.hadoop.hive.metastore.api.HiveObjectPrivilege;
 import org.apache.hadoop.hive.metastore.api.HiveObjectRef;
-import org.apache.hadoop.hive.metastore.api.HiveObjectType;
 import org.apache.hadoop.hive.metastore.api.Index;
 import org.apache.hadoop.hive.metastore.api.InvalidInputException;
 import org.apache.hadoop.hive.metastore.api.InvalidObjectException;
@@ -78,15 +79,11 @@ import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
-import org.apache.hadoop.hive.metastore.newms.DiskManager.DMProfile;
-import org.apache.hadoop.hive.metastore.newms.DiskManager.DMRequest;
-import org.apache.hadoop.hive.metastore.newms.DiskManager.FileLocatingPolicy;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.thrift.TException;
 
 import com.facebook.fb303.fb_status;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 /*
@@ -125,7 +122,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-      dm = new DiskManager(hc, LOG);
+      dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
@@ -2554,18 +2551,31 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     return fl;
   }
 
+
+  @Override
+  public boolean offlineDevicePhysically(String devid) throws MetaException, TException {
+    // TODO Auto-generated method stub
+    return false;
+  }
+
+  @Override
+  public boolean flSelectorWatch(String table, int op) throws MetaException, TException {
+    // TODO Auto-generated method stub
+    return false;
+  }
+
 	@Override
-	public boolean offlineDevicePhysically(String devid) throws MetaException,
+	public List<String> listDevsByNode(String nodeName) throws MetaException,
 			TException {
 		// TODO Auto-generated method stub
-		return false;
+		return null;
 	}
 
 	@Override
-	public boolean flSelectorWatch(String table, int op) throws MetaException,
+	public List<Long> listFilesByDevs(List<String> devids) throws MetaException,
 			TException {
 		// TODO Auto-generated method stub
-		return false;
+		return null;
 	}
 
 }
