@@ -205,6 +205,8 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '   getTableNodeFiles(string dbName, string tabName, string nodeName)'
   print '   listTableFiles(string dbName, string tabName, i32 from, i32 to)'
   print '   listFilesByDigest(string digest)'
+  print '   listDevsByNode(string nodeName)'
+  print '   listFilesByDevs( devids)'
   print '   filterTableFiles(string dbName, string tabName,  values)'
   print '  void truncTableFiles(string dbName, string tabName)'
   print '  bool addNodeGroup(NodeGroup ng)'
@@ -1363,6 +1365,18 @@ elif cmd == 'listFilesByDigest':
     print 'listFilesByDigest requires 1 args'
     sys.exit(1)
   pp.pprint(client.listFilesByDigest(args[0],))
+
+elif cmd == 'listDevsByNode':
+  if len(args) != 1:
+    print 'listDevsByNode requires 1 args'
+    sys.exit(1)
+  pp.pprint(client.listDevsByNode(args[0],))
+
+elif cmd == 'listFilesByDevs':
+  if len(args) != 1:
+    print 'listFilesByDevs requires 1 args'
+    sys.exit(1)
+  pp.pprint(client.listFilesByDevs(eval(args[0]),))
 
 elif cmd == 'filterTableFiles':
   if len(args) != 3:
