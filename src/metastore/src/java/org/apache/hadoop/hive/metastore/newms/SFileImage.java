@@ -46,6 +46,9 @@ public class SFileImage implements Serializable{
 		this.load_status = load_status;
 	}
 
+	public SFileImage() {
+	}
+
 	public static SFileImage generateSFileImage(SFile sf)
 	{
 		List<String> sflkeys = new ArrayList<String>();
