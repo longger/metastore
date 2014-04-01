@@ -1262,6 +1262,18 @@ public class DummyRawStoreForJdoConnection implements RawStore {
     return 0;
   }
 
+  @Override
+  public List<String> listDevsByNode(String nodeName) throws MetaException {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
 }
 
 
