@@ -1807,7 +1807,7 @@ public class DiskManager {
     }
 
     public String getAnyNode(String devid) throws MetaException {
-      String r = null;
+      Set<String> r = new TreeSet<String>();
 
       synchronized (ndmap) {
         for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
@@ -1815,27 +1815,24 @@ public class DiskManager {
 
           if (devid == null) {
             // anyone is ok
-            r = e.getKey();
-            break;
-          }
-          if (ni.dis != null && ni.dis.size() > 0) {
-            for (DeviceInfo di : ni.dis) {
-              if (di.dev.equalsIgnoreCase(devid)) {
-                r = e.getKey();
-                break;
+            r.add(e.getKey());
+          } else {
+            if (ni.dis != null && ni.dis.size() > 0) {
+              for (DeviceInfo di : ni.dis) {
+                if (di.dev.equalsIgnoreCase(devid)) {
+                  r.add(e.getKey());
+                }
               }
             }
-          }
-          if (r != null) {
-            break;
           }
         }
       }
 
-      if (r == null) {
+      if (r.size() == 0) {
         throw new MetaException("Could not find any avaliable Node that attached device: " + devid);
       }
-      return r;
+      Random rand = new Random();
+      return r.toArray(new String[0])[rand.nextInt(r.size())];
     }
 
     public List<String> getActiveNodes() throws MetaException {
@@ -2944,9 +2941,15 @@ public class DiskManager {
         if (sfl.getNode_name().equals("")) {
           // this is a BACKUP/SHARE device;
           try {
-            Device d = rs.getDevice(sfl.getDevid());
-
-            sfl.setNode_name(d.getNode_name());
+            try {
+              String any = getAnyNode(sfl.getDevid());
+              sfl.setNode_name(any);
+            } catch (MetaException e) {
+              synchronized (rs) {
+                Device d = rs.getDevice(sfl.getDevid());
+                sfl.setNode_name(d.getNode_name());
+              }
+            }
           } catch (MetaException e) {
             LOG.error(e, e);
             return;
@@ -2959,7 +2962,7 @@ public class DiskManager {
         if (ni != null) {
           synchronized (ni.toDelete) {
             ni.toDelete.add(sfl);
-            LOG.info("----> Add toDelete " + sfl.getLocation() + ", qs " + cleanQ.size());
+            LOG.info("----> Add toDelete " + sfl.getLocation() + ", qs " + cleanQ.size() + ", dev " + sfl.getDevid());
           }
         } else {
           LOG.warn("SFL " + sfl.getDevid() + ":" + sfl.getLocation() + " delete leak on node " + sfl.getNode_name());

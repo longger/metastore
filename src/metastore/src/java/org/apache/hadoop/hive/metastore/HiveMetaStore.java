@@ -7035,10 +7035,15 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     public boolean offlineDevicePhysically(String devid) throws MetaException, TException {
       List<SFileLocation> sfls = getMS().getSFileLocations(devid, System.currentTimeMillis(), 0);
       LOG.info("Offline Device " + devid + " physically, hit " + sfls.size() + " SFLs.");
+      boolean isSharedDevice = dm.isSharedDevice(devid);
+
       for (SFileLocation f : sfls) {
         // NOTE: we have already delete the METADATA imediately, but we might leak on physical removals.
         boolean r = getMS().delSFileLocation(devid, f.getLocation());
         if (r) {
+          if (isSharedDevice) {
+            f.setNode_name("");
+          }
           dm.asyncDelSFL(f);
         }
       }
