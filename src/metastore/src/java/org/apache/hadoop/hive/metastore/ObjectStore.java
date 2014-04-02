@@ -9933,6 +9933,13 @@ public MUser getMUser(String userName) {
         params.put("schema_name", mSchema.getSchemaName());
         params.put("old_schema_name", schemaName);
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_NAME,db_id,-1, pm, oldSchema,params));
+        for(MTable oldt : mtbls)
+        {
+          HashMap<String,Object> p = new HashMap<String,Object>();
+          p.put("table_name", mSchema.getSchemaName().toLowerCase());
+          p.put("old_table_name", oldt.getTableName());
+          msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME, db_id, -1, pm, oldt, p));
+        }
       }
       //del col   可以删除多个列,删除多个时,发送多次消息
       if(oldSchema.getSd().getCD().getCols().size() > mSchema.getSd().getCD().getCols().size())
@@ -9949,6 +9956,15 @@ public MUser getMUser(String userName) {
           ps.put("schema_name", schemaName);
           ps.put("column_name",omfs.getName());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_DEL_COL,db_id,-1, pm, mSchema.getSd().getCD(),ps));
+          for(MTable oldt : mtbls)
+          {
+            HashMap<String,Object> p = new HashMap<String,Object>();
+            p.put("db_name", oldt.getDatabase().getName());
+            p.put("table_name", oldt.getTableName());
+            p.put("column_name",omfs.getName());
+            p.put("column_type", omfs.getType());
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL, db_id, -1, pm, oldt, p));
+          }
         }
       }
       //add col
@@ -9965,6 +9981,15 @@ public MUser getMUser(String userName) {
           ps.put("schema_name", schemaName);
           ps.put("column_name",nmfs.getName());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_ADD_COL,db_id,-1, pm, mSchema.getSd().getCD(),ps));
+          for(MTable oldt : mtbls)
+          {
+            HashMap<String,Object> p = new HashMap<String,Object>();
+            p.put("db_name", oldt.getDatabase().getName());
+            p.put("table_name", oldt.getTableName());
+            p.put("column_name",nmfs.getName());
+            p.put("column_type", nmfs.getType());
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL, db_id, -1, pm, oldt, p));
+          }
         }
       }
       //修改列名，列类型  一次只能修改一个
@@ -9983,6 +10008,15 @@ public MUser getMUser(String userName) {
           params.put("column_name",newCols.get(0).getName());
           params.put("old_column_name", oldCols.get(0).getName());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_ALT_COL_NAME,db_id,-1, pm, mSchema.getSd().getCD(),params));
+          for(MTable oldt : mtbls)
+          {
+            HashMap<String,Object> p = new HashMap<String,Object>();
+            p.put("db_name", oldt.getDatabase().getName());
+            p.put("table_name", oldt.getTableName());
+            p.put("column_name",newCols.get(0).getName());
+            p.put("old_column_name", oldCols.get(0).getName());
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ALT_COL_NAME, db_id, -1, pm, oldt, p));
+          }
         }
         else if(oldCols.size() == 1 && newCols.size() == 1 && !oldCols.get(0).getType().equals(newCols.get(0).getType()))         //修改了列类型
         {
@@ -9991,6 +10025,16 @@ public MUser getMUser(String userName) {
           params.put("column_type",newCols.get(0).getType());
           params.put("old_column_type", oldCols.get(0).getType());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_ALT_COL_TYPE,db_id,-1, pm, mSchema.getSd().getCD(),params));
+          for(MTable oldt : mtbls)
+          {
+            HashMap<String,Object> p = new HashMap<String,Object>();
+            p.put("db_name", oldt.getDatabase().getName());
+            p.put("table_name", oldt.getTableName());
+            p.put("column_name",oldCols.get(0).getName());
+            p.put("column_type",newCols.get(0).getType());
+            p.put("old_column_type", oldCols.get(0).getType());
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ALT_COL_TYPE, db_id, -1, pm, oldt, p));
+          }
         }
       }
       //alt schema param    不知道判断schema的参数有没有和判断table有不一样的地方
@@ -10001,6 +10045,16 @@ public MUser getMUser(String userName) {
         ps.addAll(mSchema.getParameters().keySet());
         params.put("tbl_param_keys",ps);
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_PARAM,db_id,-1, pm, oldSchema,params));
+        for(MTable oldt : mtbls)
+        {
+          HashMap<String,Object> p = new HashMap<String,Object>();
+          p.put("db_name", oldt.getDatabase().getName());
+          p.put("table_name", oldt.getTableName());
+          ArrayList<String>  ls = new ArrayList<String>();
+          ls.addAll(mSchema.getParameters().keySet());
+          params.put("tbl_param_keys", ps);
+          msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM, db_id, -1, pm, oldt, p));
+        }
       }
 
       oldSchema.setSchemaName(mSchema.getSchemaName().toLowerCase());
