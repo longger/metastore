@@ -2734,7 +2734,7 @@ public class DiskManager {
       if (ni == null) {
         return null;
       } else {
-        return filterSharedDevice(node, ni.dis);
+        return ni.dis;
       }
     }
 

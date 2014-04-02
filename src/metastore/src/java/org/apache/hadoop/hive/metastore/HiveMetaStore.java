@@ -7036,6 +7036,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       List<SFileLocation> sfls = getMS().getSFileLocations(devid, System.currentTimeMillis(), 0);
       LOG.info("Offline Device " + devid + " physically, hit " + sfls.size() + " SFLs.");
       for (SFileLocation f : sfls) {
+        // NOTE: we have already delete the METADATA imediately, but we might leak on physical removals.
         boolean r = getMS().delSFileLocation(devid, f.getLocation());
         if (r) {
           dm.asyncDelSFL(f);
@@ -7060,7 +7061,26 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public List<String> listDevsByNode(String nodeName) throws MetaException, TException {
-      return getMS().listDevsByNode(nodeName);
+      List<String> r = getMS().listDevsByNode(nodeName);
+      Set<String> s = new TreeSet<String>();
+      s.addAll(r);
+      r.clear();
+
+      if (dm != null) {
+        List<DeviceInfo> dis;
+        try {
+          dis = dm.findDevices(nodeName);
+          if (dis != null) {
+            for (DeviceInfo di : dis) {
+              s.add(di.dev);
+            }
+          }
+        } catch (IOException e) {
+        }
+      }
+      r.addAll(s);
+
+      return r;
     }
 
     @Override
