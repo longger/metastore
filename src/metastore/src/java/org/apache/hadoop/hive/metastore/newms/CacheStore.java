@@ -1,10 +1,6 @@
 package org.apache.hadoop.hive.metastore.newms;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -15,6 +11,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
@@ -36,7 +34,6 @@ import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.ScanParams;
 import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.exceptions.JedisConnectionException;
-import redis.clients.jedis.exceptions.JedisException;
 
 import com.alibaba.fastjson.JSON;
 public class CacheStore {
@@ -45,7 +42,8 @@ public class CacheStore {
   private String findFilesCursor = "0";
   private static boolean initialized = false;
   private static String sha = null;
- 
+  private static final Log LOG = LogFactory.getLog(CacheStore.class);
+  
   private static ConcurrentHashMap<String, Database> databaseHm = new ConcurrentHashMap<String, Database>();
   private static ConcurrentHashMap<String, PrivilegeBag> privilegeBagHm = new ConcurrentHashMap<String, PrivilegeBag>();
   private static ConcurrentHashMap<String, Partition> partitionHm = new ConcurrentHashMap<String, Partition>();
@@ -97,20 +95,20 @@ public class CacheStore {
 	          readAll(ObjectType.SFILE);
 	          readAll(ObjectType.SFILELOCATION);
 	          long end = System.currentTimeMillis();
-	          System.out.println("loading objects from redis into cache takes "+(end-start)+" ms");
+	          LOG.info("loading objects from redis into cache takes "+(end-start)+" ms");
           }
           
         } catch (JedisConnectionException e) {
           // TODO Auto-generated catch block
-          e.printStackTrace();
+          LOG.error(e,e);
           RedisFactory.putBrokenInstance(jedis);
           jedis = null;
         } catch (IOException e) {
           // TODO Auto-generated catch block
-          e.printStackTrace();
+          LOG.error(e,e);
         } catch (ClassNotFoundException e) {
           // TODO Auto-generated catch block
-          e.printStackTrace();
+          LOG.error(e,e);
         }finally{
           RedisFactory.putInstance(jedis);
         }
@@ -233,7 +231,7 @@ public class CacheStore {
       try{
       	s = JSON.toJSONString(o);
       }catch(Exception e){
-      	e.printStackTrace();
+      	LOG.error(e,e);
       	throw new IOException(e.getMessage());
       }
       try{
@@ -314,7 +312,7 @@ public class CacheStore {
     
     if(o != null)
     {
-//      System.out.println("in function readObject: read "+key.getName()+":"+field+" from cache.");
+//      LOG.debug("in function readObject: read "+key.getName()+":"+field+" from cache.");
       return o;
     }
     String js = null;
@@ -343,7 +341,7 @@ public class CacheStore {
       try{
       	o = JSON.parseObject(js,key.getCla());
       }catch(Exception e){
-      	e.printStackTrace();
+      	LOG.error(e,e);
       	throw new IOException(e.getMessage());
       }
       //SFile 要特殊处理
@@ -426,7 +424,7 @@ public class CacheStore {
       else if(key.equals(ObjectType.DEVICE)) {
         deviceHm.put(field, (Device)o);
       }
-//      System.out.println("in function readObject: read "+key.getName()+":"+field+" from redis.");
+//      LOG.debug("in function readObject: read "+key.getName()+":"+field+" from redis.");
 
     
     return o;
@@ -457,7 +455,7 @@ public class CacheStore {
             p.srem(generateFtlKey(sf.getValues()), field);
             p.zrem(generateLtfKey(sf.getTableName(), sf.getDbName()), field);
             p.srem(generateSfStatKey(sf.getStore_status()), field);
-            System.out.println("in CacheStore remove:srem(generateSfStatKey(sf.getStore_status()), field);"+generateSfStatKey(sf.getStore_status())+","+field);
+            LOG.debug("in CacheStore remove:srem(generateSfStatKey(sf.getStore_status()), field);"+generateSfStatKey(sf.getStore_status())+","+field);
             p.hdel(key.getName(), field);
             p.sync();
           }catch(JedisConnectionException e){
@@ -549,10 +547,10 @@ public class CacheStore {
       {
         if(key.equals(ObjectType.SFILE)|| key.equals(ObjectType.SFILELOCATION))
         {
-          System.out.println(fields.size()+" "+key.getName()+" in redis.");
+          LOG.info(fields.size()+" "+key.getName()+" in redis.");
           return;
         }
-        System.out.println("read "+fields.size()+" "+key.getName()+" from redis into cache.");
+        LOG.info("read "+fields.size()+" "+key.getName()+" from redis into cache.");
         for(String field : fields)
         {
           readObject(key, field, true);
@@ -620,7 +618,7 @@ public class CacheStore {
               rls.add(f);
             }
           } catch(Exception e) {
-            e.printStackTrace();
+            LOG.error(e,e);
           }
         }
       }
@@ -727,14 +725,14 @@ public class CacheStore {
   		do{
   			re = jedis.sscan(generateSflStatKey(status), cursor,sp);
   			cursor = re.getStringCursor();
-//  			System.out.println(cursor +"  "+re.getResult().size());
+//  			LOG.debug(cursor +"  "+re.getResult().size());
   			for(String en : re.getResult())
   			{
   		     SFileLocation sfl = (SFileLocation)this.readObject(ObjectType.SFILELOCATION, en);
   		     sfll.add(sfl);
   			}
   		}while(!cursor.equals("0"));
-  		System.out.println("in cache store, getSFileLocations() consume "+(System.currentTimeMillis()-start)+"ms");
+  		LOG.debug("getSFileLocations() consume "+(System.currentTimeMillis()-start)+"ms");
       return sfll;
     }catch(JedisConnectionException e){
       RedisFactory.putBrokenInstance(jedis);
@@ -774,7 +772,7 @@ public class CacheStore {
   		     
   			}
   		}while(!cursor.equals("0"));
-  		System.out.println("in cache store, findVoidFiles() consume "+(System.currentTimeMillis()-start)+"ms");
+  		LOG.debug("findVoidFiles() consume "+(System.currentTimeMillis()-start)+"ms");
     }catch(JedisConnectionException e){
       RedisFactory.putBrokenInstance(jedis);
       jedis = null;
@@ -794,7 +792,7 @@ public class CacheStore {
     }
     if(from < 0 || from > to)
     {
-    	System.out.println("in cache store, findFiles() argument invalid: from:"+from+", to:"+to);
+    	LOG.debug(" findFiles() argument invalid: from:"+from+", to:"+to);
     	return;
     }
   	Jedis jedis = null;
@@ -808,34 +806,11 @@ public class CacheStore {
 			{
 		     SFile sf = (SFile) this.readObject(ObjectType.SFILE, en.getKey());
 		     if(sf == null)
-		    	 System.out.println("in CacheStore findFiles(),a SFile("+en.getKey()+") is null, bad...");
+		    	 LOG.debug("in CacheStore findFiles(),a SFile("+en.getKey()+") is null, bad...");
 		     else if(sf.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE)
 		    	 temp.add(sf);
 			}
-    	/*
-    	for(String key : jedis.keys(generateSfStatKey(-1)))
-    	{
-    		if(!key.equals(generateSfStatKey(MetaStoreConst.MFileStoreStatus.INCREATE)))
-    		{
-    			ScanResult<String> re = null;
-          ScanParams sp = new ScanParams();
-          sp.count(5000);
-      		String cursor = "0";
-      		do{
-      			re = jedis.sscan(key, cursor,sp);
-      			cursor = re.getStringCursor();
-      			for(String en : re.getResult())
-      			{
-      		     SFile sf = (SFile) this.readObject(ObjectType.SFILE, en);
-      		     if(sf == null)
-      		    	 System.out.println("in CacheStore findFiles(),a SFile("+en+") read from sfstatkey("+key+") is null, bad...");
-      		     else
-      		    	 temp.add(sf);
-      			}
-      		}while(!cursor.equals("0"));
-    		}
-    	}
-    	*/
+    	
     }catch(JedisConnectionException e){
       RedisFactory.putBrokenInstance(jedis);
       jedis = null;
@@ -843,14 +818,14 @@ public class CacheStore {
     }finally{
       RedisFactory.putInstance(jedis);
     }
-    System.out.println("in cache store, findFiles() consume "+(System.currentTimeMillis()-start)+"ms");  
+    LOG.debug("findFiles() consume "+(System.currentTimeMillis()-start)+"ms");  
     
     for(SFile m : temp)
     {
     	List<SFileLocation> l = m.getLocations();
     	if(l == null)
     	{
-    		System.out.println("In CacheStore, sfilelocation is null in fid"+m.getFid());
+    		LOG.info("sfilelocation is null in fid"+m.getFid());
     		continue;
     	}
       // find under replicated files
@@ -868,7 +843,7 @@ public class CacheStore {
             underReplicated.add(m);
           } catch (javax.jdo.JDOObjectNotFoundException e) {
             // it means the file slips ...
-            e.printStackTrace();
+            LOG.error(e,e);
           }
         }
       }
@@ -887,7 +862,7 @@ public class CacheStore {
             overReplicated.add(m);
           } catch (javax.jdo.JDOObjectNotFoundException e) {
             // it means the file slips ...
-          	e.printStackTrace();
+          	LOG.error(e,e);
           }
         }
       }
@@ -911,7 +886,7 @@ public class CacheStore {
             lingering.add(m);
           } catch (javax.jdo.JDOObjectNotFoundException e) {
             // it means the file slips ...
-          	e.printStackTrace();
+          	LOG.error(e,e);
           }
         }
       }

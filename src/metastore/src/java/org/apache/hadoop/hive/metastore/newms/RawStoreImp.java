@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
@@ -67,9 +69,11 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 
 public class RawStoreImp implements RawStore {
 
+	private static final Log LOG = LogFactory.getLog(RawStoreImp.class);
 	private static final Long g_fid_syncer = new Long(0);
   private static long g_fid = 0;
 	private static NewMSConf conf;
+	
 	private CacheStore cs;
 
 	public RawStoreImp(NewMSConf conf) {
@@ -156,11 +160,11 @@ public class RawStoreImp implements RawStore {
 			return d;
 			//到底是抛出去，还是自己捕获呢。。
 		} catch (JedisConnectionException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		}
 		return null;
 	}
@@ -252,7 +256,7 @@ public class RawStoreImp implements RawStore {
 	      }
 	    }
 	   } catch (Exception e) {
-	     e.printStackTrace();
+	     LOG.error(e,e);
 	     throw new MetaException(e.getMessage());
     }
 
@@ -293,7 +297,7 @@ public class RawStoreImp implements RawStore {
         return true;
       }
     } catch (Exception e) {
-      e.printStackTrace();
+      LOG.error(e,e);
       throw new MetaException(e.getMessage());
     }
 	}
@@ -310,11 +314,11 @@ public class RawStoreImp implements RawStore {
 			Node n = (Node) cs.readObject(ObjectType.NODE, node_name);
 			return n;
 		} catch (JedisConnectionException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		}
 		return null;
 	}
@@ -352,7 +356,7 @@ public class RawStoreImp implements RawStore {
 			old_params.put("table_name", file.getTableName());
 			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_CREATE_FILE, -1l, -1l, null, file, old_params));
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 		return file;
@@ -367,7 +371,7 @@ public class RawStoreImp implements RawStore {
 				return null;
 			return (SFile)o;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -378,7 +382,7 @@ public class RawStoreImp implements RawStore {
 			SFileLocation sfl = getSFileLocation(devid, location);
 			return getSFile(sfl.getFid());
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -397,7 +401,7 @@ public class RawStoreImp implements RawStore {
       old_params.put("table_name", sf.getTableName() );
       MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_DEL_FILE, -1l, -1l, null, sf, old_params));
 		}catch(Exception e){
-			e.printStackTrace();
+			LOG.error(e,e);
 			return false;
 		}
 		return true;
@@ -453,7 +457,7 @@ public class RawStoreImp implements RawStore {
       
       return sf;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 
@@ -479,7 +483,7 @@ public class RawStoreImp implements RawStore {
       cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
       return sf;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 
@@ -509,7 +513,7 @@ public class RawStoreImp implements RawStore {
       MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, location, old_params));
 			return true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -529,7 +533,7 @@ public class RawStoreImp implements RawStore {
 			List<SFileLocation> sfll = cs.getSFileLocations(status);
 			return sfll;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -549,7 +553,7 @@ public class RawStoreImp implements RawStore {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
 			return sfl;
 		}catch(Exception e){
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -601,7 +605,7 @@ public class RawStoreImp implements RawStore {
 			
 			return sfl;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -630,7 +634,7 @@ public class RawStoreImp implements RawStore {
 			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, sfl, old_params));
 			return true;
 		}catch(Exception e){
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -649,7 +653,7 @@ public class RawStoreImp implements RawStore {
 			Table t = (Table) cs.readObject(ObjectType.TABLE, dbName+"."+tableName);
 			return t;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -774,7 +778,7 @@ public class RawStoreImp implements RawStore {
           ts.add(t);
         }
 			} catch (Exception e) {
-				e.printStackTrace();
+				LOG.error(e,e);
 //				throw new MetaException(e.getMessage());
 			}
 		}
@@ -846,7 +850,7 @@ public class RawStoreImp implements RawStore {
 			Index in = (Index) cs.readObject(ObjectType.INDEX, dbName+"."+origTableName+"."+indexName);
 			return in;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -1236,7 +1240,7 @@ public class RawStoreImp implements RawStore {
 		try {
 			cs.findFiles(underReplicated, overReplicated, lingering, from, to);
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -1246,7 +1250,7 @@ public class RawStoreImp implements RawStore {
 		try {
 			cs.findVoidFiles(voidFiles);
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -1391,7 +1395,7 @@ public class RawStoreImp implements RawStore {
 				throw new NoSuchObjectException("Can not find device :"+devid);
 			return de;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		} 
 	}
@@ -1473,7 +1477,7 @@ public class RawStoreImp implements RawStore {
       }
 			return gs;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -1608,7 +1612,7 @@ public class RawStoreImp implements RawStore {
           ngs.add(ng);
         }
 			} catch (Exception e) {
-				e.printStackTrace();
+				LOG.error(e,e);
 				throw new MetaException(e.getMessage());
 			}
 		}
@@ -1709,7 +1713,7 @@ public class RawStoreImp implements RawStore {
       for (int i = 0, step = 1000; i < Integer.MAX_VALUE; i+=step) {
         List<Long> files = listTableFiles(dbName, tableName, i, i + step);
         for (int j = 0; j < files.size(); j++) {
-        	System.out.println("in RawStoreImp, truncTableFiles, sfile.size()="+files.size());
+        	LOG.debug("truncTableFiles, sfile.size()="+files.size());
           SFile f = this.getSFile(files.get(j));
           if (f != null) {
             f.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);

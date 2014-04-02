@@ -17,6 +17,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.common.metrics.Metrics;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.DiskManager;
@@ -97,7 +98,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   private final NewMSConf conf;
   private final RawStoreImp rs;
   private IMetaStoreClient client;
-  private static final Log LOG = NewMS.LOG;
+  private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
   private DiskManager dm;
   private final long startTimeMillis;
   public static Long file_creation_lock = 0L;
@@ -117,20 +118,20 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 				client.authentication(hc.getVar(HiveConf.ConfVars.HIVE_USER),hc.getVar(HiveConf.ConfVars.HIVE_USERPWD));
 			} catch (NoSuchObjectException e) {
 				// TODO Auto-generated catch block
-				e.printStackTrace();
+				LOG.error(e,e);
 			} catch (TException e) {
 				// TODO Auto-generated catch block
-				e.printStackTrace();
+				LOG.error(e,e);
 			}
       dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
     } catch (MetaException e) {
-      e.printStackTrace();
+      LOG.error(e,e);
     } catch (IOException e) {
       // TODO Auto-generated catch block
-      e.printStackTrace();
+      LOG.error(e,e);
     }
   }
 
@@ -1600,7 +1601,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       }
       return f;
     } catch (Exception e) {
-      e.printStackTrace();
+      LOG.error(e,e);
       throw new MetaException(e.getMessage());
     }
   }

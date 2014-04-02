@@ -10,17 +10,16 @@ import java.util.concurrent.Semaphore;
 
 import javax.jdo.PersistenceManager;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.ObjectStore;
-import org.apache.hadoop.hive.metastore.api.FileOperationException;
-import org.apache.hadoop.hive.metastore.api.InvalidObjectException;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
-import org.apache.thrift.TException;
 
 import com.taobao.metamorphosis.Message;
 import com.taobao.metamorphosis.client.MessageSessionFactory;
@@ -35,7 +34,7 @@ import com.taobao.metamorphosis.exception.MetaClientException;
 import com.taobao.metamorphosis.utils.ZkUtils.ZKConfig;
 
 public class MsgServer {
-//	public static final Log LOG = LogFactory.getLog(ObjectStore.class.getName());
+	private static final Log LOG = LogFactory.getLog(MsgServer.class);
 	private static NewMSConf conf;
 	static Producer producer = null;
 	static int times = 3;
@@ -110,7 +109,7 @@ public class MsgServer {
 		String jsonMsg = "";
 
 		jsonMsg = MSGFactory.getMsgData(msg);
-		System.out.println("---zjw-- send ddl msg:" + jsonMsg);
+		LOG.info("---zjw-- send ddl msg:" + jsonMsg);
 		boolean success = false;
 
 		success = retrySendMsg(jsonMsg, times);
@@ -133,7 +132,7 @@ public class MsgServer {
     }catch(InterruptedException ie){
       return retrySendMsg(jsonMsg,times-1);
     } catch (MetaClientException e) {
-      e.printStackTrace();
+      LOG.error(e,e);
       return retrySendMsg(jsonMsg,times-1);
     }
     return success;
@@ -192,7 +191,7 @@ public class MsgServer {
 	            }
 	          }
 	        } catch (Exception e) {
-	        	e.printStackTrace();
+	        	LOG.error(e,e);
 	        }
 	      }
 
@@ -234,9 +233,9 @@ public class MsgServer {
       }
       catch(MetaClientException e){
 //        LOG.error(e.getMessage());
-      	e.printStackTrace();
+      	LOG.error(e,e);
       }
-      System.out.println("Topic '" + topic + "' has been published.");
+      LOG.info("Topic '" + topic + "' has been published.");
     }
 
     public static Producer getInstance() throws MetaClientException {
@@ -260,10 +259,10 @@ public class MsgServer {
 
         boolean success = sendResult.isSuccess();
         if (!success) {
-            System.out.println("Send message failed,error message:" + sendResult.getErrorMessage());
+            LOG.debug("Send message failed,error message:" + sendResult.getErrorMessage());
         }
         else {
-            System.out.println("Send message successfully,sent to " + sendResult.getPartition());
+            LOG.debug("Send message successfully,sent to " + sendResult.getPartition());
         }
         return success;
     }
@@ -287,7 +286,7 @@ public class MsgServer {
 				localhost_name = InetAddress.getLocalHost().getHostName();
 			} catch (UnknownHostException e) {
 				// TODO Auto-generated catch block
-				e.printStackTrace();
+				LOG.error(e,e);
 			}
 			mp = new MsgProcessing(conf);
 		}
@@ -319,7 +318,7 @@ public class MsgServer {
 				@Override
 				public void recieveMessages(final Message message) {
 					String data = new String(message.getData());
-//					System.out.println(data);
+//					LOG.debug(data);
 					int time = 0;
 //					 if(data != null)
 //					 return;
@@ -327,14 +326,14 @@ public class MsgServer {
 					while (time <= 3) {
 						if (time >= 3) {
 							failedq.add(msg);
-							System.out.println("handle msg failed, add msg into failed queue: "+ msg.getMsg_id());
+							LOG.info("handle msg failed, add msg into failed queue: "+ msg.getMsg_id());
 							break;
 						}
 						try {
 							mp.handleMsg(msg);
 							if (!failedq.isEmpty()) {
 								msg = failedq.poll();
-								System.out.println("handle msg in failed queue: "+ msg.getMsg_id());
+								LOG.info("handle msg in failed queue: "+ msg.getMsg_id());
 								time = 0;
 							} else
 								// 能到else一定是handlemsg没抛异常成功返回，而failedq是空的
@@ -345,7 +344,7 @@ public class MsgServer {
 								Thread.sleep(1 * 1000);
 							} catch (InterruptedException e2) {
 							}
-							e.printStackTrace();
+							LOG.error(e,e);
 						}
 					}
 				}
@@ -389,9 +388,12 @@ public class MsgServer {
           if(msg == null){
               continue;
           }
-          System.out.println("LocalConsumer, consume msg:"+msg.toJson());
+          LOG.debug("LocalConsumer, consume msg:"+msg.toJson());
           if(msg.getEventObject() == null)
-          	System.out.println("ERROR: eventObject is null, event id is "+msg.getEvent_id());
+          {
+          	LOG.warn("eventObject is null, event id is "+msg.getEvent_id());
+          	continue;
+          }
           int event_id = (int) msg.getEvent_id();
           switch(event_id){
 	          case MSGType.MSG_REP_FILE_CHANGE:
@@ -403,8 +405,8 @@ public class MsgServer {
 	          		try {
 									ob.createFileLocation(sfl);
 								} catch (Exception e) {
-									e.printStackTrace();
-									System.out.println("handle msg failed:"+msg.toJson());
+									LOG.error(e,e);
+									LOG.info("handle msg failed:"+msg.toJson());
 								}
 	          	}
 	          	if(op.equals("del"))
@@ -412,8 +414,8 @@ public class MsgServer {
 	          		try {
 									ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
 								} catch (MetaException e) {
-									e.printStackTrace();
-									System.out.println("handle msg failed:"+msg.toJson());
+									LOG.error(e,e);
+									LOG.info("handle msg failed:"+msg.toJson());
 								}
 	          	}
 	          	break;
@@ -425,8 +427,8 @@ public class MsgServer {
 	          	try {
 								ob.updateSFile(sf);
 							} catch (MetaException e) {
-								e.printStackTrace();
-								System.out.println("handle msg failed:"+msg.toJson());
+								LOG.error(e,e);
+								LOG.info("handle msg failed:"+msg.toJson());
 							}
 	          	
 	          	break;
@@ -437,8 +439,8 @@ public class MsgServer {
 	          	try {
 								ob.updateSFileLocation(sfl);
 							} catch (MetaException e) {
-								e.printStackTrace();
-								System.out.println("handle msg failed:"+msg.toJson());
+								LOG.error(e,e);
+								LOG.info("handle msg failed:"+msg.toJson());
 							}
 	          	break;
 	          }
@@ -451,8 +453,8 @@ public class MsgServer {
 	          			for(SFileLocation sfl : sf.getLocations())
 	          				ob.createFileLocation(sfl);
 							} catch (Exception e) {
-								e.printStackTrace();
-								System.out.println("handle msg failed:"+msg.toJson());
+								LOG.error(e,e);
+								LOG.info("handle msg failed:"+msg.toJson());
 							}
 	          	
 	          	break;
@@ -466,8 +468,8 @@ public class MsgServer {
 	          				ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
 								ob.delSFile(sf.getFid());
 							} catch (MetaException e) {
-								e.printStackTrace();
-								System.out.println("handle msg failed:"+msg.toJson());
+								LOG.error(e,e);
+								LOG.info("handle msg failed:"+msg.toJson());
 							}
 	          	break;
 						}
