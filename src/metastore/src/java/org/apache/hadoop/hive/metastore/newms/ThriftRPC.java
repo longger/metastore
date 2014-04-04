@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -123,7 +124,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 				// TODO Auto-generated catch block
 				LOG.error(e,e);
 			}
-      dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
+      dm = new DiskManager(hc, LogFactory.getLog(DiskManager.class), RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
@@ -2555,28 +2556,41 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
 
   @Override
   public boolean offlineDevicePhysically(String devid) throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+  	List<SFileLocation> sfls = rs.getSFileLocations(devid, System.currentTimeMillis(), 0);
+    LOG.info("Offline Device " + devid + " physically, hit " + sfls.size() + " SFLs.");
+    for (SFileLocation f : sfls) {
+      boolean r = rs.delSFileLocation(devid, f.getLocation());
+      if (r) {
+        dm.asyncDelSFL(f);
+      }
+    }
+    return true;
   }
 
   @Override
   public boolean flSelectorWatch(String table, int op) throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return false;
+  	switch (op) {
+    case 0:
+      return DiskManager.flselector.watched(table);
+    case 1:
+      return DiskManager.flselector.unWatched(table);
+    case 2:
+      return DiskManager.flselector.flushWatched(table);
+    default:
+      return false;
+    }
   }
 
 	@Override
 	public List<String> listDevsByNode(String nodeName) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return null;
+		return rs.listDevsByNode(nodeName);
 	}
 
 	@Override
 	public List<Long> listFilesByDevs(List<String> devids) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return null;
+		return rs.listFilesByDevs(devids);
 	}
 
 }

@@ -541,8 +541,7 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<SFileLocation> getSFileLocations(String devid, long curts,
 			long timeout) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		return cs.getSFileLocations(devid, curts, timeout);
 	}
 
 	@Override
@@ -1823,15 +1822,29 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public List<String> listDevsByNode(String nodeName) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		List<String> ls = new LinkedList<String>();
+		Iterator<Device> iter = CacheStore.getDeviceHm().values().iterator();
+		while(iter.hasNext()){
+			Device dev = iter.next();
+			if(dev.getNode_name().equals(nodeName))
+				ls.add(dev.getDevid());
+		}
+		return ls;
 	}
 
 	@Override
 	public List<Long> listFilesByDevs(List<String> devids) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return null;
+		List<Long> ids = new LinkedList<Long>();
+		long ct = System.currentTimeMillis();
+		for(String devid : devids)
+		{
+			for(SFileLocation sfl : this.getSFileLocations(devid, ct, 0))
+			{
+				ids.add(sfl.getFid());
+			}
+		}
+		return ids;
 	}
 
 	

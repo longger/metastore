@@ -172,8 +172,10 @@ public class CacheStore {
       	SFileLocation sfl = (SFileLocation)o;
       	try{
       		jedis = rf.getDefaultInstance();
-      		jedis.sadd(generateSflStatKey(sfl.getVisit_status()), SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
-      		
+      		Pipeline p = jedis.pipelined();
+      		p.sadd(generateSflStatKey(sfl.getVisit_status()), field);
+      		p.sadd(generateSflDevKey(sfl.getDevid()), field);
+      		p.sync();
       	}catch(JedisConnectionException e){
           RedisFactory.putBrokenInstance(jedis);
           jedis = null;
@@ -476,6 +478,7 @@ public class CacheStore {
           jedis = rf.getDefaultInstance();
           Pipeline p = jedis.pipelined();
           p.srem(generateSflStatKey(sfl.getVisit_status()), field);
+          p.srem(generateSflDevKey(sfl.getDevid()), field);
           p.hdel(key.getName(), field);
           p.sync();
         }catch(JedisConnectionException e){
@@ -825,7 +828,7 @@ public class CacheStore {
     	List<SFileLocation> l = m.getLocations();
     	if(l == null)
     	{
-    		LOG.info("sfilelocation is null in fid"+m.getFid());
+    		LOG.warn("sfilelocation is null in fid"+m.getFid());
     		continue;
     	}
       // find under replicated files
@@ -894,6 +897,47 @@ public class CacheStore {
      
 	}
 
+	
+	public List<SFileLocation> getSFileLocations(String devid, long curts, long timeout) {
+		Jedis jedis = null;
+		List<SFileLocation> sfll = new LinkedList<SFileLocation>();
+    try{
+      jedis = rf.getDefaultInstance();
+      ScanResult<String> re = null;
+      ScanParams sp = new ScanParams();
+      sp.count(5000);
+  		String cursor = "0";
+  		do{
+  			re = jedis.sscan(generateSflDevKey(devid), cursor,sp);
+  			cursor = re.getStringCursor();
+  			for(String en : re.getResult())
+  			{
+  		     SFileLocation sfl = null;
+					try {
+						sfl = (SFileLocation)this.readObject(ObjectType.SFILELOCATION, en);
+						if(sfl == null)
+						{
+							//it means sflDevKey in redis is inconsistent, bad....
+							LOG.warn("key("+en+") read from SflDevKey("+generateSflDevKey(devid)+") refers to a non-exist SFileLocation, bad...");
+						}
+						else if(sfl.getUpdate_time() + timeout < curts)
+	  		    	 sfll.add(sfl);
+					} catch (Exception e) {
+						LOG.error(e,e);
+					}
+  		     
+  			}
+  		}while(!cursor.equals("0"));
+    }catch(JedisConnectionException e){
+      RedisFactory.putBrokenInstance(jedis);
+      jedis = null;
+      throw e;
+    }finally{
+      RedisFactory.putInstance(jedis);
+    }
+    return sfll;
+	}
+	
   private String generateLtfKey(String tablename, String dbname)
   {
     String p = "sf.ltf.";
@@ -928,6 +972,10 @@ public class CacheStore {
   	if(status < 0)
   		return "sf.stat.*";
   	return "sf.stat."+status;
+  }
+  private String generateSflDevKey(String devid)
+  {
+  	return "sfl.dev."+devid;
   }
 
 

@@ -226,7 +226,7 @@ public class NewMS {
 				case STANDALONE:
 					ri = new ArrayList<RedisInstance>();
 					for (String rp : ra.split(";")) {
-						System.out.println(rp);
+//						System.out.println(rp);
 						String[] s = rp.split(":");
 						ri.add(new RedisInstance(s[0], Integer.parseInt(s[1])));
 					}
@@ -276,7 +276,7 @@ public class NewMS {
 		RawStoreImp.setNewMSConf(conf);
 		try {
 			MsgServer.startConsumer(conf.getZkaddr(), "meta-test", "newms");
-//			MsgServer.startProducer();
+			MsgServer.startProducer();
 			MsgServer.startLocalConsumer();
 		} catch (MetaClientException e) {
 			// TODO Auto-generated catch block
