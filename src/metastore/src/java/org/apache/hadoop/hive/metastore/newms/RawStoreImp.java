@@ -66,6 +66,7 @@ import org.apache.hadoop.hive.metastore.msg.MSGType;
 import org.apache.thrift.TException;
 
 import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisException;
 
 public class RawStoreImp implements RawStore {
 
@@ -73,15 +74,15 @@ public class RawStoreImp implements RawStore {
 	private static final Long g_fid_syncer = new Long(0);
   private static long g_fid = 0;
 	private static NewMSConf conf;
-	
-	private CacheStore cs;
 
-	public RawStoreImp(NewMSConf conf) {
+	private final CacheStore cs;
+
+	public RawStoreImp(NewMSConf conf) throws IOException {
 		RawStoreImp.conf = conf;
 		cs = new CacheStore(conf);
 	}
 
-	public RawStoreImp() {
+	public RawStoreImp() throws IOException {
 		cs = new CacheStore(conf);
 	}
 
@@ -89,12 +90,12 @@ public class RawStoreImp implements RawStore {
 	{
 		return cs;
 	}
-	
+
   public static void setNewMSConf(NewMSConf conf)
   {
   	RawStoreImp.conf = conf;
   }
- 
+
 	private long getNextFID() {
     synchronized (g_fid_syncer) {
       return g_fid++;
@@ -106,17 +107,14 @@ public class RawStoreImp implements RawStore {
 	public static long getFid(){
 		return g_fid;
 	}
-	
+
 	@Override
 	public Configuration getConf() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public void setConf(Configuration arg0) {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
@@ -185,7 +183,11 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public List<String> getDatabases(String pattern) throws MetaException {
-		return cs.getDatabases(pattern);
+		try {
+      return cs.getDatabases(pattern);
+    } catch (JedisException | IOException e) {
+      throw new MetaException(e.getMessage());
+    }
 	}
 
 	@Override
@@ -231,7 +233,7 @@ public class RawStoreImp implements RawStore {
 	      if(n == null){
 	        throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
 	      }
-       
+
 	      if(di.mp == null){
 	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.SUSPECT, ng.getNode_group_name());
 	      }else{
@@ -242,7 +244,7 @@ public class RawStoreImp implements RawStore {
 	      if( di.mp != null && de.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT){
 	        de.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
 	      }
-	      if(!de.getNode_name().equals(node.getNode_name()) && 
+	      if(!de.getNode_name().equals(node.getNode_name()) &&
             de.getProp() == MetaStoreConst.MDeviceProp.ALONE){
 	        Node n = getNode(node.getNode_name());
 	        if(n == null){
@@ -365,10 +367,10 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public SFile getSFile(long fid) throws MetaException {
 		try {
-			
-			Object o = cs.readObject(ObjectType.SFILE, fid+"");
-			if(o == null)
-				return null;
+			Object o = cs.readObject(ObjectType.SFILE, fid + "");
+			if (o == null) {
+        return null;
+      }
 			return (SFile)o;
 		} catch (Exception e) {
 			LOG.error(e,e);
@@ -391,10 +393,11 @@ public class RawStoreImp implements RawStore {
 	public boolean delSFile(long fid) throws MetaException {
 		try{
 			SFile sf = getSFile(fid);
-			if(sf == null)
-				return true;
+			if(sf == null) {
+        return true;
+      }
 			cs.removeObject(ObjectType.SFILE, fid+"");
-			
+
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
 			old_params.put("f_id", sf.getFid());
       old_params.put("db_name", sf.getDbName());
@@ -412,15 +415,16 @@ public class RawStoreImp implements RawStore {
 		SFile sf = this.getSFile(newfile.getFid());
 		boolean repnr_changed = false;
 	  boolean stat_changed = false;
-		if(sf == null)
-			throw new MetaException("Invalid SFile object provided!");
+		if(sf == null) {
+      throw new MetaException("Invalid SFile object provided!");
+    }
 		 if (sf.getRep_nr() != newfile.getRep_nr()) {
        repnr_changed = true;
      }
      if (sf.getStore_status() != newfile.getStore_status()) {
        stat_changed = true;
      }
-		
+
 		try {
 			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
 			sf.setRep_nr(newfile.getRep_nr());
@@ -432,7 +436,7 @@ public class RawStoreImp implements RawStore {
       sf.setLength(newfile.getLength());
       sf.setRef_files(newfile.getRef_files());
       cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
-      
+
       if (stat_changed) {
         // send the SFile state change message
         HashMap<String, Object> old_params = new HashMap<String, Object>();
@@ -454,7 +458,7 @@ public class RawStoreImp implements RawStore {
         old_params.put("table_name", newfile.getTableName());
         MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_FILE_USER_SET_REP_CHANGE, -1l, -1l, null, sf, old_params));
       }
-      
+
       return sf;
 		} catch (Exception e) {
 			LOG.error(e,e);
@@ -462,12 +466,13 @@ public class RawStoreImp implements RawStore {
 		}
 
 	}
-	
+
 	//为了不改变原有的updatesfile的语义，添加一个是否连sfl一起更新的方法
 	public SFile updateSFile(SFile newfile, boolean isWithSfl) throws MetaException {
 		SFile sf = this.getSFile(newfile.getFid());
-		if(sf == null)
-			throw new MetaException("Invalid SFile object provided!");
+		if(sf == null) {
+      throw new MetaException("Invalid SFile object provided!");
+    }
 		try {
 			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
 			sf.setRep_nr(newfile.getRep_nr());
@@ -478,8 +483,9 @@ public class RawStoreImp implements RawStore {
       sf.setLoad_status(newfile.getLoad_status());
       sf.setLength(newfile.getLength());
       sf.setRef_files(newfile.getRef_files());
-      if(isWithSfl)
-      	sf.setLocations(newfile.getLocations());
+      if(isWithSfl) {
+        sf.setLocations(newfile.getLocations());
+      }
       cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
       return sf;
 		} catch (Exception e) {
@@ -497,12 +503,13 @@ public class RawStoreImp implements RawStore {
 	      return false;
 	    }
 			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, location.getFid()+"");
-			if(sf == null)
-				throw new MetaException("No SFile found by id:"+location.getFid());
+			if(sf == null) {
+        throw new MetaException("No SFile found by id:"+location.getFid());
+      }
 			sf.addToLocations(location);
 			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
 			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(location.getLocation(), location.getDevid()), location);
-			
+
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", new Long(location.getFid()));
       old_params.put("devid", location.getDevid());
@@ -579,7 +586,7 @@ public class RawStoreImp implements RawStore {
 			sfl.setRep_id(newsfl.getRep_id());
 			sfl.setDigest(newsfl.getDigest());
 			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
-			
+
 			if (changed) {
 	      switch (newsfl.getVisit_status()) {
 	      case MetaStoreConst.MFileLocationVisitStatus.ONLINE:
@@ -602,7 +609,7 @@ public class RawStoreImp implements RawStore {
 //	      old_params.put("table_name", tableName);
 	      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, sfl, old_params));
 	    }
-			
+
 			return sfl;
 		} catch (Exception e) {
 			LOG.error(e,e);
@@ -615,15 +622,17 @@ public class RawStoreImp implements RawStore {
 		String sflkey = SFileImage.generateSflkey(location, devid);
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
-			if(sfl == null)
-				return true;
+			if(sfl == null) {
+        return true;
+      }
 			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
-			if(sf == null)
-				throw new MetaException("no sfile found by id:"+sfl.getFid());
+			if(sf == null) {
+        throw new MetaException("no sfile found by id:"+sfl.getFid());
+      }
 			sf.getLocations().remove(sfl);
 			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
 			cs.removeObject(ObjectType.SFILELOCATION, sflkey);
-			
+
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
 			old_params.put("f_id", sfl.getFid());
 			old_params.put("devid", devid);
@@ -754,8 +763,9 @@ public class RawStoreImp implements RawStore {
 			if(key.startsWith(dbName))
 			{
 				String tabname = key.split("\\.")[1];
-				if(tabname.matches(pattern))
-					tn.add(tabname);
+				if(tabname.matches(pattern)) {
+          tn.add(tabname);
+        }
 			}
 		}
 		return tn;
@@ -1176,10 +1186,12 @@ public class RawStoreImp implements RawStore {
 	public Node findNode(String ip) throws MetaException {
 		for(Node n : CacheStore.getNodeHm().values())
 		{
-			for(String p : n.getIps())
-				if(p.equals(ip))
-					return n;
-		}			
+			for(String p : n.getIps()) {
+        if(p.equals(ip)) {
+          return n;
+        }
+      }
+		}
 		return null;
 	}
 
@@ -1391,13 +1403,14 @@ public class RawStoreImp implements RawStore {
 	public Device getDevice(String devid) throws MetaException,	NoSuchObjectException {
 		try {
 			Device de = (Device) cs.readObject(ObjectType.DEVICE, devid);
-			if(de == null)
-				throw new NoSuchObjectException("Can not find device :"+devid);
+			if(de == null) {
+        throw new NoSuchObjectException("Can not find device :"+devid);
+      }
 			return de;
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
-		} 
+		}
 	}
 
 	@Override
@@ -1575,20 +1588,31 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<Long> listTableFiles(String dbName, String tableName,
 			int begin, int end) throws MetaException {
-		return cs.listTableFiles(dbName,tableName,begin,end);
+		try {
+      return cs.listTableFiles(dbName,tableName,begin,end);
+    } catch (JedisException | IOException e) {
+      throw new MetaException(e.getMessage());
+    }
 	}
 
 	@Override
 	public List<Long> findSpecificDigestFiles(String digest)
 			throws MetaException {
-
-		return cs.listFilesByDegist(digest);
+		try {
+      return cs.listFilesByDegist(digest);
+    } catch (JedisException | IOException e) {
+      throw new MetaException(e.getMessage());
+    }
 	}
 
 	@Override
 	public List<SFile> filterTableFiles(String dbName, String tableName,
 			List<SplitValue> values) throws MetaException {
-		return cs.filterTableFiles(dbName, tableName, values);
+	  try {
+	    return cs.filterTableFiles(dbName, tableName, values);
+	  } catch (JedisException | IOException e) {
+	    throw new MetaException(e.getMessage());
+	  }
 	}
 
 	@Override
@@ -1731,8 +1755,9 @@ public class RawStoreImp implements RawStore {
 		boolean changed = false;
 		SFile sf = this.getSFile(file.getFid());
 		List<SFileLocation> toOffline = new ArrayList<SFileLocation>();
-		if(sf == null)
-			throw new MetaException("No SFile found by id:"+file.getFid());
+		if(sf == null) {
+      throw new MetaException("No SFile found by id:"+file.getFid());
+    }
 		if (sf.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
       sf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
 //      pm.makePersistent(mf);
@@ -1769,7 +1794,7 @@ public class RawStoreImp implements RawStore {
       if (selected) {
         changed = true;
       }
-      
+
       if (changed) {
         // ok, send msgs
         HashMap<String, Object> old_params = new HashMap<String, Object>();
@@ -1811,7 +1836,7 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public long countDevice() throws MetaException {
-		
+
 		return CacheStore.getDeviceHm().size();
 	}
 
@@ -1834,5 +1859,5 @@ public class RawStoreImp implements RawStore {
 		return null;
 	}
 
-	
+
 }

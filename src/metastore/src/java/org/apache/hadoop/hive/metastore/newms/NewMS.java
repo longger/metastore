@@ -1,5 +1,6 @@
 package org.apache.hadoop.hive.metastore.newms;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -8,28 +9,29 @@ import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
+import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
 import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore;
 import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisInstance;
 import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisMode;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TServerTransport;
-import org.apache.thrift.transport.TTransportException;
 import org.apache.thrift.transport.TTransportFactory;
 
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisException;
 
 import com.taobao.metamorphosis.exception.MetaClientException;
 import com.taobao.metamorphosis.utils.ZkUtils.ZKConfig;
 
 public class NewMS {
-
 	public static Log LOG = LogFactory.getLog(NewMS.class);
-	final ZKConfig zkConfig = new ZKConfig();
+	private final ZKConfig zkConfig = new ZKConfig();
 	private NewMSConf conf;
 
 	public static class Option {
@@ -79,41 +81,47 @@ public class NewMS {
 		return optsList;
 	}
 
-	static class RPCServer implements Runnable {
-		private final NewMSConf conf;
+	static class RPCServer {
+		public RPCServer(NewMSConf conf) throws Throwable {
+		  HiveConf hc = new HiveConf();
+		  int port = conf.getRpcport();
+			int minWorkerThreads = hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
+      int maxWorkerThreads = hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
+      boolean tcpKeepAlive = hc.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);
 
-		public RPCServer(NewMSConf conf) {
-			this.conf = conf;
-		}
+      try {
+        TServerTransport serverTransport = tcpKeepAlive ?
+            new TServerSocketKeepAlive(port) : new TServerSocket(port);
+			  TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
 
-		@Override
-		public void run() {
-			// TODO Auto-generated method stub
+			  TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(serverTransport)
+			  .transportFactory(new TTransportFactory())
+			  .protocolFactory(new TBinaryProtocol.Factory())
+			  .processor(tprocessor)
+			  .minWorkerThreads(minWorkerThreads)
+			  .maxWorkerThreads(maxWorkerThreads);
 
-			LOG.info("RPCServer start at port:" + conf.getRpcport());
+			  TServer server = new TThreadPoolServer(sargs);
 
-			TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
-			HiveConf hc = new HiveConf();
-			try {
-				TServerTransport tt = new TServerSocket(conf.getRpcport());
-				TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(tt)
-						.transportFactory(new TTransportFactory())
-						.protocolFactory(new TBinaryProtocol.Factory())
-						.processor(tprocessor)
-						.minWorkerThreads(hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS))
-						.maxWorkerThreads(hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS));
-				TServer server = new TThreadPoolServer(sargs);
-				server.serve();
-			} catch (TTransportException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+			  LOG.info("Started the NewMS on port [" + port + "]...");
+			  LOG.info("Options.minWorkerThreads = "
+          + minWorkerThreads);
+			  LOG.info("Options.maxWorkerThreads = "
+          + maxWorkerThreads);
+			  LOG.info("TCP keepalive = " + tcpKeepAlive);
+
+			  HiveMetaStoreServerEventHandler eventHandler = new HiveMetaStoreServerEventHandler();
+			  server.setServerEventHandler(eventHandler);
+
+			  server.serve();
+			} catch (Throwable x) {
+			  x.printStackTrace();
+			  LOG.error(StringUtils.stringifyException(x));
 			}
 		}
-
 	}
 
-	public static void main(String[] args) {
-
+	public static void main(String[] args) throws Throwable {
 		NewMSConf conf = null;
 		int rpcp = 0;
 		int fcs = 1000;
@@ -125,6 +133,7 @@ public class NewMS {
 			String zkaddr = null;
 			String ra = null;
 			String mh = null, mp = null;
+
 			for (Option o : ops) {
 				if (o.flag.equals("-h")) {
 					// print help message
@@ -140,15 +149,15 @@ public class NewMS {
 					System.exit(0);
 				}
 				if (o.flag.equals("-mh")) {
-					// set serverPort
+					// set old metastore serverName
 					if (o.opt == null) {
-						System.out.println("-mh metastore server ip. ");
+						System.out.println("-mh metastore server name. ");
 						System.exit(0);
 					}
 					mh = o.opt;
 				}
 				if (o.flag.equals("-mp")) {
-					// set serverPort
+					// set old metastore serverPort
 					if (o.opt == null) {
 						System.out.println("-mp metastore server port. ");
 						System.exit(0);
@@ -156,6 +165,7 @@ public class NewMS {
 					mp = o.opt;
 				}
 				if (o.flag.equals("-rm")) {
+				  // set redis mode
 					if (o.opt == null) {
 						System.out.println("-rm redismode");
 						System.exit(0);
@@ -165,53 +175,51 @@ public class NewMS {
           } else if (o.opt.equals("STL")) {
             rm = RedisMode.SENTINEL;
           } else {
-						System.out.println("wrong redis mode:" + o.opt
-								+ ", should be STA or STL");
+						System.out.println("Invalid redis mode:" + o.opt + ", should be STA or STL.");
 						System.exit(0);
 					}
 				}
 				if (o.flag.equals("-ra")) {
-					// set serverPort
+					// set redis or sentinel address
 					if (o.opt == null) {
-						System.out
-								.println("-ra redis or sentinel addr. <host:port;host:port> ");
+						System.out.println("-ra redis or sentinel addr. <host:port;host:port>.");
 						System.exit(0);
 					}
 					ra = o.opt;
 				}
 				if (o.flag.equals("-zka")) {
-					// set redis server name
-					if (o.opt == null) {
-						System.out.println("-zka zkaddr <host:port>.");
-						System.exit(0);
-					}
+					// set zookeeper address
+				  if (o.opt == null) {
+				    System.out.println("-zka zkaddr <host:port>.");
+				    System.exit(0);
+				  }
 					zkaddr = o.opt;
 				}
 				if (o.flag.equals("-rpcp")) {
 					// set rpc service port
 					if (o.opt == null) {
-						System.out.println("-rpcp rpc service port ");
+						System.out.println("-rpcp rpc service port.");
 						System.exit(0);
 					}
 					rpcp = Integer.parseInt(o.opt);
 				}
-
 				if (o.flag.equals("-fcs")) {
-					if (o.opt == null) {
-						System.out.println("-fcs file cache size.");
-						System.exit(0);
-					}
-					fcs = Integer.parseInt(o.opt);
+				  // set file cache size
+				  if (o.opt == null) {
+				    System.out.println("-fcs file cache size.");
+				    System.exit(0);
+				  }
+				  fcs = Integer.parseInt(o.opt);
 				}
 			}
 
 			if (mh == null || mp == null) {
-				System.out.println("please provide ms host and ms port");
-				System.exit(0);
+			  System.out.println("please provide old metastore host and port");
+			  System.exit(0);
 			}
 
 			if (rm == null || ra == null || zkaddr == null) {
-				System.out.println("please provide enough args.");
+				System.out.println("please provide redis mode, address, zkaddr args.");
 				System.exit(0);
 			} else {
 				switch (rm) {
@@ -235,7 +243,6 @@ public class NewMS {
 				}
 				conf.setFcs(fcs);
 			}
-
 		} else {
 			String zkaddr = "192.168.1.13:3181";
 			// System.out.println("please provide arguments, use -h for help");
@@ -250,60 +257,69 @@ public class NewMS {
 			// System.exit(0);
 		}
 
-		//get g_fid from redis
+		// get g_fid from redis
 		Jedis jedis = null;
-    try{
+    try {
     	jedis = new RedisFactory(conf).getDefaultInstance();
+    	if (jedis == null) {
+        throw new IOException("Connect to redis server failed.");
+      }
     	String fid = jedis.get("g_fid");
-    	if(fid != null){
+    	if (fid != null) {
     		long id = Long.parseLong(fid);
     		synchronized (RawStoreImp.class) {
-					if(RawStoreImp.getFid() < id)
-						RawStoreImp.setFID(Long.parseLong(fid));
-				}    		
+					if (RawStoreImp.getFid() < id) {
+            RawStoreImp.setFID(Long.parseLong(fid));
+          }
+				}
     	}
-    	
-    }catch(JedisConnectionException e){
+    } catch (JedisException e) {
     	LOG.warn(e,e);
     	RedisFactory.putBrokenInstance(jedis);
-    	jedis = null;
-    }finally{
+    	throw e;
+    } finally {
     	RedisFactory.putInstance(jedis);
     }
-		
-		new Thread(new RPCServer(conf)).start();
-		MsgServer.setConf(conf);
-		RawStoreImp.setNewMSConf(conf);
-		try {
-			MsgServer.startConsumer(conf.getZkaddr(), "meta-test", "newms");
-//			MsgServer.startProducer();
-			MsgServer.startLocalConsumer();
-		} catch (MetaClientException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-		 // Add shutdown hook.
-		final NewMSConf co = conf; 
+
+    // Add shutdown hook.
+		final NewMSConf co = conf;
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
       public void run() {
-        String shutdownMsg = "Shutting down newms, store g_fid: "+RawStoreImp.getFid()+" in redis.";
+        String shutdownMsg = "Shutting down newms, flush g_fid: " + RawStoreImp.getFid() + " to redis.";
         LOG.info(shutdownMsg);
         Jedis jedis = null;
-        try{
+        try {
         	jedis = new RedisFactory(co).getDefaultInstance();
-        	jedis.set("g_fid",RawStoreImp.getFid()+"");
-        	
-        }catch(JedisConnectionException e){
+        	if (jedis != null) {
+            jedis.set("g_fid", RawStoreImp.getFid() + "");
+          }
+        } catch (JedisException e) {
         	LOG.warn(e,e);
         	RedisFactory.putBrokenInstance(jedis);
-        	jedis = null;
-        }finally{
+        } finally {
         	RedisFactory.putInstance(jedis);
         }
       }
     });
-	}
 
+    try {
+      MsgServer.setConf(conf);
+      RawStoreImp.setNewMSConf(conf);
+      try {
+        MsgServer.startConsumer(conf.getZkaddr(), "meta-test", "newms");
+        //MsgServer.startProducer();
+        MsgServer.startLocalConsumer();
+      } catch (MetaClientException e) {
+        LOG.error(e, e);
+        throw new IOException("Start MsgServer failed: " + e.getMessage());
+      }
+      new RPCServer(conf);
+    } catch (Throwable t) {
+      // Catch the exception, log it and rethrow it.
+      LOG.error("NewMS Thrift Server threw an exception...", t);
+      System.exit(-1);
+      throw t;
+    }
+	}
 }

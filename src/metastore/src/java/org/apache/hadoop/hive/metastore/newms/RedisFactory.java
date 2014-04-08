@@ -14,7 +14,8 @@ public class RedisFactory {
 	private static JedisSentinelPool jsp = null;
 	private static JedisPool jp = null;
 	private static RedisInstance ri = null;
-	private JedisPoolConfig config;
+	private final JedisPoolConfig config;
+
 	public RedisFactory(NewMSConf conf) {
 		RedisFactory.conf = conf;
 		config = new JedisPoolConfig();
@@ -22,25 +23,42 @@ public class RedisFactory {
 		config.setMaxTotal(2000);
 	}
 
+	public void destroy() {
+	  switch (conf.getRedisMode()) {
+	  case STANDALONE:
+	    if (jp != null) {
+        jp.destroy();
+      }
+	    break;
+	  case SENTINEL:
+	    if (jsp != null) {
+        jsp.destroy();
+      }
+	    break;
+	  }
+	}
+
 	// 从配置文件中读取redis的地址和端口,以此创建jedis对象
 	public synchronized Jedis getDefaultInstance() {
 		switch (conf.getRedisMode()) {
 		case STANDALONE:
 
-			if(ri == null)
-			{
+			if (ri == null) {
 				ri = conf.getRedisInstance();
-				jp = new JedisPool(config,ri.hostname,ri.port);
+				if (ri != null) {
+          jp = new JedisPool(config, ri.hostname, ri.port);
+        }
 			}
-			return jp.getResource();
+			if (jp != null) {
+        return jp.getResource();
+      }
 		case SENTINEL:
 		{
 			Jedis r;
 			if (jsp != null) {
         r = jsp.getResource();
       } else {
-
-				jsp = new JedisSentinelPool("mymaster", conf.getSentinels(),config);
+				jsp = new JedisSentinelPool("mymaster", conf.getSentinels(), config);
 				r = jsp.getResource();
 			}
 			return r;

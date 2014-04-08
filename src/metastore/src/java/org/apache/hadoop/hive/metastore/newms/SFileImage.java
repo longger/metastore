@@ -10,7 +10,7 @@ import org.apache.hadoop.hive.metastore.api.SplitValue;
 
 public class SFileImage implements Serializable{
 	/**
-	 * 
+	 * exclude SFileLocation
 	 */
 	private static final long serialVersionUID = 1l;
 	private long fid; // required
@@ -49,29 +49,25 @@ public class SFileImage implements Serializable{
 	public SFileImage() {
 	}
 
-	public static SFileImage generateSFileImage(SFile sf)
-	{
-		List<String> sflkeys = new ArrayList<String>();
-		if(sf.getLocations() != null)
-		{
-			for(int i = 0;i<sf.getLocations().size();i++)
-			{
-				SFileLocation sfl = sf.getLocations().get(i);
-				sflkeys.add(generateSflkey(sfl.getLocation(), sfl.getDevid()));
-			}
-		}
-		return new SFileImage(sf.getFid(),sf.getDbName(),sf.getTableName()
-				,sf.getStore_status(),sf.getRep_nr(),sf.getDigest(),sf.getRecord_nr()
-				,sf.getAll_record_nr(),sflkeys,sf.getLength()
-				,sf.getRef_files(),sf.getValues(),sf.getLoad_status());
+	public static SFileImage generateSFileImage(SFile sf) {
+	  List<String> sflkeys = new ArrayList<String>();
+	  if (sf.getLocations() != null) {
+	    for (int i = 0; i < sf.getLocations().size(); i++) {
+	      SFileLocation sfl = sf.getLocations().get(i);
+	      sflkeys.add(generateSflkey(sfl.getLocation(), sfl.getDevid()));
+	    }
+	  }
+	  return new SFileImage(sf.getFid(), sf.getDbName(), sf.getTableName(),
+	      sf.getStore_status(), sf.getRep_nr(), sf.getDigest(), sf.getRecord_nr(),
+	      sf.getAll_record_nr(), sflkeys,sf.getLength(),
+	      sf.getRef_files(), sf.getValues(), sf.getLoad_status());
 	}
-	
-	public static String generateSflkey(String location, String devid)
-	{
-		String s = location+"_"+devid;
-		return s.hashCode()+"";
+
+	public static String generateSflkey(String location, String devid) {
+		String s = location + "_" + devid;
+		return s.hashCode() + "";
 	}
-	
+
 	public long getFid() {
 		return fid;
 	}
@@ -176,7 +172,7 @@ public class SFileImage implements Serializable{
 		this.load_status = load_status;
 	}
 
-	
+
 	@Override
 	public String toString() {
 		return "SFileImage [fid=" + fid + ", dbName=" + dbName + ", tableName="
@@ -187,5 +183,5 @@ public class SFileImage implements Serializable{
 				+ ", values=" + values + ", load_status=" + load_status + "]";
 	}
 
-	
+
 }
