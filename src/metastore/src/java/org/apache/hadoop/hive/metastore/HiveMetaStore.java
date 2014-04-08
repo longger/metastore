@@ -160,7 +160,6 @@ import org.apache.hadoop.hive.serde2.SerDeUtils;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
 import org.apache.hadoop.hive.thrift.TUGIContainingTransport;
-import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TException;
@@ -306,12 +305,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         return;
       }
 
-      UserGroupInformation ugi;
-      try {
-        ugi = ShimLoader.getHadoopShims().getUGIForConf(getConf());
-      } catch (Exception ex) {
-        throw new RuntimeException(ex);
-      }
       final Formatter fmt = auditFormatter.get();
       ((StringBuilder) fmt.out()).setLength(0);
 
@@ -324,8 +317,15 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       if (address == null) {
         address = "unknown-ip-addr";
       }
+      String user = "";
+      HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler.getServerContext(msss.getSessionId());
+      if (serverContext!= null) {
+        user += serverContext.getUserName() + "(" + serverContext.isAuthenticated() + ")";
+      } else {
+        user = "unknown";
+      }
 
-      auditLog.info(fmt.format(AUDIT_FORMAT, ugi.getUserName(),
+      auditLog.info(fmt.format(AUDIT_FORMAT, user,
           address, cmd).toString());
     }
 
@@ -5338,6 +5338,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public SFile get_file_by_name(String node, String devid, String location)
         throws FileOperationException, MetaException, TException {
+      DMProfile.fgetR.incrementAndGet();
       SFile r = getMS().getSFile(devid, location);
       if (r == null) {
         throw new FileOperationException("Can not find SFile by name: " + node + ":" + devid + ":" + location, FOFailReason.INVALID_FILE);
