@@ -2562,4 +2562,16 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     return false;
   }
 
+  @Override
+  public List<String> listDevsByNode(String arg0) throws MetaException, TException {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public List<Long> listFilesByDevs(List<String> arg0) throws MetaException, TException {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
 }
