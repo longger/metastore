@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Formatter;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -24,8 +25,13 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.DiskManager;
 import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DMRequest;
+import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
 import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
 import org.apache.hadoop.hive.metastore.DiskManager.RsStatus;
+import org.apache.hadoop.hive.metastore.HiveMetaStore;
+import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler.MSSessionState;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreServerContext;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionContext;
 import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionListener;
@@ -85,8 +91,8 @@ import org.apache.hadoop.hive.metastore.tools.PartitionFactory;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.thrift.TException;
 
+import com.facebook.fb303.FacebookBase;
 import com.facebook.fb303.fb_status;
-import com.google.common.collect.Maps;
 
 /*
  * 没缓存的对象，但是rpc里要得到的
@@ -94,71 +100,121 @@ import com.google.common.collect.Maps;
  */
 
 
-public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface {
+public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface {
 
   private final NewMSConf conf;
   private final RawStoreImp rs;
   private IMetaStoreClient client;
   private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
   private DiskManager dm;
-  private final long startTimeMillis;
+  Random rand = new Random();
   public static Long file_creation_lock = 0L;
   public static Long file_reopen_lock = 0L;
   private List<MetaStoreEndFunctionListener> endFunctionListeners;
 
-  public ThriftRPC(NewMSConf conf)
-  {
+  private static int nextSerialNum = 0;
+  private static final ThreadLocal<Integer> threadLocalId = new ThreadLocal<Integer>() {
+    @Override
+    protected synchronized Integer initialValue() {
+      return new Integer(nextSerialNum++);
+    }
+  };
+
+  private final HiveMetaStore.HMSHandler.MSSessionState msss = new MSSessionState();
+
+  // This will only be set if the metastore is being accessed from a metastore Thrift server,
+  // not if it is from the CLI. Also, only if the TTransport being used to connect is an
+  // instance of TSocket.
+  private static ThreadLocal<String> threadLocalIpAddress = new ThreadLocal<String>() {
+    @Override
+    protected synchronized String initialValue() {
+      return null;
+    }
+  };
+
+  public static void setIpAddress(String ipAddress) {
+    threadLocalIpAddress.set(ipAddress);
+  }
+
+  // This will return null if the metastore is not being accessed from a metastore Thrift server,
+  // or if the TTransport being used to connect is not an instance of TSocket.
+  public static String getIpAddress() {
+    return threadLocalIpAddress.get();
+  }
+
+  public static final String AUDIT_FORMAT =
+      "user=%s\t" + // ugi
+          "ip=%s\t" + // remote IP
+          "cmd=%s\t"; // command
+  public static final Log auditLog = LogFactory.getLog(
+      ThriftRPC.class.getName() + ".audit");
+  private static  ThreadLocal<Formatter> auditFormatter =
+      new ThreadLocal<Formatter>() {
+    @Override
+    protected Formatter initialValue() {
+      return new Formatter(new StringBuilder(AUDIT_FORMAT.length() * 4));
+    }
+  };
+
+  private final void logAuditEvent(String cmd) {
+    if (cmd == null) {
+      return;
+    }
+
+    final Formatter fmt = auditFormatter.get();
+    ((StringBuilder) fmt.out()).setLength(0);
+
+    String address;
+    address = getIpAddress();
+    if (address == null) {
+      address = "unknown-ip-addr";
+    }
+    String user = "";
+    HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler.getServerContext(msss.getSessionId());
+    if (serverContext!= null) {
+      user += serverContext.getUserName() + "(" + serverContext.isAuthenticated() + ")";
+    } else {
+      user = "unknown";
+    }
+
+    auditLog.info(fmt.format(AUDIT_FORMAT, user, address, cmd).toString());
+  }
+
+  public ThriftRPC(NewMSConf conf) throws IOException {
+    super("NewMS-RPC");
     this.conf = conf;
     rs = new RawStoreImp(conf);
-    startTimeMillis = System.currentTimeMillis();
+    System.currentTimeMillis();
     try {
     	HiveConf hc = new HiveConf(DiskManager.class);
       client = MsgProcessing.createMetaStoreClient();
       try {
-      	if(client != null)
-				client.authentication(hc.getVar(HiveConf.ConfVars.HIVE_USER),hc.getVar(HiveConf.ConfVars.HIVE_USERPWD));
+      	if (client != null) {
+          if (client.authentication(hc.getVar(HiveConf.ConfVars.HIVE_USER),
+                hc.getVar(HiveConf.ConfVars.HIVE_USERPWD))) {
+            LOG.info("Authenticate '" + hc.getVar(HiveConf.ConfVars.HIVE_USER) + "' success.");
+          }
+        }
 			} catch (NoSuchObjectException e) {
-				// TODO Auto-generated catch block
-				LOG.error(e,e);
+				LOG.error(e, e);
 			} catch (TException e) {
-				// TODO Auto-generated catch block
-				LOG.error(e,e);
+			  LOG.error(e, e);
 			}
       dm = new DiskManager(hc, LogFactory.getLog(DiskManager.class), RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
     } catch (MetaException e) {
-      LOG.error(e,e);
+      LOG.error(e, e);
+      throw new IOException(e.getMessage());
     } catch (IOException e) {
-      // TODO Auto-generated catch block
-      LOG.error(e,e);
+      LOG.error(e, e);
+      throw e;
     }
   }
 
-  /**
-   * return the alive timemillis since last set up
-   * the {@code startTimeMillis} is inited in the constructor method {@link #ThriftRPC(NewMSConf)}
-   *
-   * @author mzy
-   * @return {@code System.currentTimeMillis - startTimeMillis}
-   */
   @Override
-  public long aliveSince() throws TException {
-    return System.currentTimeMillis() - startTimeMillis;
-  }
-
-  @Override
-  public long getCounter(String arg0) throws TException {
-    if (isNullOrEmpty(arg0)) {
-      return -1;
-    }
-    return 0;
-  }
-
-
-  @Override
-  public Map<String, Long> getCounters() throws TException {
+  public AbstractMap<String, Long> getCounters() {
     AbstractMap<String, Long> counters = new HashMap<String, Long>();
 
     // Allow endFunctionListeners to add any counters they have collected
@@ -179,57 +235,18 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   }
 
   @Override
-  public String getName() throws TException {
- // TODO HiveMetaStore didn't implement this method
-    //HiveMetaStoreClient didn't call this method
-    return "";
-  }
-
-  @Override
-  public String getOption(String arg0) throws TException {
- // TODO HiveMetaStore didn't implement this method
-    //HiveMetaStoreClient didn't call this method
-    return "";
-  }
-
-  @Override
-  public Map<String, String> getOptions() throws TException {
-    // TODO HiveMetaStore didn't implement this method
-    //HiveMetaStoreClient didn't call this method
-    return Maps.newHashMap();
-  }
-
-  @Override
-  public fb_status getStatus() throws TException {
+  public fb_status getStatus() {
       return fb_status.ALIVE;
-  }
-
-  @Override
-  public String getStatusDetails() throws TException {
-    //TODO implement this method HiveMetaStore didn't call this method
-    return "";
   }
 
   @Override
   public String getVersion() throws TException {
     endFunction(startFunction("getVersion",""),true,null);
-    return "3.0";
+    return "3.2";
   }
 
   @Override
-  public void reinitialize() throws TException {
-    // TODO Auto-generated method stub
-
-  }
-
-  @Override
-  public void setOption(String arg0, String arg1) throws TException {
-    // TODO implement this method HiveMetaStore didn't implement this method and HiveMetaStoreClient
-    // didn't call it yet
-  }
-
-  @Override
-  public void shutdown() throws TException {
+  public void shutdown() {
     LOG.info("Shutting down the object store...");
     if (rs != null) {
       rs.shutdown();
@@ -259,7 +276,6 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean addNodeGroup(NodeGroup nodeGroup) throws AlreadyExistsException,
       MetaException, TException {
-
     return nodeGroup != null && client.addNodeGroup(nodeGroup);
   }
 
@@ -302,7 +318,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
     client.createIndex(index, indexTable);
-    return index;
+    return client.getIndex(index.getDbName(), index.getOrigTableName(), index.getIndexName());
   }
 
   @Override
@@ -471,7 +487,17 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   public boolean authentication(String userName, String passwd)
       throws NoSuchObjectException, MetaException, TException {
-    return client.authentication(userName, passwd);
+    incrementCounter("user_authentication");
+    boolean r = client.authentication(userName, passwd);
+    // save user info to thread local context
+    if (r) {
+      HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler.getServerContext(msss.getSessionId());
+      if (serverContext != null) {
+        serverContext.setUserName(userName);
+        serverContext.setAuthenticated(true);
+      }
+    }
+    return r;
   }
 
   @Override
@@ -484,10 +510,10 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public int close_file(SFile file) throws FileOperationException, MetaException, TException {
     startFunction("close_file ", "fid: " + file.getFid());
     DMProfile.fcloseR.incrementAndGet();
-    
+
     FileOperationException e = null;
     SFile saved = rs.getSFile(file.getFid());
-    
+
     try {
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID" + file.getFid(),
@@ -552,7 +578,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       // keep repnr unchanged
       file.setRep_nr(saved.getRep_nr());
       rs.updateSFile(file,true);
-      
+
       if (e != null) {
         throw e;
       }
@@ -568,10 +594,15 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     return 0;
   }
 
+  private void logInfo(String m) {
+    LOG.info(threadLocalId.get().toString() + ": " + m);
+    logAuditEvent(m);
+  }
+
   public String startFunction(String function, String extraLogInfo) {
-    // incrementCounter(function);
-    // logInfo((getIpAddress() == null ? "" : "source:" + getIpAddress() + " ") + function +
-    // extraLogInfo);
+    incrementCounter(function);
+    logInfo((getIpAddress() == null ? "" : "source:" + getIpAddress() + " ") + function +
+        extraLogInfo);
     try {
       Metrics.startScope(function);
     } catch (IOException e) {
@@ -609,7 +640,6 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public boolean createSchema(GlobalSchema schema)
       throws AlreadyExistsException, InvalidObjectException,
       MetaException, TException {
-    // TODO Auto-generated method stub
     return client.createSchema(schema);
   }
 
@@ -712,21 +742,37 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   private SFile create_file(FileLocatingPolicy flp, String node_name, int repnr, String db_name,
       String table_name, List<SplitValue> values)
       throws FileOperationException, TException {
-    Random rand = new Random();
     String table_path = null;
 
+    if (dm == null) {
+      return null;
+    }
     if (node_name == null) {
       // this means we should select Best Available Node and Best Available Device;
+      // FIXME: add FLSelector here, filter already used nodes, update will used nodes;
       try {
         node_name = dm.findBestNode(flp);
         if (node_name == null) {
-          throw new IOException("Folloing the FLP(" + flp
-              + "), we can't find any available node now.");
+          throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
+        }
+        if (db_name != null && table_name != null && values.size() == 3) {
+          try {
+            String l2keys[] = values.get(2).getValue().split("-");
+            if (l2keys.length == 2) {
+              LOG.info("FLSelector will choose " + DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
+                  Long.parseLong(values.get(0).getValue()),
+                  Long.parseLong(l2keys[1])) + " for " + db_name + "." + table_name +
+                  " L1Key=" + values.get(0).getValue() +
+                  " L2Key=" + l2keys[1] + ", vs " + node_name);
+            }
+          }
+          catch (NumberFormatException nfe) {
+            LOG.error(nfe, nfe);
+          }
         }
       } catch (IOException e) {
         LOG.error(e, e);
-        throw new FileOperationException("Can not find any Best Available Node now, please retry",
-            FOFailReason.SAFEMODE);
+        throw new FileOperationException("Can not find any Best Available Node now, please retry", FOFailReason.SAFEMODE);
       }
     }
 
@@ -812,6 +858,8 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     List<NodeGroup> ngs = null;
     Set<String> ngnodes = new HashSet<String>();
 
+    startFunction("create_file_by_policy:", "CP " + policy.getOperation() +
+          " db: " + db_name + " table: " + table_name + " values: " + values);
     // Step 1: parse the policy and check arguments
     switch (policy.getOperation()) {
     case CREATE_NEW_IN_NODEGROUPS:
@@ -1340,7 +1388,7 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
       NoSuchObjectException, TException {
   	/*
     startFunction("drop_type", ": " + name);
-    
+
     boolean success = false;
     Exception ex = null;
     try {
@@ -1591,31 +1639,69 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
     return t.getSd().getCols();
   }
 
+  // for each file, lookup cached device firstly
+  private void identifySharedDevice(List<SFileLocation> lsfl) throws MetaException, NoSuchObjectException {
+    if (lsfl == null) {
+      return;
+    }
+    for (SFileLocation sfl : lsfl) {
+      DeviceInfo di = dm.getDeviceInfo(sfl.getDevid());
+      if (di == null || di.prop < 0) {
+        Device d = rs.getDevice(sfl.getDevid());
+        if (d.getProp() == MetaStoreConst.MDeviceProp.SHARED ||
+            d.getProp() == MetaStoreConst.MDeviceProp.BACKUP) {
+          sfl.setNode_name("");
+        }
+      } else {
+        if (di.prop == MetaStoreConst.MDeviceProp.SHARED ||
+            di.prop == MetaStoreConst.MDeviceProp.BACKUP) {
+          sfl.setNode_name("");
+        }
+      }
+    }
+  }
+
   @Override
   public SFile get_file_by_id(long fid) throws FileOperationException,
       MetaException, TException {
-    // TODO Auto-generated method stub
-    try {
-      SFile f = rs.getSFile(fid);
-      if (f == null) {
-        throw new FileOperationException("File not found by id:" + fid, FOFailReason.INVALID_FILE);
-      }
-      return f;
-    } catch (Exception e) {
-      LOG.error(e,e);
-      throw new MetaException(e.getMessage());
+    DMProfile.fgetR.incrementAndGet();
+    SFile r = rs.getSFile(fid);
+    if (r == null) {
+      throw new FileOperationException("File not found by id:" + fid, FOFailReason.INVALID_FILE);
     }
+
+    switch (r.getStore_status()) {
+    case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
+    case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+      r.getLocations().clear();
+      break;
+    default:
+    }
+    identifySharedDevice(r.getLocations());
+
+    return r;
   }
 
   @Override
   public SFile get_file_by_name(String node, String devid, String location)
       throws FileOperationException, MetaException, TException {
-    SFile f = rs.getSFile(devid, location);
-    if (f == null) {
+    DMProfile.fgetR.incrementAndGet();
+    SFile r = rs.getSFile(devid, location);
+    if (r == null) {
       throw new FileOperationException("Can not find SFile by name: " + node + ":" + devid + ":"
           + location, FOFailReason.INVALID_FILE);
     }
-    return f;
+
+    switch (r.getStore_status()) {
+    case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
+    case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+      r.getLocations().clear();
+      break;
+    default:
+    }
+    identifySharedDevice(r.getLocations());
+
+    return r;
   }
 
   @Override
@@ -1659,7 +1745,6 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   @Override
   // MetaStoreClient 初始化时会调这个rpc
   public Database get_local_attribution() throws MetaException, TException {
-    // TODO Auto-generated method stub
     String dbname = conf.getLocalDbName();
     try {
       Database db = rs.getDatabase(dbname);
@@ -2541,18 +2626,18 @@ public class ThriftRPC implements org.apache.hadoop.hive.metastore.api.ThriftHiv
   public List<SFile> get_files_by_ids(List<Long> fids)
       throws FileOperationException, MetaException, TException {
     List<SFile> fl = new ArrayList<SFile>();
-    for (Long fid : fids)
-    {
-    	try{
-    		SFile sf = this.get_file_by_id(fid);
-    		fl.add(sf);
-    	}catch(FileOperationException e){
-    		//ignore
-    	}
+    if (fids.size() > 0) {
+      for (Long fid : fids) {
+        try {
+          SFile sf = get_file_by_id(fid);
+          fl.add(sf);
+        } catch(FileOperationException e){
+          //ignore
+        }
+      }
     }
     return fl;
   }
-
 
   @Override
   public boolean offlineDevicePhysically(String devid) throws MetaException, TException {

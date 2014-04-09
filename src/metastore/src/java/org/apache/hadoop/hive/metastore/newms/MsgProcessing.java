@@ -35,7 +35,7 @@ public class MsgProcessing {
 
 	private IMetaStoreClient client;
 	private static HiveConf hiveConf;
-	private NewMSConf conf;
+	private final NewMSConf conf;
 	private CacheStore cs;
 	private static final Log LOG = LogFactory.getLog(MsgProcessing.class);
 	public MsgProcessing(NewMSConf conf) {
@@ -49,8 +49,9 @@ public class MsgProcessing {
 				long start = System.currentTimeMillis();
 			//device
 	      List<Device> dl = client.listDevice();
-	      for(Device de : dl)
-	      	cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+	      for(Device de : dl) {
+          cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+        }
 	      long end = System.currentTimeMillis();
 	      LOG.info("get devices in "+(end-start)+" ms");
 	      start = end;
@@ -63,30 +64,34 @@ public class MsgProcessing {
 	      end = System.currentTimeMillis();
 	      LOG.info("get databases in "+(end-start)+" ms");
 	      start = end;
-	      
+
 	      //sfile  sfilelocation
 	      //把所有的sfile得到应该就不需要再拉取sfilelocation了
 	      long maxid = client.getMaxFid();
 	      synchronized (RawStoreImp.class) {
 	      	if(RawStoreImp.getFid() < maxid)
-	      		RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
+           {
+            RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
+          }
 				}
 	      long num = 10000;
 	      List<Thread> ths = new LinkedList<Thread>();
 	      for(long id = 0;id < maxid; id+= num)
 	      {
-	      	if(id + num >= maxid)
-	      		ths.add(new Thread(new GFThread(id, maxid)));
-	      	else
-	      		ths.add(new Thread(new GFThread(id, id+num-1)));
-	      	
+	      	if(id + num >= maxid) {
+            ths.add(new Thread(new GFThread(id, maxid)));
+          } else {
+            ths.add(new Thread(new GFThread(id, id+num-1)));
+          }
+
 	      }
-	      for(Thread t : ths)
-	      	t.start();
+	      for(Thread t : ths) {
+          t.start();
+        }
 	      end = System.currentTimeMillis();
 	      LOG.info("get sfile and sfilelocation in "+(end-start)+" ms");
 	      start = end;
-	      
+
 	      //table  index
 	      for(Database db : dbs)
 	      {
@@ -94,42 +99,47 @@ public class MsgProcessing {
 	        {
 	        	Table t = client.getTable(db.getName(), tn);
 	        	cs.writeObject(ObjectType.TABLE, t.getDbName()+"."+t.getTableName(), t);
-	        	for(Index in : client.listIndexes(db.getName(), tn,(short) 127))
-	        		cs.writeObject(ObjectType.INDEX, db.getName()+"."+tn+"."+in.getIndexName(), in);
+	        	for(Index in : client.listIndexes(db.getName(), tn,(short) 127)) {
+              cs.writeObject(ObjectType.INDEX, db.getName()+"."+tn+"."+in.getIndexName(), in);
+            }
 	        }
 	      }
 	      end = System.currentTimeMillis();
 	      LOG.info("get tables and indexes in "+(end-start)+" ms");
 	      start = end;
 	      //partition    no partition so far
-	      
+
 	      //node
-	      for(Node n : client.listNodes())
-	      	cs.writeObject(ObjectType.NODE, n.getNode_name(),n);
+	      for(Node n : client.listNodes()) {
+          cs.writeObject(ObjectType.NODE, n.getNode_name(),n);
+        }
 	      end = System.currentTimeMillis();
 	      LOG.info("get nodes in "+(end-start)+" ms");
 	      start = end;
 	      //globalschema
-	      for(GlobalSchema gs : client.listSchemas())
-	      	cs.writeObject(ObjectType.GLOBALSCHEMA, gs.getSchemaName(), gs);
+	      for(GlobalSchema gs : client.listSchemas()) {
+          cs.writeObject(ObjectType.GLOBALSCHEMA, gs.getSchemaName(), gs);
+        }
 	      end = System.currentTimeMillis();
 	      LOG.info("get globalschema in "+(end-start)+" ms");
 	      start = end;
 	      //nodegroup
-	      for(NodeGroup ng : client.listNodeGroups())
-	      	cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ng);
+	      for(NodeGroup ng : client.listNodeGroups()) {
+          cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ng);
+        }
 	      end = System.currentTimeMillis();
 	      LOG.info("get nodegroup in "+(end-start)+" ms");
 	      start = end;
-	     
+
 				try {
-					for(Thread t : ths)
-					t.join();
+					for(Thread t : ths) {
+            t.join();
+          }
 				} catch (InterruptedException e) {
 					// TODO Auto-generated catch block
 					LOG.error(e,e);
 				}
-				
+
 				LOG.info("get all objects complete.");
 			}
 		} catch (MetaException e) {
@@ -149,8 +159,8 @@ public class MsgProcessing {
 
 	private class GFThread implements Runnable
 	{
-		private long from;
-		private long to;
+		private final long from;
+		private final long to;
 		private IMetaStoreClient cli;
 		public GFThread(long from, long to) {
 			this.from = from;
@@ -167,7 +177,7 @@ public class MsgProcessing {
 			long start = System.currentTimeMillis();
 			try{
 				long num = 1000;
-				
+
 				for(long id = from; id<=to; id += num)
 				{
 					LinkedList<Long> ids = new LinkedList<Long>();
@@ -188,12 +198,13 @@ public class MsgProcessing {
 			cli.close();
 			LOG.info(("In GFThread "+Thread.currentThread().getId()+", get file from " + from + " to " + to + " consume " + (System.currentTimeMillis()-start) + " ms"));
 		}
-		
+
 	}
 	public static IMetaStoreClient createMetaStoreClient() throws MetaException
 	{
-		if(hiveConf == null)
-			hiveConf = new HiveConf();
+		if (hiveConf == null) {
+      hiveConf = new HiveConf();
+    }
 		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
 		{
 //			LOG.debug("isUseMetaStoreClient false");
@@ -211,7 +222,7 @@ public class MsgProcessing {
 	}
 
 	public void handleMsg(DDLMsg msg) throws JedisConnectionException, IOException, NoSuchObjectException, TException, ClassNotFoundException {
-		
+
 		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
 		{
 			LOG.debug("property isUseMetaStoreClient is set to false, so nothing to do here.");
@@ -219,7 +230,7 @@ public class MsgProcessing {
 		}
 		int eventid = (int) msg.getEvent_id();
 		switch (eventid) {
-			case MSGType.MSG_NEW_DATABESE: 
+			case MSGType.MSG_NEW_DATABESE:
 			case MSGType.MSG_ALTER_DATABESE:
 			case MSGType.MSG_ALTER_DATABESE_PARAM:
 			{
@@ -231,7 +242,7 @@ public class MsgProcessing {
 					LOG.error(e,e);
 				}
 				break;
-				
+
 			}
 			case MSGType.MSG_DROP_DATABESE:
 			{
@@ -255,7 +266,7 @@ public class MsgProcessing {
 				cs.writeObject(ObjectType.TABLE, newKey, ti);
 				break;
 			}
-			
+
 			case MSGType.MSG_NEW_TALBE:
 			case MSGType.MSG_ALT_TALBE_DISTRIBUTE:
 			case MSGType.MSG_ALT_TALBE_PARTITIONING:
@@ -309,8 +320,7 @@ public class MsgProcessing {
 				}
 				break;
 			}
-			
-			
+
 			case MSGType.MSG_REP_FILE_CHANGE:
 			case MSGType.MSG_STA_FILE_CHANGE:
 			case MSGType.MSG_REP_FILE_ONOFF:
@@ -340,7 +350,7 @@ public class MsgProcessing {
 //				{
 //					cs.writeObject(ObjectType.SFILELOCATION, sfi.getSflkeys().get(i), sf.getLocations().get(i));
 //				}
-				
+
 				break;
 			}
 			//在删除文件时，会在之前发几个1307,然后才是4002
@@ -362,8 +372,9 @@ public class MsgProcessing {
 				String dbName = (String)msg.getMsg_data().get("db_name");
 				String tblName = (String)msg.getMsg_data().get("table_name");
 				String indexName = (String)msg.getMsg_data().get("index_name");
-				if(dbName == null || tblName == null || indexName == null)
-					break;
+				if(dbName == null || tblName == null || indexName == null) {
+          break;
+        }
 				Index ind = client.getIndex(dbName, tblName, indexName);
 				String key = dbName + "." + tblName + "." + indexName;
 				cs.writeObject(ObjectType.INDEX, key, ind);
@@ -375,13 +386,14 @@ public class MsgProcessing {
 				String tblName = (String)msg.getMsg_data().get("table_name");
 				String indexName = (String)msg.getMsg_data().get("index_name");
 				//Index ind = client.getIndex(dbName, tblName, indexName);
-				
+
 				String key = dbName + "." + tblName + "." + indexName;
-				if(CacheStore.getIndexHm().remove(key) != null)
-					cs.removeObject(ObjectType.INDEX, key);
+				if(CacheStore.getIndexHm().remove(key) != null) {
+          cs.removeObject(ObjectType.INDEX, key);
+        }
 				break;
 			}
-			
+
 			case MSGType.MSG_NEW_NODE:
 			case MSGType.MSG_FAIL_NODE:
 			case MSGType.MSG_BACK_NODE:
@@ -391,7 +403,7 @@ public class MsgProcessing {
 				cs.writeObject(ObjectType.NODE, nodename, node);
 				break;
 			}
-			
+
 			case MSGType.MSG_DEL_NODE:
 			{
 				String nodename = (String)msg.getMsg_data().get("node_name");
@@ -400,7 +412,7 @@ public class MsgProcessing {
 				cs.updateCache(ObjectType.TABLE);
 				break;
 			}
-			
+
 			case MSGType.MSG_CREATE_SCHEMA:
 			case MSGType.MSG_MODIFY_SCHEMA_DEL_COL:
 			case MSGType.MSG_MODIFY_SCHEMA_ADD_COL:
@@ -415,10 +427,10 @@ public class MsgProcessing {
 				}catch(NoSuchObjectException e){
 					LOG.error(e,e);
 				}
-				
+
 				break;
 			}
-			
+
 			case MSGType.MSG_MODIFY_SCHEMA_NAME:
 			{
 				String old_schema_name = (String)msg.getMsg_data().get("old_schema_name");
@@ -438,25 +450,26 @@ public class MsgProcessing {
 					{
 						LOG.error(e,e);
 					}
-				
+
 				}
 			}
-			
+
 			case MSGType.MSG_DEL_SCHEMA:
 			{
 				String schema_name = (String)msg.getMsg_data().get("schema_name");
 				cs.removeObject(ObjectType.GLOBALSCHEMA, schema_name);
 				break;
 			}
-			
+
 			case MSGType.MSG_NEW_NODEGROUP:
 			{
 				String nodeGroupName = (String)msg.getMsg_data().get("nodegroup_name");
 				List<String> ngNames = new ArrayList<String>();
 				ngNames.add(nodeGroupName);
 				List<NodeGroup> ngs = client.listNodeGroups(ngNames);
-				if(ngs == null || ngs.size() == 0)
-					break;
+				if(ngs == null || ngs.size() == 0) {
+          break;
+        }
 				NodeGroup ng = ngs.get(0);
 				cs.writeObject(ObjectType.NODEGROUP, nodeGroupName, ng);
 				/*
@@ -479,8 +492,8 @@ public class MsgProcessing {
 				cs.updateCache(ObjectType.TABLE);
 				break;
 			}
-			
-			
+
+
 			//what can I do...
 		    case MSGType.MSG_GRANT_GLOBAL:
 		    case MSGType.MSG_GRANT_DB:
@@ -489,7 +502,7 @@ public class MsgProcessing {
 		    case MSGType.MSG_GRANT_PARTITION:
 		    case MSGType.MSG_GRANT_PARTITION_COLUMN:
 		    case MSGType.MSG_GRANT_TABLE_COLUMN:
-	
+
 		    case MSGType.MSG_REVOKE_GLOBAL:
 		    case MSGType.MSG_REVOKE_DB:
 		    case MSGType.MSG_REVOKE_TABLE:
