@@ -62,7 +62,9 @@ import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
 import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
 import org.apache.hadoop.hive.metastore.model.MUser;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.metastore.msg.MSGFactory;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
+import org.apache.hadoop.hive.metastore.msg.MetaMsgServer;
 import org.apache.thrift.TException;
 
 import redis.clients.jedis.exceptions.JedisConnectionException;
@@ -289,21 +291,44 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public boolean updateNode(Node node) throws MetaException {
+		boolean changed = false;
 	  try {
       Node n = (Node) cs.readObject(ObjectType.NODE,node.getNode_name());
-      if(n==null){
-        throw new Exception("Node" + node.getNode_name() + "is not in redis.");
+      if(n == null){
+        return false;
       }else{
-      	cs.removeObject(ObjectType.NODE, node.getNode_name());
+      	if (n.getStatus() != node.getStatus()) {
+          changed = true;
+        }
         n.setStatus(node.getStatus());
         n.setIps(node.getIps());
         cs.writeObject(ObjectType.NODE, n.getNode_name(), n);
+        
+        //不抛异常就说明更新操作成功了，可以发消息了
+        if (changed) {
+          HashMap<String, Object> old_params = new HashMap<String, Object>();
+          long event = 0;
+
+          old_params.put("node_name", node.getNode_name());
+          old_params.put("status", node.getStatus());
+          if (node.getStatus() == MetaStoreConst.MNodeStatus.SUSPECT ||
+              node.getStatus() == MetaStoreConst.MNodeStatus.OFFLINE) {
+            event = MSGType.MSG_FAIL_NODE;
+          } else if (node.getStatus() == MetaStoreConst.MNodeStatus.ONLINE) {
+            event = MSGType.MSG_BACK_NODE;
+          }
+          if (event != 0) {
+            MsgServer.addMsg(MsgServer.generateDDLMsg(event, -1l, -1l, null, n, old_params));
+          }
+        }
         return true;
       }
     } catch (Exception e) {
       LOG.error(e,e);
       throw new MetaException(e.getMessage());
     }
+	  
+	  
 	}
 
 	@Override
