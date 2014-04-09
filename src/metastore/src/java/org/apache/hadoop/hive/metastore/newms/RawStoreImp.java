@@ -185,7 +185,9 @@ public class RawStoreImp implements RawStore {
 	public List<String> getDatabases(String pattern) throws MetaException {
 		try {
       return cs.getDatabases(pattern);
-    } catch (JedisException | IOException e) {
+    } catch (JedisException e) {
+      throw new MetaException(e.getMessage());
+    } catch (IOException e) {
       throw new MetaException(e.getMessage());
     }
 	}
@@ -1590,7 +1592,9 @@ public class RawStoreImp implements RawStore {
 			int begin, int end) throws MetaException {
 		try {
       return cs.listTableFiles(dbName,tableName,begin,end);
-    } catch (JedisException | IOException e) {
+    } catch (JedisException e ) {
+      throw new MetaException(e.getMessage());
+    } catch (IOException e) {
       throw new MetaException(e.getMessage());
     }
 	}
@@ -1598,11 +1602,13 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<Long> findSpecificDigestFiles(String digest)
 			throws MetaException {
-		try {
-      return cs.listFilesByDegist(digest);
-    } catch (JedisException | IOException e) {
-      throw new MetaException(e.getMessage());
-    }
+	  try {
+	    return cs.listFilesByDegist(digest);
+	  } catch (JedisException e ) {
+	    throw new MetaException(e.getMessage());
+	  } catch (IOException e) {
+	    throw new MetaException(e.getMessage());
+	  }
 	}
 
 	@Override
@@ -1610,9 +1616,11 @@ public class RawStoreImp implements RawStore {
 			List<SplitValue> values) throws MetaException {
 	  try {
 	    return cs.filterTableFiles(dbName, tableName, values);
-	  } catch (JedisException | IOException e) {
-	    throw new MetaException(e.getMessage());
-	  }
+	  } catch (JedisException e ) {
+      throw new MetaException(e.getMessage());
+    } catch (IOException e) {
+      throw new MetaException(e.getMessage());
+    }
 	}
 
 	@Override
@@ -1628,8 +1636,7 @@ public class RawStoreImp implements RawStore {
 	public List<NodeGroup> listNodeGroupByNames(List<String> ngNames)
 			throws MetaException {
 		List<NodeGroup> ngs = new ArrayList<NodeGroup>();
-		for(String name : ngNames)
-		{
+		for(String name : ngNames) {
 			try {
 				NodeGroup ng = (NodeGroup) cs.readObject(ObjectType.NODEGROUP, name);
 				if(ng != null) {
