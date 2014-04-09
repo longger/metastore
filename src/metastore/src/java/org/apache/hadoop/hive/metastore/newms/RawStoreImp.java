@@ -393,23 +393,29 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public boolean delSFile(long fid) throws MetaException {
+	  boolean success = false;
 		try{
 			SFile sf = getSFile(fid);
 			if(sf == null) {
-        return true;
+        return !success;
       }
 			cs.removeObject(ObjectType.SFILE, fid+"");
-
+			success = true;
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
 			old_params.put("f_id", sf.getFid());
       old_params.put("db_name", sf.getDbName());
       old_params.put("table_name", sf.getTableName() );
       MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_DEL_FILE, -1l, -1l, null, sf, old_params));
+      
 		}catch(Exception e){
 			LOG.error(e,e);
-			return false;
+			return !success;
+		}finally {
+      if (success) {
+        DMProfile.fdelR.incrementAndGet();
+      }
 		}
-		return true;
+		return success;
 	}
 
 	@Override
@@ -520,7 +526,8 @@ public class RawStoreImp implements RawStore {
 //      old_params.put("db_name", location);
 //      old_params.put("table_name", tableName);
       MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, location, old_params));
-			return true;
+      DMProfile.sflcreateR.incrementAndGet();
+      return true;
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
@@ -621,11 +628,12 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public boolean delSFileLocation(String devid, String location) throws MetaException {
+	  boolean success = false;
 		String sflkey = SFileImage.generateSflkey(location, devid);
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
 			if(sfl == null) {
-        return true;
+        return !success;
       }
 			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
 			if(sf == null) {
@@ -634,7 +642,8 @@ public class RawStoreImp implements RawStore {
 			sf.getLocations().remove(sfl);
 			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
 			cs.removeObject(ObjectType.SFILELOCATION, sflkey);
-
+			success = true;
+			
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
 			old_params.put("f_id", sfl.getFid());
 			old_params.put("devid", devid);
@@ -643,11 +652,16 @@ public class RawStoreImp implements RawStore {
 //			old_params.put("table_name", table_name);
 			old_params.put("op", "del");
 			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, sfl, old_params));
-			return true;
+			
 		}catch(Exception e){
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
-		}
+		} finally {
+      if (success) {
+        DMProfile.sfldelR.incrementAndGet();
+      }
+    }
+		return success;
 	}
 
 	@Override
