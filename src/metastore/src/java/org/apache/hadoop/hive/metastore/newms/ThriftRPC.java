@@ -1672,7 +1672,6 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       r.getLocations().clear();
       break;
     default:
-      r.setLocations(rs.getSFileLocations(fid));
     }
     identifySharedDevice(r.getLocations());
 
@@ -1695,7 +1694,6 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       r.getLocations().clear();
       break;
     default:
-      r.setLocations(rs.getSFileLocations(r.getFid()));
     }
     identifySharedDevice(r.getLocations());
 
