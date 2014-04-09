@@ -417,15 +417,16 @@ public class RawStoreImp implements RawStore {
 		SFile sf = this.getSFile(newfile.getFid());
 		boolean repnr_changed = false;
 	  boolean stat_changed = false;
-		if(sf == null) {
-      throw new MetaException("Invalid SFile object provided!");
-    }
-		 if (sf.getRep_nr() != newfile.getRep_nr()) {
-       repnr_changed = true;
-     }
-     if (sf.getStore_status() != newfile.getStore_status()) {
-       stat_changed = true;
-     }
+
+	  if (sf == null) {
+	    throw new MetaException("Invalid SFile object provided!");
+	  }
+	  if (sf.getRep_nr() != newfile.getRep_nr()) {
+	    repnr_changed = true;
+	  }
+	  if (sf.getStore_status() != newfile.getStore_status()) {
+	    stat_changed = true;
+	  }
 
 		try {
 			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
@@ -1740,11 +1741,10 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public void truncTableFiles(String dbName, String tableName) throws MetaException, NoSuchObjectException {
-
       for (int i = 0, step = 1000; i < Integer.MAX_VALUE; i+=step) {
         List<Long> files = listTableFiles(dbName, tableName, i, i + step);
         for (int j = 0; j < files.size(); j++) {
-        	LOG.debug("truncTableFiles, sfile.size()="+files.size());
+        	LOG.debug("truncTableFiles, sfile.size()=" + files.size());
           SFile f = this.getSFile(files.get(j));
           if (f != null) {
             f.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);
@@ -1762,12 +1762,11 @@ public class RawStoreImp implements RawStore {
 		boolean changed = false;
 		SFile sf = this.getSFile(file.getFid());
 		List<SFileLocation> toOffline = new ArrayList<SFileLocation>();
-		if(sf == null) {
-      throw new MetaException("No SFile found by id:"+file.getFid());
+		if (sf == null) {
+      throw new MetaException("No SFile found by id " + file.getFid());
     }
 		if (sf.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
       sf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
-//      pm.makePersistent(mf);
       this.updateSFile(sf);
 
       List<SFileLocation> sfl = sf.getLocations();
@@ -1791,7 +1790,6 @@ public class RawStoreImp implements RawStore {
               SFileLocation x = sfl.get(i);
               // mark it as OFFLINE
               x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-//              pm.makePersistent(x);
               this.updateSFileLocation(x);
               toOffline.add(x);
             }
