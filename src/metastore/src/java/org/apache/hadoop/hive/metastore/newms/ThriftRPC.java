@@ -1669,6 +1669,7 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+      r.getLocations().clear();
       break;
     default:
       r.setLocations(rs.getSFileLocations(fid));
@@ -1691,6 +1692,7 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+      r.getLocations().clear();
       break;
     default:
       r.setLocations(rs.getSFileLocations(r.getFid()));
