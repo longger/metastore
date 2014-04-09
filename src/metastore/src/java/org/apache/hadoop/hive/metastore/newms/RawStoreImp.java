@@ -414,6 +414,11 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public SFile updateSFile(SFile newfile) throws MetaException {
+		return updateSFile(newfile, false);
+	}
+
+	//为了不改变原有的updatesfile的语义，添加一个是否连sfl一起更新的方法
+	public SFile updateSFile(SFile newfile, boolean isWithSfl) throws MetaException {
 		SFile sf = this.getSFile(newfile.getFid());
 		boolean repnr_changed = false;
 	  boolean stat_changed = false;
@@ -428,7 +433,12 @@ public class RawStoreImp implements RawStore {
      }
 
 		try {
-			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
+//			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
+			//update index here
+			if(!sf.getDigest().equals(newfile.getDigest()))
+				cs.removeLfbdValue(sf.getDigest(), sf.getFid()+"");
+			if(stat_changed)
+				cs.removeSfileStatValue(sf.getStore_status(), sf.getFid()+"");
 			sf.setRep_nr(newfile.getRep_nr());
       sf.setDigest(newfile.getDigest());
       sf.setRecord_nr(newfile.getRecord_nr());
@@ -437,6 +447,9 @@ public class RawStoreImp implements RawStore {
       sf.setLoad_status(newfile.getLoad_status());
       sf.setLength(newfile.getLength());
       sf.setRef_files(newfile.getRef_files());
+      if(isWithSfl) {
+        sf.setLocations(newfile.getLocations());
+      }
       cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
 
       if (stat_changed) {
@@ -461,34 +474,6 @@ public class RawStoreImp implements RawStore {
         MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_FILE_USER_SET_REP_CHANGE, -1l, -1l, null, sf, old_params));
       }
 
-      return sf;
-		} catch (Exception e) {
-			LOG.error(e,e);
-			throw new MetaException(e.getMessage());
-		}
-
-	}
-
-	//为了不改变原有的updatesfile的语义，添加一个是否连sfl一起更新的方法
-	public SFile updateSFile(SFile newfile, boolean isWithSfl) throws MetaException {
-		SFile sf = this.getSFile(newfile.getFid());
-		if(sf == null) {
-      throw new MetaException("Invalid SFile object provided!");
-    }
-		try {
-			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
-			sf.setRep_nr(newfile.getRep_nr());
-      sf.setDigest(newfile.getDigest());
-      sf.setRecord_nr(newfile.getRecord_nr());
-      sf.setAll_record_nr(newfile.getAll_record_nr());
-      sf.setStore_status(newfile.getStore_status());
-      sf.setLoad_status(newfile.getLoad_status());
-      sf.setLength(newfile.getLength());
-      sf.setRef_files(newfile.getRef_files());
-      if(isWithSfl) {
-        sf.setLocations(newfile.getLocations());
-      }
-      cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
       return sf;
 		} catch (Exception e) {
 			LOG.error(e,e);
@@ -576,22 +561,27 @@ public class RawStoreImp implements RawStore {
 		boolean changed = false;
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
+			if (sfl == null) {
+        throw new MetaException("Invalid SFileLocation provided");
+      }
 			//防止缓存中的sfile的location与更新之后的sfl不一致。。。。
 			// FIXME 这样手动维护sfile与sfilelocation的关系很麻烦，很容易出错。。。
 			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
 			sf.getLocations().remove(sfl);
-			sf.addToLocations(newsfl);
-			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
-			//状态改变的话，还需要改变更新关于visit status的索引
-			cs.removeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
+
 			sfl.setUpdate_time(System.currentTimeMillis());
 			if (sfl.getVisit_status() != newsfl.getVisit_status()) {
         changed = true;
       }
+			//update index
+			if(changed)
+				cs.removeSflStatValue(sfl.getVisit_status(), SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
 			sfl.setVisit_status(newsfl.getVisit_status());
 			sfl.setRep_id(newsfl.getRep_id());
 			sfl.setDigest(newsfl.getDigest());
-			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
+//			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
+			sf.addToLocations(sfl);
+			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);			//写入了sfile，也就把sfilelocation写入了
 
 			if (changed) {
 	      switch (newsfl.getVisit_status()) {

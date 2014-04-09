@@ -1091,9 +1091,29 @@ public class CacheStore {
   	return "sf.stat." + status;
   }
 
-  public void removeSfStatValue(int status, String value) throws IOException, JedisException
+  public void removeSfileStatValue(int status, String value) throws IOException, JedisException
   {
   	String key = this.generateSfStatKey(status);
+  	Jedis jedis = refreshJedis();
+  	int err = 0;
+
+    try {
+    	jedis.srem(key, value);
+    } catch (JedisException e) {
+      err = -1;
+      throw e;
+    } finally {
+      if (err < 0) {
+        RedisFactory.putBrokenInstance(jedis);
+      } else {
+        RedisFactory.putInstance(jedis);
+      }
+    }
+  }
+  
+  public void removeSflStatValue(int status, String value) throws IOException, JedisException
+  {
+  	String key = this.generateSflStatKey(status);
   	Jedis jedis = refreshJedis();
   	int err = 0;
 

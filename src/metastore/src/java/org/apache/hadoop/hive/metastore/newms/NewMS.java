@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -121,6 +123,39 @@ public class NewMS {
 		}
 	}
 
+	static class FidStoreTask extends TimerTask
+	{
+		private NewMSConf conf;
+		private RedisFactory rf;
+		public FidStoreTask(NewMSConf conf)
+		{
+			this.conf = conf;
+			rf = new RedisFactory(conf);
+		}
+		
+		@Override
+		public void run() {
+			Jedis jedis = null;
+			int err = 0;
+			try{
+				jedis = rf.getDefaultInstance();
+				String fid = RawStoreImp.getFid()+"";
+				jedis.set("g_fid", fid);
+				LOG.info("store g_fid "+ fid + " into redis.");
+			}catch(JedisException e){
+				LOG.warn(e, e);
+				err = -1;
+			}finally{
+				if (err < 0) {
+	        RedisFactory.putBrokenInstance(jedis);
+	      } else {
+	        RedisFactory.putInstance(jedis);
+	      }
+			}
+		}
+		
+	}
+	
 	public static void main(String[] args) throws Throwable {
 		NewMSConf conf = null;
 		int rpcp = 0;
@@ -302,13 +337,14 @@ public class NewMS {
         }
       }
     });
-
+    Timer timer = new Timer("FidStorer",true);
+    timer.schedule(new FidStoreTask(conf), 60*1000, 60*1000);
     try {
       MsgServer.setConf(conf);
       RawStoreImp.setNewMSConf(conf);
       try {
         MsgServer.startConsumer(conf.getZkaddr(), "meta-test", "newms");
-        //MsgServer.startProducer();
+        MsgServer.startProducer();
         MsgServer.startLocalConsumer();
       } catch (MetaClientException e) {
         LOG.error(e, e);
