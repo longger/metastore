@@ -208,7 +208,7 @@ public class MsgServer {
     // create producer,强烈建议使用单例
     private MessageProducer producer = null;
     // publish topic
-    private static String topic = "meta-newms";
+    private static String topic = "meta-test";
     private static String  zkAddr = conf.getZkaddr();
 
     //获取实例之前要先调这个方法
@@ -318,11 +318,16 @@ public class MsgServer {
 				@Override
 				public void recieveMessages(final Message message) {
 					String data = new String(message.getData());
-//					LOG.debug(data);
+					LOG.debug("consume msg from metaq: "+data);
 					int time = 0;
 //					 if(data != null)
 //					 return;
 					DDLMsg msg = DDLMsg.fromJson(data);
+					if(msg.getLocalhost_name().equals(localhost_name))
+					{
+						LOG.debug("ignore msg sent by myself:"+msg.toJson());
+						return;
+					}
 					while (time <= 3) {
 						if (time >= 3) {
 							failedq.add(msg);
