@@ -37,6 +37,9 @@ public class TableImage implements Serializable{
     //private List<String> fsKeys; // required
     private List<FieldSchema> fileSplitKeys; // required
     
+    public TableImage(){
+    	
+    }
 	public TableImage(String tableName, String dbName, String schemaName,
 			String owner, int createTime, int lastAccessTime, int retention,
 			StorageDescriptor sd, List<FieldSchema> partitionKeys,

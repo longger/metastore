@@ -3,10 +3,11 @@ package org.apache.hadoop.hive.metastore.newms;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaHook;
 import org.apache.hadoop.hive.metastore.HiveMetaHookLoader;
@@ -15,7 +16,6 @@ import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
-import org.apache.hadoop.hive.metastore.api.FileOperationException;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
 import org.apache.hadoop.hive.metastore.api.Index;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -36,6 +36,7 @@ public class MsgProcessing {
 	private static HiveConf hiveConf;
 	private NewMSConf conf;
 	private CacheStore cs;
+	private static final Log LOG = LogFactory.getLog(MsgProcessing.class);
 	public MsgProcessing(NewMSConf conf) {
 		this.conf = conf;
 		try {
@@ -50,7 +51,7 @@ public class MsgProcessing {
 	      for(Device de : dl)
 	      	cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
 	      long end = System.currentTimeMillis();
-	      System.out.println("get devices in "+(end-start)+" ms");
+	      LOG.info("get devices in "+(end-start)+" ms");
 	      start = end;
 	      //db
 				List<Database> dbs = client.get_all_attributions();
@@ -59,7 +60,30 @@ public class MsgProcessing {
 	        cs.writeObject(ObjectType.DATABASE, db.getName(), db);
 	      }
 	      end = System.currentTimeMillis();
-	      System.out.println("get databases in "+(end-start)+" ms");
+	      LOG.info("get databases in "+(end-start)+" ms");
+	      start = end;
+	      
+	      //sfile  sfilelocation
+	      //把所有的sfile得到应该就不需要再拉取sfilelocation了
+	      long maxid = client.getMaxFid();
+	      synchronized (RawStoreImp.class) {
+	      	if(RawStoreImp.getFid() < maxid)
+	      		RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
+				}
+	      long num = 10000;
+	      List<Thread> ths = new LinkedList<Thread>();
+	      for(long id = 0;id < maxid; id+= num)
+	      {
+	      	if(id + num >= maxid)
+	      		ths.add(new Thread(new GFThread(id, maxid)));
+	      	else
+	      		ths.add(new Thread(new GFThread(id, id+num-1)));
+	      	
+	      }
+	      for(Thread t : ths)
+	      	t.start();
+	      end = System.currentTimeMillis();
+	      LOG.info("get sfile and sfilelocation in "+(end-start)+" ms");
 	      start = end;
 	      
 	      //table  index
@@ -74,7 +98,7 @@ public class MsgProcessing {
 	        }
 	      }
 	      end = System.currentTimeMillis();
-	      System.out.println("get tables and indexes in "+(end-start)+" ms");
+	      LOG.info("get tables and indexes in "+(end-start)+" ms");
 	      start = end;
 	      //partition    no partition so far
 	      
@@ -82,65 +106,96 @@ public class MsgProcessing {
 	      for(Node n : client.listNodes())
 	      	cs.writeObject(ObjectType.NODE, n.getNode_name(),n);
 	      end = System.currentTimeMillis();
-	      System.out.println("get nodes in "+(end-start)+" ms");
+	      LOG.info("get nodes in "+(end-start)+" ms");
 	      start = end;
 	      //globalschema
 	      for(GlobalSchema gs : client.listSchemas())
 	      	cs.writeObject(ObjectType.GLOBALSCHEMA, gs.getSchemaName(), gs);
 	      end = System.currentTimeMillis();
-	      System.out.println("get globalschema in "+(end-start)+" ms");
+	      LOG.info("get globalschema in "+(end-start)+" ms");
 	      start = end;
 	      //nodegroup
 	      for(NodeGroup ng : client.listNodeGroups())
 	      	cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ng);
 	      end = System.currentTimeMillis();
-	      System.out.println("get nodegroup in "+(end-start)+" ms");
+	      LOG.info("get nodegroup in "+(end-start)+" ms");
 	      start = end;
-	      //sfile  sfilelocation
-	      //把所有的sfile得到应该就不需要再拉取sfilelocation了
-	      long maxid = client.getMaxFid();
-	      synchronized (RawStoreImp.class) {
-	      	if(RawStoreImp.getFid() < maxid)
-	      		RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
+	     
+				try {
+					for(Thread t : ths)
+					t.join();
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					LOG.error(e,e);
 				}
-	      long num = 1000;
-	      for(long id = 0;id < maxid; id+= num)
-	      {
-	      	LinkedList<Long> ids = new LinkedList<Long>();
-	      	for(long fid = id; fid < num + id && fid < maxid; fid++)
-	      		ids.add(fid);
-	      	for(SFile sf : client.get_files_by_ids(ids))
-	      	{
-	      		cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
-	      	}
-	      }
-	      end = System.currentTimeMillis();
-	      System.out.println("get sfile and sfilelocation in "+(end-start)+" ms");
-	      start = end;
-	      
+				
+				LOG.info("get all objects complete.");
 			}
 		} catch (MetaException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (TException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (JedisConnectionException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOG.error(e,e);
 		}
 	}
 
+	private class GFThread implements Runnable
+	{
+		private long from;
+		private long to;
+		private IMetaStoreClient cli;
+		public GFThread(long from, long to) {
+			this.from = from;
+			this.to = to;
+			try {
+				cli = createMetaStoreClient();
+			} catch (MetaException e) {
+				// TODO Auto-generated catch block
+				LOG.error(e,e);
+			}
+		}
+		@Override
+		public void run() {
+			long start = System.currentTimeMillis();
+			try{
+				long num = 1000;
+				
+				for(long id = from; id<=to; id += num)
+				{
+					LinkedList<Long> ids = new LinkedList<Long>();
+		    	for(long fid = id; fid < num + id && fid <= to; fid++)
+		    	{
+		    		ids.add(fid);
+		    	}
+		    	List<SFile> files = cli.get_files_by_ids(ids);
+	    		LOG.info(Thread.currentThread().getId()+": in msgprocessing:"+ids.get(0)+" , "+ids.get(ids.size()-1) + ", get number:"+files.size());
+	    		for(SFile sf : files)
+	    		{
+	    			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+	    		}
+	    	}
+			}catch(Exception e){
+				LOG.error(e,e);
+			}
+			cli.close();
+			LOG.info(("In GFThread "+Thread.currentThread().getId()+", get file from " + from + " to " + to + " consume " + (System.currentTimeMillis()-start) + " ms"));
+		}
+		
+	}
 	public static IMetaStoreClient createMetaStoreClient() throws MetaException
 	{
 		if(hiveConf == null)
 			hiveConf = new HiveConf();
 		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
 		{
-//			System.out.println("isUseMetaStoreClient false");
+//			LOG.debug("isUseMetaStoreClient false");
 			return null;
 		}
 		HiveMetaHookLoader hookLoader = new HiveMetaHookLoader() {
@@ -158,7 +213,7 @@ public class MsgProcessing {
 		
 		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
 		{
-			System.out.println("property isUseMetaStoreClient is set to false, so nothing to do here.");
+			LOG.debug("property isUseMetaStoreClient is set to false, so nothing to do here.");
 			return;
 		}
 		int eventid = (int) msg.getEvent_id();
@@ -172,7 +227,7 @@ public class MsgProcessing {
 					Database db = client.getDatabase(dbName);
 					cs.writeObject(ObjectType.DATABASE, dbName, db);
 				}catch(NoSuchObjectException e ){
-					e.printStackTrace();
+					LOG.error(e,e);
 				}
 				break;
 				
@@ -272,8 +327,7 @@ public class MsgProcessing {
 				}catch(FileOperationException e)
 				{
 					//Can not find SFile by FID ...
-//					System.out.println(e.getMessage());
-					e.printStackTrace();
+					LOG.error(e,e);
 					if(sf == null)
 						break;
 				}
@@ -358,7 +412,7 @@ public class MsgProcessing {
 					GlobalSchema s = client.getSchemaByName(schema_name);
 					cs.writeObject(ObjectType.GLOBALSCHEMA, schema_name, s);
 				}catch(NoSuchObjectException e){
-					e.printStackTrace();
+					LOG.error(e,e);
 				}
 				
 				break;
@@ -381,7 +435,7 @@ public class MsgProcessing {
 					}
 					catch(NoSuchObjectException e)
 					{
-						e.printStackTrace();
+						LOG.error(e,e);
 					}
 				
 				}
@@ -448,7 +502,7 @@ public class MsgProcessing {
 		    }
 			default:
 			{
-				System.out.println("unhandled msg : "+msg.getEvent_id());
+				LOG.debug("unhandled msg : "+msg.getEvent_id());
 				break;
 			}
 		}

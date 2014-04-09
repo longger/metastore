@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
@@ -67,9 +69,11 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 
 public class RawStoreImp implements RawStore {
 
+	private static final Log LOG = LogFactory.getLog(RawStoreImp.class);
 	private static final Long g_fid_syncer = new Long(0);
   private static long g_fid = 0;
 	private static NewMSConf conf;
+	
 	private CacheStore cs;
 
 	public RawStoreImp(NewMSConf conf) {
@@ -156,11 +160,11 @@ public class RawStoreImp implements RawStore {
 			return d;
 			//到底是抛出去，还是自己捕获呢。。
 		} catch (JedisConnectionException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		}
 		return null;
 	}
@@ -252,7 +256,7 @@ public class RawStoreImp implements RawStore {
 	      }
 	    }
 	   } catch (Exception e) {
-	     e.printStackTrace();
+	     LOG.error(e,e);
 	     throw new MetaException(e.getMessage());
     }
 
@@ -293,7 +297,7 @@ public class RawStoreImp implements RawStore {
         return true;
       }
     } catch (Exception e) {
-      e.printStackTrace();
+      LOG.error(e,e);
       throw new MetaException(e.getMessage());
     }
 	}
@@ -310,11 +314,11 @@ public class RawStoreImp implements RawStore {
 			Node n = (Node) cs.readObject(ObjectType.NODE, node_name);
 			return n;
 		} catch (JedisConnectionException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 		}
 		return null;
 	}
@@ -350,9 +354,9 @@ public class RawStoreImp implements RawStore {
 			old_params.put("f_id", file.getFid());
 			old_params.put("db_name", file.getDbName());
 			old_params.put("table_name", file.getTableName());
-			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_CREATE_FILE, -1l, -1l, null, null, old_params));
+			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_CREATE_FILE, -1l, -1l, null, file, old_params));
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 		return file;
@@ -367,7 +371,7 @@ public class RawStoreImp implements RawStore {
 				return null;
 			return (SFile)o;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -378,7 +382,7 @@ public class RawStoreImp implements RawStore {
 			SFileLocation sfl = getSFileLocation(devid, location);
 			return getSFile(sfl.getFid());
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -395,9 +399,9 @@ public class RawStoreImp implements RawStore {
 			old_params.put("f_id", sf.getFid());
       old_params.put("db_name", sf.getDbName());
       old_params.put("table_name", sf.getTableName() );
-      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_DEL_FILE, -1l, -1l, null, null, old_params));
+      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_DEL_FILE, -1l, -1l, null, sf, old_params));
 		}catch(Exception e){
-			e.printStackTrace();
+			LOG.error(e,e);
 			return false;
 		}
 		return true;
@@ -436,7 +440,7 @@ public class RawStoreImp implements RawStore {
         old_params.put("new_status", newfile.getStore_status());
         old_params.put("db_name", newfile.getDbName());
         old_params.put("table_name", newfile.getTableName());
-        MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, null, null, old_params));
+        MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, null, sf, old_params));
         if (newfile.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
           DMProfile.freplicateR.incrementAndGet();
         }
@@ -448,12 +452,12 @@ public class RawStoreImp implements RawStore {
         old_params.put("new_repnr", newfile.getRep_nr());
         old_params.put("db_name", newfile.getDbName());
         old_params.put("table_name", newfile.getTableName());
-        MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_FILE_USER_SET_REP_CHANGE, -1l, -1l, null, null, old_params));
+        MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_FILE_USER_SET_REP_CHANGE, -1l, -1l, null, sf, old_params));
       }
       
       return sf;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 
@@ -479,7 +483,7 @@ public class RawStoreImp implements RawStore {
       cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
       return sf;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 
@@ -506,10 +510,10 @@ public class RawStoreImp implements RawStore {
       old_params.put("op", "add");
 //      old_params.put("db_name", location);
 //      old_params.put("table_name", tableName);
-      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, null, old_params));
+      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, location, old_params));
 			return true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -529,7 +533,7 @@ public class RawStoreImp implements RawStore {
 			List<SFileLocation> sfll = cs.getSFileLocations(status);
 			return sfll;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -549,7 +553,7 @@ public class RawStoreImp implements RawStore {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
 			return sfl;
 		}catch(Exception e){
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -573,7 +577,7 @@ public class RawStoreImp implements RawStore {
       }
 			sfl.setVisit_status(newsfl.getVisit_status());
 			sfl.setRep_id(newsfl.getRep_id());
-			sfl.setDigest(sfl.getDigest());
+			sfl.setDigest(newsfl.getDigest());
 			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
 			
 			if (changed) {
@@ -596,12 +600,12 @@ public class RawStoreImp implements RawStore {
         old_params.put("location", newsfl.getLocation());
 //	      old_params.put("db_name", );
 //	      old_params.put("table_name", tableName);
-	      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, null, old_params));
+	      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, sfl, old_params));
 	    }
 			
 			return sfl;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -627,10 +631,10 @@ public class RawStoreImp implements RawStore {
 //			old_params.put("db_name", sf.getd);
 //			old_params.put("table_name", table_name);
 			old_params.put("op", "del");
-			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, null, old_params));
+			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, sfl, old_params));
 			return true;
 		}catch(Exception e){
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -649,7 +653,7 @@ public class RawStoreImp implements RawStore {
 			Table t = (Table) cs.readObject(ObjectType.TABLE, dbName+"."+tableName);
 			return t;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -774,7 +778,7 @@ public class RawStoreImp implements RawStore {
           ts.add(t);
         }
 			} catch (Exception e) {
-				e.printStackTrace();
+				LOG.error(e,e);
 //				throw new MetaException(e.getMessage());
 			}
 		}
@@ -846,7 +850,7 @@ public class RawStoreImp implements RawStore {
 			Index in = (Index) cs.readObject(ObjectType.INDEX, dbName+"."+origTableName+"."+indexName);
 			return in;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -1236,7 +1240,7 @@ public class RawStoreImp implements RawStore {
 		try {
 			cs.findFiles(underReplicated, overReplicated, lingering, from, to);
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -1246,7 +1250,7 @@ public class RawStoreImp implements RawStore {
 		try {
 			cs.findVoidFiles(voidFiles);
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -1391,7 +1395,7 @@ public class RawStoreImp implements RawStore {
 				throw new NoSuchObjectException("Can not find device :"+devid);
 			return de;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		} 
 	}
@@ -1473,7 +1477,7 @@ public class RawStoreImp implements RawStore {
       }
 			return gs;
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
 	}
@@ -1608,7 +1612,7 @@ public class RawStoreImp implements RawStore {
           ngs.add(ng);
         }
 			} catch (Exception e) {
-				e.printStackTrace();
+				LOG.error(e,e);
 				throw new MetaException(e.getMessage());
 			}
 		}
@@ -1709,7 +1713,7 @@ public class RawStoreImp implements RawStore {
       for (int i = 0, step = 1000; i < Integer.MAX_VALUE; i+=step) {
         List<Long> files = listTableFiles(dbName, tableName, i, i + step);
         for (int j = 0; j < files.size(); j++) {
-        	System.out.println("in RawStoreImp, truncTableFiles, sfile.size()="+files.size());
+        	LOG.debug("truncTableFiles, sfile.size()="+files.size());
           SFile f = this.getSFile(files.get(j));
           if (f != null) {
             f.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);
@@ -1771,7 +1775,7 @@ public class RawStoreImp implements RawStore {
         HashMap<String, Object> old_params = new HashMap<String, Object>();
         old_params.put("f_id", file.getFid());
         old_params.put("new_status", MetaStoreConst.MFileStoreStatus.INCREATE);
-        MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, null, null, old_params));
+        MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, null, sf, old_params));
         if (toOffline.size() > 0) {
           for (SFileLocation y : toOffline) {
             HashMap<String, Object> params = new HashMap<String, Object>();
@@ -1779,7 +1783,7 @@ public class RawStoreImp implements RawStore {
             params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
             params.put("devid", y.getDevid());
             params.put("location", y.getLocation());
-            MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, null, params));
+            MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, y, params));
           }
         }
       }
@@ -1817,17 +1821,18 @@ public class RawStoreImp implements RawStore {
 		return 0;
 	}
 
-  @Override
-  public List<String> listDevsByNode(String nodeName) throws MetaException {
-    // TODO Auto-generated method stub
-    return null;
-  }
+	@Override
+	public List<String> listDevsByNode(String nodeName) throws MetaException {
+		// TODO Auto-generated method stub
+		return null;
+	}
 
-  @Override
-  public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException {
-    // TODO Auto-generated method stub
-    return null;
-  }
+	@Override
+	public List<Long> listFilesByDevs(List<String> devids) throws MetaException,
+			TException {
+		// TODO Auto-generated method stub
+		return null;
+	}
 
 	
 }

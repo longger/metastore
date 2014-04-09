@@ -26,7 +26,9 @@ public class NodeGroupImage implements Serializable{
 		this.status = status;
 		this.nodeKeys = nodeKeys;
 	}
-
+	public NodeGroupImage(){
+		
+	}
 
 	public static NodeGroupImage generateNodeGroupImage(NodeGroup ng)
 	{

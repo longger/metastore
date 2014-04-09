@@ -276,7 +276,8 @@ public class NewMS {
 		RawStoreImp.setNewMSConf(conf);
 		try {
 			MsgServer.startConsumer(conf.getZkaddr(), "meta-test", "newms");
-			MsgServer.startProducer();
+//			MsgServer.startProducer();
+			MsgServer.startLocalConsumer();
 		} catch (MetaClientException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
