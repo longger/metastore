@@ -134,7 +134,16 @@ public class ThriftRPC extends FacebookBase implements
       return null;
     }
   };
-
+  static{
+    IMetaStoreClient client = null;
+    try {
+      client = MsgProcessing.createMetaStoreClient();
+      clients.put(DEFAULT_USER_NAME, client);
+    } catch (MetaException e) {
+      LOG.error("can't init IMetaStoreClient");
+      e.printStackTrace();
+    }
+ }
   public static void setIpAddress(String ipAddress) {
     threadLocalIpAddress.set(ipAddress);
   }
@@ -192,8 +201,6 @@ public class ThriftRPC extends FacebookBase implements
     System.currentTimeMillis();
     try {
       HiveConf hc = new HiveConf(DiskManager.class);
-      IMetaStoreClient client = MsgProcessing.createMetaStoreClient();
-      clients.put(DEFAULT_USER_NAME, client);
       dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
