@@ -4,6 +4,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -134,7 +137,7 @@ public class ThriftRPC extends FacebookBase implements
       return null;
     }
   };
-  static{
+  static {
     IMetaStoreClient client = null;
     try {
       client = MsgProcessing.createMetaStoreClient();
@@ -143,7 +146,8 @@ public class ThriftRPC extends FacebookBase implements
       LOG.error("can't init IMetaStoreClient");
       e.printStackTrace();
     }
- }
+  }
+
   public static void setIpAddress(String ipAddress) {
     threadLocalIpAddress.set(ipAddress);
   }
@@ -212,6 +216,42 @@ public class ThriftRPC extends FacebookBase implements
       LOG.error(e, e);
       throw e;
     }
+  }
+
+  private static class _ProxyThriftRPC implements InvocationHandler {
+    private ThriftRPC rpc = null;
+
+    public _ProxyThriftRPC(ThriftRPC rpc) {
+      this.rpc = rpc;
+    }
+
+    public ThriftRPC getRPC() {
+      return (ThriftRPC) Proxy.newProxyInstance(rpc.getClass().getClassLoader(), rpc.getClass()
+          .getInterfaces(), this);
+    }
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+      String methodName = method.getName();
+      Object result = null;
+      try {
+        result = method.invoke(rpc, args);
+        return result;
+      } catch (Exception e) {
+        if (e instanceof TException) {
+          LOG.info("some error occured when call method "+methodName+" try reconnect");
+          clients.put(rpc.getUserName(), MsgProcessing.createMetaStoreClient());
+          return result;
+        }else{
+          throw e;
+        }
+      }
+    }
+
+  }
+
+  public static ThriftRPC newThriftRPC(NewMSConf conf) throws IOException {
+    return new _ProxyThriftRPC(new ThriftRPC(conf)).getRPC();
   }
 
   @Override
