@@ -109,6 +109,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     TokenToTypeName.put(HiveParser.TOK_DATE, serdeConstants.DATE_TYPE_NAME);
     TokenToTypeName.put(HiveParser.TOK_DATETIME, serdeConstants.DATETIME_TYPE_NAME);
     TokenToTypeName.put(HiveParser.TOK_TIMESTAMP, serdeConstants.TIMESTAMP_TYPE_NAME);
+    TokenToTypeName.put(HiveParser.TOK_BLOB, serdeConstants.BLOB_TYPE_NAME);
   }
 
   public static String getTypeName(int token) throws SemanticException {
@@ -257,6 +258,12 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       break;
     case HiveParser.TOK_ALTERTABLE_FILESPLIT:
       analyzeAlterTableFileSplit(ast, AlterTableTypes.ALTERFILESPLIT);
+      break;
+    case HiveParser.TOK_ALTERTABLE_ADD_DISTRIBUTION:
+      analyzeAlterTableDistribution(ast, AlterTableTypes.ADDNODEGROUP);
+      break;
+    case HiveParser.TOK_ALTERTABLE_DELETE_DISTRIBUTION:
+      analyzeAlterTableDistribution(ast, AlterTableTypes.DELETENODEGROUP);
       break;
     case HiveParser.TOK_ALTERTABLE_TOUCH:
       analyzeAlterTableTouch(ast);
@@ -499,6 +506,12 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     case HiveParser.TOK_CREATENODEGROUP:
       analyzeCreateNodeGroup(ast);
       break;
+    case HiveParser.TOK_ALTER_NODEGROUP_ADD_NODES:
+      analyzeAlterNodeGroupAddNodes(ast);
+      break;
+    case HiveParser.TOK_ALTER_NODEGROUP_DELETE_NODES:
+      analyzeAlterNodeGroupDeleteNodes(ast);
+      break;
     case HiveParser.TOK_MODIFYNODEGROUP:
       analyzeModifyNodeGroup(ast);
       break;
@@ -647,7 +660,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       AlterSchemaDesc alterSchDesc = new AlterSchemaDesc(schName, newCols,
           alterType);
       addInputsOutputsAlterSchema(schName, null, alterSchDesc);
-      LOG.info("****************zqh****************addInputsOutputsAlterSchema BACK):"+ schName + newCols.get(0).getName() + newCols.get(0).getType());
       rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
           alterSchDesc), conf));
   }
@@ -657,14 +669,12 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       AlterSchemaDesc alterSchDesc = new AlterSchemaDesc(schName,
           getUnescapedName((ASTNode) ast.getChild(1)), expectView);
       addInputsOutputsAlterSchema(schName, null, alterSchDesc);
-      LOG.info("****************zqh****************addInputsOutputsAlterSchema BACK):");
       rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
           alterSchDesc), conf));
   }
 
   private void analyzeDropSchema(ASTNode ast) throws SemanticException {
     String schemaName = getUnescapedName((ASTNode) ast.getChild(0).getChild(0));
-    LOG.info("****************zqh****************analyzeDropSchema):" + schemaName);
     boolean ifExists = false;
     if (null != ast.getFirstChildWithType(HiveParser.TOK_IFEXISTS)) {
       ifExists = true;
@@ -855,6 +865,57 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
+  private void analyzeAlterNodeGroupAddNodes(ASTNode ast) throws SemanticException {
+    String nodeGroupName = unescapeIdentifier(ast.getChild(0).getText());
+    //boolean ifNotExists = false;
+    String nodeGroupcomment = null;
+    Map<String, String> nodeGroupProps = null;
+    Set<String> nodes = null;
+
+    for (int i = 1; i < ast.getChildCount(); i++) {
+      ASTNode childNode = (ASTNode) ast.getChild(i);
+      switch (childNode.getToken().getType()) {
+      /*case HiveParser.TOK_IFNOTEXISTS:
+        ifNotExists = true;
+        break;*/
+      case HiveParser.TOK_NODEGROUPCOMMENT:
+        nodeGroupcomment = unescapeSQLString(childNode.getChild(0).getText());
+        break;
+      case HiveParser.TOK_NODEGROUPPROPERTIES:
+        nodeGroupProps = DDLSemanticAnalyzer.getProps((ASTNode) childNode.getChild(0));
+        break;
+      case HiveParser.TOK_STRINGLITERALLIST:
+        nodes = DDLSemanticAnalyzer.getNodes((ASTNode) childNode);
+        break;
+      default:
+        throw new SemanticException("Unrecognized token in ALTER NODEGROUP statement");
+      }
+    }
+
+    AlterNodeGroupAddNodesDesc alterNodeGroupAddNodesDesc =
+        new AlterNodeGroupAddNodesDesc(nodeGroupName, nodeGroupcomment, nodes);
+    if (nodeGroupProps != null) {
+      alterNodeGroupAddNodesDesc.setNodeGroupProps(nodeGroupProps);
+    }
+
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterNodeGroupAddNodesDesc), conf));
+
+  }
+
+  private void analyzeAlterNodeGroupDeleteNodes(ASTNode ast) throws SemanticException {
+    String nodeGroupName = unescapeIdentifier(ast.getChild(0).getText());
+    Set<String> nodes = null;
+    ASTNode childNode = (ASTNode) ast.getChild(1);
+    nodes = DDLSemanticAnalyzer.getNodes((ASTNode) childNode);
+
+    AlterNodeGroupDeleteNodesDesc alterNodeGroupDeleteNodesDesc =
+        new AlterNodeGroupDeleteNodesDesc(nodeGroupName,nodes);
+
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterNodeGroupDeleteNodesDesc), conf));
+
+  }
 
   static Set<String> getNodes(ASTNode node) {
     HashSet<String> setNode = new HashSet<String>();
@@ -1212,7 +1273,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     LOG.debug("----zjw --analyzeAlterDatawareHouse ast:" + ast.toStringTree());
     String dwNum = unescapeIdentifier(ast.getChild(0).getText());
     int dn = Integer.parseInt(dwNum);
-    String sql = unescapeIdentifier(ast.getChild(1).getText());
+    String sql = unescapeSQLString(ast.getChild(1).getText());
     AlterDatawareHouseDesc alterDatawareHouseDesc = new AlterDatawareHouseDesc(dn, sql);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         alterDatawareHouseDesc), conf));
@@ -1229,7 +1290,7 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
-  private void analyzeDropNode(ASTNode ast) {
+  private void analyzeDropNode(ASTNode ast) throws SemanticException {
     String nodeName = unescapeIdentifier(ast.getChild(0).getText());
     DropNodeDesc dropNodeDesc = new DropNodeDesc(nodeName);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
@@ -1237,11 +1298,19 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
-  private void analyzeAddNode(ASTNode ast) {
+  private void analyzeAddNode(ASTNode ast) throws SemanticException {
     String nodeName = unescapeIdentifier(ast.getChild(0).getText());
-    String status_str = unescapeIdentifier(ast.getChild(1).getText());
-    Integer status = Integer.parseInt(status_str);
-    String ip = unescapeIdentifier(ast.getChild(2).getText());
+    String status_str = unescapeSQLString(ast.getChild(1).getText());
+    String ip = unescapeSQLString(ast.getChild(2).getText());
+    Integer status = 0;
+    LOG.info("###################ZQH##################analyzeAddNode" + nodeName + status_str + ip);
+    if("offline".equals(status_str)){
+      status = 0;
+    }else if ("online".equals(status_str)){
+      status = 1;
+    }else{
+      throw new SemanticException("The status you put is wrong.");
+    }
     AddNodeDesc addNodeDesc = new AddNodeDesc(nodeName, status, ip);
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         addNodeDesc), conf));
@@ -1744,7 +1813,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     subject.setObject(unescapeIdentifier(ast.getChild(0).getText()));
     if (ast.getChildCount() > 1) {
       if ("TABLE".equals(unescapeIdentifier(ast.getChild(1).getText()))) {
-        LOG.info("****************zqh****************PrivilegeObjectDesc####unescapeIdentifier(ast.getChild(1).getText()):" + unescapeIdentifier(ast.getChild(1).getText()));
         for (int i = 0; i < ast.getChildCount(); i++) {
           ASTNode astChild = (ASTNode) ast.getChild(i);
           if (astChild.getToken().getType() == HiveParser.TOK_PARTSPEC) {
@@ -1752,7 +1820,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
           } else {
             subject.setTable(ast.getChild(0) != null);
             //subject.setSchema(ast.getChild(0) == null);
-            LOG.info("****************zqh****************PrivilegeObjectDesc####ast.getChild(0) != null:" + ast.getChild(0) != null);
           }
         }
       }
@@ -2216,6 +2283,8 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       case ADDPROPS:
       case RENAME:
       case ALTERFILESPLIT:
+      case ADDNODEGROUP:
+      case DELETENODEGROUP:
         // allow this form
         break;
       default:
@@ -2233,7 +2302,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   private void validateAlterSchemaType(GlobalSchema gls, AlterSchemaTypes op, boolean expectView)
       throws SemanticException {
-    LOG.info("****************zqh****************gls.isView()):"+gls.isView());
     if (gls.isView()) {
       if (!expectView) {
         throw new SemanticException(ErrorMsg.ALTER_COMMAND_FOR_VIEWS.getMsg());
@@ -2432,12 +2500,8 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     inputs.add(new ReadEntity(sch));
     outputs.add(new WriteEntity(sch));
     boolean flag  = (desc != null);
-    LOG.info("****************zqh****************desc != null):"+flag);
     if (desc != null) {
-      LOG.info("****************zqh****************desc.getOp()):"+desc.getOp());
-      LOG.info("****************zqh****************desc.getExpectView()):"+desc.getExpectView());
       validateAlterSchemaType(sch, desc.getOp(), desc.getExpectView());
-
     }
   }
 
@@ -3471,9 +3535,10 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     }
     List<FieldSchema> fieldSchemas = tab.getFileSplitKeys();
     for(FieldSchema fs : fieldSchemas){
-      LOG.info("*****************zqh****************begin to get tab.getFileSplitKeys()" + fs.getName() + oldColName);
+      if (oldColName.equalsIgnoreCase(newColName)) {
+        continue;
+      }
       if (fs.getName().equals(oldColName)){
-        LOG.info("*****************zqh****************fs.getName() == oldColName" + fs.getName() == oldColName);
         throw new SemanticException("AlterColumn error! you can't rename the column which is the table splited by.");
       }
     }
@@ -3538,9 +3603,6 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
   private void analyzeAlterTableFileSplit(ASTNode ast, AlterTableTypes alterType)
       throws SemanticException {
     String tblName = getUnescapedName((ASTNode) ast.getChild(0));
-    LOG.info("*****************zqh****************" +tblName);
-    //List<FieldSchema> newCols = getColumns((ASTNode) ast.getChild(1));
-    //LOG.info("*****************zqh****************" +newCols);
     PartitionDefinition pd = new PartitionDefinition();
     List<FieldSchema> splitCols = new ArrayList<FieldSchema>();
     pd.setTableName(tblName);
@@ -3553,8 +3615,18 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
 
   }
 
+  private void analyzeAlterTableDistribution(ASTNode ast, AlterTableTypes alterType)
+      throws SemanticException {
+    String tblName = getUnescapedName((ASTNode) ast.getChild(0));
+    List<String> nodeGroupNames = null;
+    ASTNode child = (ASTNode) ast.getChild(1);
+    nodeGroupNames = getNodeGroups((ASTNode)child.getChild(0));
+    AlterTableDesc alterTblDesc = new AlterTableDesc(alterType, tblName, nodeGroupNames);
+    addInputsOutputsAlterTable(tblName, null, alterTblDesc);
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterTblDesc), conf));
 
-
+  }
 
   private void analyzeAlterTableDropParts(ASTNode ast, boolean expectView)
       throws SemanticException {

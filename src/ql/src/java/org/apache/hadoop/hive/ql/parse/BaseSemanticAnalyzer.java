@@ -380,6 +380,16 @@ public abstract class BaseSemanticAnalyzer {
   }
 
 
+  public static List<String> getNodeGroups(ASTNode ast) {
+    List<String> ngNameList = new ArrayList<String>();
+    int numCh = ast.getChildCount();
+    for (int i = 0; i < numCh; i++) {
+      ASTNode child = (ASTNode) ast.getChild(i);
+      ngNameList.add(unescapeSQLString(child.getText()).toLowerCase());
+    }
+    return ngNameList;
+  }
+
   /**
    * Remove the encapsulating "`" pair from the identifier. We allow users to
    * use "`" to escape identifier for table names, column names and aliases, in

@@ -119,7 +119,7 @@ public interface RawStore extends Configurable {
   public abstract void createTable(Table tbl) throws InvalidObjectException,
       MetaException;
 
-  public abstract void createOrUpdateDevice(DeviceInfo di, Node node) throws
+  public abstract void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng) throws
       InvalidObjectException, MetaException;
 
   public Device modifyDevice(Device dev, Node node) throws MetaException, NoSuchObjectException, InvalidObjectException;
@@ -601,6 +601,9 @@ public interface RawStore extends Configurable {
   public abstract  boolean addNodeGroup(NodeGroup ng) throws InvalidObjectException, MetaException;
   //新增节点组
 
+  public abstract  boolean alterNodeGroup(NodeGroup ng) throws InvalidObjectException, MetaException;
+  //往节点组新增节点
+
   public abstract  boolean modifyNodeGroup(String ngName,NodeGroup ng) throws InvalidObjectException, MetaException;
   //修改节点组
 
@@ -677,7 +680,13 @@ public interface RawStore extends Configurable {
 
   public abstract long getCurrentFID();
 
+  public abstract long getMinFID() throws MetaException;
+
   public abstract List<Device> listDevice() throws MetaException;
+
+  public abstract List<String> listDevsByNode(String nodeName) throws MetaException;
+
+  public abstract List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException;
 
   public abstract statfs statFileSystem(long from, long to) throws MetaException;
 

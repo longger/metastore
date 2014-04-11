@@ -388,12 +388,9 @@ public class Hive {
     try {
       // Remove the DDL_TIME so it gets refreshed
       if (newTbl.getParameters() != null) {
-        LOG.info("*****************zqh****************newTbl.getParameters() != null");
         newTbl.getParameters().remove(hive_metastoreConstants.DDL_TIME);
       }
-      LOG.info("*****************zqh**************** before alterTable");
       getMSC().alter_table(t.getDbName(), t.getTableName(), newTbl.getTTable());
-      LOG.info("*****************zqh****************alterTable successfully");
     } catch (MetaException e) {
       throw new HiveException("Unable to alter table.", e);
     } catch (TException e) {
@@ -3065,6 +3062,23 @@ public class Hive {
       }
   }
 
+  public void alterNodeGroup(NodeGroup ngs, Set<String> nodeNames) throws HiveException {
+    try{
+      Set<Node> nds = new HashSet<Node>();
+      for(String nodeName : nodeNames){
+        Node node = getMSC().get_node(nodeName);
+        if(node == null){
+          throw new HiveException("Not valid node:["+nodeName+"]");
+        }
+        nds.add(node);
+      }
+      ngs.setNodes(nds);
+      getMSC().alterNodeGroup(ngs);
+    } catch (Exception e) {
+      throw new HiveException(e);
+    }
+  }
+
   public void dropNodeGroup(NodeGroups ngs) throws HiveException {
     List<String> ngNames = new ArrayList<String>();
     ngNames.add(ngs.getNode_group_name());
@@ -3377,12 +3391,9 @@ public class Hive {
     try {
       // Remove the DDL_TIME so it gets refreshed
       if (newSch.getParameters() != null) {
-        LOG.info("****************zqh****************newSch.getParameters()" + newSch.getParameters());
         newSch.getParameters().remove(hive_metastoreConstants.DDL_TIME);
       }
-      LOG.info("****************zqh****************modifySchema" + gls.getSchemaName());
       getMSC().modifySchema(gls.getSchemaName(), newSch.getTSchema());
-      LOG.info("****************zqh****************modifySchemaSuccessfully");
     } catch (MetaException e) {
       LOG.error("Unable to modify schema MetaException:" + e.getMessage());
       throw new HiveException("Unable to alter schema.", e);

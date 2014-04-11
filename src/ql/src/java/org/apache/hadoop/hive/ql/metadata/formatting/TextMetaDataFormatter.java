@@ -160,7 +160,7 @@ public class TextMetaDataFormatter implements MetaDataFormatter {
        try {
          if (colPath.equals(tableName)) {
            if (!isFormatted) {
-             outStream.writeBytes(MetaDataFormatUtils.displayColsUnformatted(cols));
+             outStream.writeBytes(MetaDataFormatUtils.displayColsUnformatted(cols,tbl));
            } else {
              outStream.writeBytes(
                MetaDataFormatUtils.getAllColumnsInformation(cols,
@@ -680,7 +680,7 @@ public class TextMetaDataFormatter implements MetaDataFormatter {
                   boolean first = true;
                   for(String node : nodeGroup.getNodes()){
                     if(!first){
-                      nodes = ","+nodes;
+                      nodes = nodes + ",";
                     }else{
                       first = false;
                     }

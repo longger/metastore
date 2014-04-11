@@ -14,8 +14,9 @@ module HiveObjectType
   TABLE = 3
   PARTITION = 4
   COLUMN = 5
-  VALUE_MAP = {1 => "GLOBAL", 2 => "DATABASE", 3 => "TABLE", 4 => "PARTITION", 5 => "COLUMN"}
-  VALID_VALUES = Set.new([GLOBAL, DATABASE, TABLE, PARTITION, COLUMN]).freeze
+  SCHEMA = 6
+  VALUE_MAP = {1 => "GLOBAL", 2 => "DATABASE", 3 => "TABLE", 4 => "PARTITION", 5 => "COLUMN", 6 => "SCHEMA"}
+  VALID_VALUES = Set.new([GLOBAL, DATABASE, TABLE, PARTITION, COLUMN, SCHEMA]).freeze
 end
 
 module PrincipalType
@@ -793,12 +794,14 @@ class Device
   PROP = 2
   NODE_NAME = 3
   STATUS = 4
+  NG_NAME = 5
 
   FIELDS = {
     DEVID => {:type => ::Thrift::Types::STRING, :name => 'devid'},
     PROP => {:type => ::Thrift::Types::I32, :name => 'prop'},
     NODE_NAME => {:type => ::Thrift::Types::STRING, :name => 'node_name'},
-    STATUS => {:type => ::Thrift::Types::I32, :name => 'status'}
+    STATUS => {:type => ::Thrift::Types::I32, :name => 'status'},
+    NG_NAME => {:type => ::Thrift::Types::STRING, :name => 'ng_name'}
   }
 
   def struct_fields; FIELDS; end

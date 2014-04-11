@@ -183,7 +183,7 @@
            <column name="PARAM_KEY" length="256" jdbc-type="VARCHAR"/>
         </key>
         <value>
-           <column name="PARAM_VALUE" length="4000" jdbc-type="VARCHAR"/>
+           <column name="PARAM_VALUE" jdbc-type="LONGVARCHAR"/>
         </value>
       </field>
       <field name="viewOriginalText" default-fetch-group="false">
@@ -295,7 +295,7 @@
            <column name="PARAM_KEY" length="256" jdbc-type="VARCHAR"/>
         </key>
         <value>
-           <column name="PARAM_VALUE" length="4000" jdbc-type="VARCHAR"/>
+           <column name="PARAM_VALUE" jdbc-type="LONGVARCHAR"/>
         </value>
       </field>
       <field name="viewOriginalText" default-fetch-group="false">
@@ -1237,6 +1237,9 @@
       
       <field name="node">
       	<column name="NODE_ID"/>
+      </field>
+      <field name="ng">
+        <column name="NG_ID" allows-null="true"/>
       </field>
       <field name="dev_name">
         <column name="DEV_NAME"/>

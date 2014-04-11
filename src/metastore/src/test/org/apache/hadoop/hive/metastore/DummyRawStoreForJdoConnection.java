@@ -561,7 +561,7 @@ public class DummyRawStoreForJdoConnection implements RawStore {
   }
 
   @Override
-  public void createOrUpdateDevice(DeviceInfo di, Node node) throws InvalidObjectException,
+  public void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng) throws InvalidObjectException,
       MetaException {
     // TODO Auto-generated method stub
 
@@ -1248,6 +1248,30 @@ public class DummyRawStoreForJdoConnection implements RawStore {
   public long countDevice() throws MetaException {
     // TODO Auto-generated method stub
     return 0;
+  }
+
+  @Override
+  public boolean alterNodeGroup(NodeGroup ng) throws InvalidObjectException, MetaException {
+    // TODO Auto-generated method stub
+    return false;
+  }
+
+  @Override
+  public long getMinFID() throws MetaException {
+    // TODO Auto-generated method stub
+    return 0;
+  }
+
+  @Override
+  public List<String> listDevsByNode(String nodeName) throws MetaException {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException {
+    // TODO Auto-generated method stub
+    return null;
   }
 
 }

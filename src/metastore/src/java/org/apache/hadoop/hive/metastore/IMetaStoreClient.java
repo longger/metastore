@@ -997,9 +997,13 @@ public interface IMetaStoreClient {
 
   public int close_file(SFile file) throws FileOperationException, TException;
 
+  public boolean del_filelocation(String devid, String location) throws MetaException, TException;
+
   public boolean online_filelocation(SFile file) throws MetaException, TException;
 
   public boolean offline_filelocation(SFileLocation sfl) throws MetaException, TException;
+
+  public boolean set_loadstatus_bad(long fid) throws MetaException, TException;
 
   public SFile get_file_by_id(long fid) throws FileOperationException, MetaException, TException;
 
@@ -1230,6 +1234,8 @@ public interface IMetaStoreClient {
 
   public boolean addNodeGroup(NodeGroup ng) throws AlreadyExistsException, MetaException, TException;
 
+  public boolean alterNodeGroup(NodeGroup ng) throws AlreadyExistsException, MetaException, TException;
+
   public boolean modifyNodeGroup(String schemaName, NodeGroup ng) throws MetaException, TException;
 
   public boolean deleteNodeGroup(NodeGroup ng) throws MetaException, TException;
@@ -1284,4 +1290,14 @@ public interface IMetaStoreClient {
   public void setTimeout(int timeout);
 
   public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException;
+
+  public long getMaxFid() throws MetaException, TException;
+
+  public boolean offlineDevicePhysically(String devid) throws MetaException, TException;
+
+  public boolean flSelectorWatch(String table, int op) throws MetaException, TException;
+
+  public List<String> listDevsByNode(String nodeName) throws MetaException, TException;
+
+  public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException;
 }

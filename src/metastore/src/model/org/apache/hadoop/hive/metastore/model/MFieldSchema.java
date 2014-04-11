@@ -117,4 +117,12 @@ public class MFieldSchema {
   {
     return name.hashCode()+type.hashCode();
   }
+
+  @Override
+  public String toString() {
+    return "MFieldSchema [name=" + name + ", type=" + type + ", comment=" + comment + ", version="
+        + version + "]";
+  }
+
+
 }

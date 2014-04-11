@@ -175,7 +175,7 @@ public class Entity implements Serializable {
     d = null;
     p = null;
     this.gls = gls;
-    LOG.info("****************zqh****************inputs.add(new Read/WriteEntity(sch)):"+this.gls.getCompleteName());
+    //LOG.info("****************zqh****************inputs.add(new Read/WriteEntity(sch)):"+this.gls.getCompleteName());
     typ = Type.SCHEMA;
     name = computeName();
     this.complete = complete;

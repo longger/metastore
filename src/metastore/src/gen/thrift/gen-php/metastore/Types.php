@@ -22,12 +22,14 @@ final class HiveObjectType {
   const TABLE = 3;
   const PARTITION = 4;
   const COLUMN = 5;
+  const SCHEMA = 6;
   static public $__names = array(
     1 => 'GLOBAL',
     2 => 'DATABASE',
     3 => 'TABLE',
     4 => 'PARTITION',
     5 => 'COLUMN',
+    6 => 'SCHEMA',
   );
 }
 
@@ -5718,6 +5720,7 @@ class Device {
   public $prop = null;
   public $node_name = null;
   public $status = null;
+  public $ng_name = null;
 
   public function __construct($vals=null) {
     if (!isset(self::$_TSPEC)) {
@@ -5738,6 +5741,10 @@ class Device {
           'var' => 'status',
           'type' => TType::I32,
           ),
+        5 => array(
+          'var' => 'ng_name',
+          'type' => TType::STRING,
+          ),
         );
     }
     if (is_array($vals)) {
@@ -5752,6 +5759,9 @@ class Device {
       }
       if (isset($vals['status'])) {
         $this->status = $vals['status'];
+      }
+      if (isset($vals['ng_name'])) {
+        $this->ng_name = $vals['ng_name'];
       }
     }
   }
@@ -5803,6 +5813,13 @@ class Device {
             $xfer += $input->skip($ftype);
           }
           break;
+        case 5:
+          if ($ftype == TType::STRING) {
+            $xfer += $input->readString($this->ng_name);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
         default:
           $xfer += $input->skip($ftype);
           break;
@@ -5834,6 +5851,11 @@ class Device {
     if ($this->status !== null) {
       $xfer += $output->writeFieldBegin('status', TType::I32, 4);
       $xfer += $output->writeI32($this->status);
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->ng_name !== null) {
+      $xfer += $output->writeFieldBegin('ng_name', TType::STRING, 5);
+      $xfer += $output->writeString($this->ng_name);
       $xfer += $output->writeFieldEnd();
     }
     $xfer += $output->writeFieldStop();

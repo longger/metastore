@@ -840,6 +840,23 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'pingPong failed: unknown result')
     end
 
+    def alterNodeGroup(ng)
+      send_alterNodeGroup(ng)
+      return recv_alterNodeGroup()
+    end
+
+    def send_alterNodeGroup(ng)
+      send_message('alterNodeGroup', AlterNodeGroup_args, :ng => ng)
+    end
+
+    def recv_alterNodeGroup()
+      result = receive_message(AlterNodeGroup_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise result.o2 unless result.o2.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'alterNodeGroup failed: unknown result')
+    end
+
     def create_database(database)
       send_create_database(database)
       recv_create_database()
@@ -2360,6 +2377,38 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'offline_filelocation failed: unknown result')
     end
 
+    def del_filelocation(slf)
+      send_del_filelocation(slf)
+      return recv_del_filelocation()
+    end
+
+    def send_del_filelocation(slf)
+      send_message('del_filelocation', Del_filelocation_args, :slf => slf)
+    end
+
+    def recv_del_filelocation()
+      result = receive_message(Del_filelocation_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'del_filelocation failed: unknown result')
+    end
+
+    def set_loadstatus_bad(fid)
+      send_set_loadstatus_bad(fid)
+      return recv_set_loadstatus_bad()
+    end
+
+    def send_set_loadstatus_bad(fid)
+      send_message('set_loadstatus_bad', Set_loadstatus_bad_args, :fid => fid)
+    end
+
+    def recv_set_loadstatus_bad()
+      result = receive_message(Set_loadstatus_bad_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'set_loadstatus_bad failed: unknown result')
+    end
+
     def toggle_safemode()
       send_toggle_safemode()
       return recv_toggle_safemode()
@@ -2391,6 +2440,23 @@ module ThriftHiveMetastore
       raise result.o1 unless result.o1.nil?
       raise result.o2 unless result.o2.nil?
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_file_by_id failed: unknown result')
+    end
+
+    def get_files_by_ids(fids)
+      send_get_files_by_ids(fids)
+      return recv_get_files_by_ids()
+    end
+
+    def send_get_files_by_ids(fids)
+      send_message('get_files_by_ids', Get_files_by_ids_args, :fids => fids)
+    end
+
+    def recv_get_files_by_ids()
+      result = receive_message(Get_files_by_ids_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise result.o2 unless result.o2.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_files_by_ids failed: unknown result')
     end
 
     def get_file_by_name(node, devid, location)
@@ -2961,6 +3027,38 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'listFilesByDigest failed: unknown result')
     end
 
+    def listDevsByNode(nodeName)
+      send_listDevsByNode(nodeName)
+      return recv_listDevsByNode()
+    end
+
+    def send_listDevsByNode(nodeName)
+      send_message('listDevsByNode', ListDevsByNode_args, :nodeName => nodeName)
+    end
+
+    def recv_listDevsByNode()
+      result = receive_message(ListDevsByNode_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'listDevsByNode failed: unknown result')
+    end
+
+    def listFilesByDevs(devids)
+      send_listFilesByDevs(devids)
+      return recv_listFilesByDevs()
+    end
+
+    def send_listFilesByDevs(devids)
+      send_message('listFilesByDevs', ListFilesByDevs_args, :devids => devids)
+    end
+
+    def recv_listFilesByDevs()
+      result = receive_message(ListFilesByDevs_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'listFilesByDevs failed: unknown result')
+    end
+
     def filterTableFiles(dbName, tabName, values)
       send_filterTableFiles(dbName, tabName, values)
       return recv_filterTableFiles()
@@ -3169,6 +3267,54 @@ module ThriftHiveMetastore
       return result.success unless result.success.nil?
       raise result.o1 unless result.o1.nil?
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'statFileSystem failed: unknown result')
+    end
+
+    def getMaxFid()
+      send_getMaxFid()
+      return recv_getMaxFid()
+    end
+
+    def send_getMaxFid()
+      send_message('getMaxFid', GetMaxFid_args)
+    end
+
+    def recv_getMaxFid()
+      result = receive_message(GetMaxFid_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'getMaxFid failed: unknown result')
+    end
+
+    def offlineDevicePhysically(devid)
+      send_offlineDevicePhysically(devid)
+      return recv_offlineDevicePhysically()
+    end
+
+    def send_offlineDevicePhysically(devid)
+      send_message('offlineDevicePhysically', OfflineDevicePhysically_args, :devid => devid)
+    end
+
+    def recv_offlineDevicePhysically()
+      result = receive_message(OfflineDevicePhysically_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'offlineDevicePhysically failed: unknown result')
+    end
+
+    def flSelectorWatch(table, op)
+      send_flSelectorWatch(table, op)
+      return recv_flSelectorWatch()
+    end
+
+    def send_flSelectorWatch(table, op)
+      send_message('flSelectorWatch', FlSelectorWatch_args, :table => table, :op => op)
+    end
+
+    def recv_flSelectorWatch()
+      result = receive_message(FlSelectorWatch_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'flSelectorWatch failed: unknown result')
     end
 
   end
@@ -3755,6 +3901,19 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'pingPong', seqid)
+    end
+
+    def process_alterNodeGroup(seqid, iprot, oprot)
+      args = read_args(iprot, AlterNodeGroup_args)
+      result = AlterNodeGroup_result.new()
+      begin
+        result.success = @handler.alterNodeGroup(args.ng)
+      rescue ::AlreadyExistsException => o1
+        result.o1 = o1
+      rescue ::MetaException => o2
+        result.o2 = o2
+      end
+      write_result(result, oprot, 'alterNodeGroup', seqid)
     end
 
     def process_create_database(seqid, iprot, oprot)
@@ -4941,6 +5100,28 @@ module ThriftHiveMetastore
       write_result(result, oprot, 'offline_filelocation', seqid)
     end
 
+    def process_del_filelocation(seqid, iprot, oprot)
+      args = read_args(iprot, Del_filelocation_args)
+      result = Del_filelocation_result.new()
+      begin
+        result.success = @handler.del_filelocation(args.slf)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'del_filelocation', seqid)
+    end
+
+    def process_set_loadstatus_bad(seqid, iprot, oprot)
+      args = read_args(iprot, Set_loadstatus_bad_args)
+      result = Set_loadstatus_bad_result.new()
+      begin
+        result.success = @handler.set_loadstatus_bad(args.fid)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'set_loadstatus_bad', seqid)
+    end
+
     def process_toggle_safemode(seqid, iprot, oprot)
       args = read_args(iprot, Toggle_safemode_args)
       result = Toggle_safemode_result.new()
@@ -4963,6 +5144,19 @@ module ThriftHiveMetastore
         result.o2 = o2
       end
       write_result(result, oprot, 'get_file_by_id', seqid)
+    end
+
+    def process_get_files_by_ids(seqid, iprot, oprot)
+      args = read_args(iprot, Get_files_by_ids_args)
+      result = Get_files_by_ids_result.new()
+      begin
+        result.success = @handler.get_files_by_ids(args.fids)
+      rescue ::FileOperationException => o1
+        result.o1 = o1
+      rescue ::MetaException => o2
+        result.o2 = o2
+      end
+      write_result(result, oprot, 'get_files_by_ids', seqid)
     end
 
     def process_get_file_by_name(seqid, iprot, oprot)
@@ -5366,6 +5560,28 @@ module ThriftHiveMetastore
       write_result(result, oprot, 'listFilesByDigest', seqid)
     end
 
+    def process_listDevsByNode(seqid, iprot, oprot)
+      args = read_args(iprot, ListDevsByNode_args)
+      result = ListDevsByNode_result.new()
+      begin
+        result.success = @handler.listDevsByNode(args.nodeName)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'listDevsByNode', seqid)
+    end
+
+    def process_listFilesByDevs(seqid, iprot, oprot)
+      args = read_args(iprot, ListFilesByDevs_args)
+      result = ListFilesByDevs_result.new()
+      begin
+        result.success = @handler.listFilesByDevs(args.devids)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'listFilesByDevs', seqid)
+    end
+
     def process_filterTableFiles(seqid, iprot, oprot)
       args = read_args(iprot, FilterTableFiles_args)
       result = FilterTableFiles_result.new()
@@ -5513,6 +5729,39 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'statFileSystem', seqid)
+    end
+
+    def process_getMaxFid(seqid, iprot, oprot)
+      args = read_args(iprot, GetMaxFid_args)
+      result = GetMaxFid_result.new()
+      begin
+        result.success = @handler.getMaxFid()
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'getMaxFid', seqid)
+    end
+
+    def process_offlineDevicePhysically(seqid, iprot, oprot)
+      args = read_args(iprot, OfflineDevicePhysically_args)
+      result = OfflineDevicePhysically_result.new()
+      begin
+        result.success = @handler.offlineDevicePhysically(args.devid)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'offlineDevicePhysically', seqid)
+    end
+
+    def process_flSelectorWatch(seqid, iprot, oprot)
+      args = read_args(iprot, FlSelectorWatch_args)
+      result = FlSelectorWatch_result.new()
+      begin
+        result.success = @handler.flSelectorWatch(args.table, args.op)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'flSelectorWatch', seqid)
     end
 
   end
@@ -7333,6 +7582,42 @@ module ThriftHiveMetastore
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::STRING, :name => 'success'},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class AlterNodeGroup_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    NG = 1
+
+    FIELDS = {
+      NG => {:type => ::Thrift::Types::STRUCT, :name => 'ng', :class => ::NodeGroup}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class AlterNodeGroup_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+    O2 = 2
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::AlreadyExistsException},
+      O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::MetaException}
     }
 
     def struct_fields; FIELDS; end
@@ -10837,6 +11122,74 @@ module ThriftHiveMetastore
     ::Thrift::Struct.generate_accessors self
   end
 
+  class Del_filelocation_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SLF = 1
+
+    FIELDS = {
+      SLF => {:type => ::Thrift::Types::STRUCT, :name => 'slf', :class => ::SFileLocation}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Del_filelocation_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Set_loadstatus_bad_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    FID = 1
+
+    FIELDS = {
+      FID => {:type => ::Thrift::Types::I64, :name => 'fid'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Set_loadstatus_bad_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
   class Toggle_safemode_args
     include ::Thrift::Struct, ::Thrift::Struct_Union
 
@@ -10894,6 +11247,42 @@ module ThriftHiveMetastore
 
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::STRUCT, :name => 'success', :class => ::SFile},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::FileOperationException},
+      O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Get_files_by_ids_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    FIDS = -1
+
+    FIELDS = {
+      FIDS => {:type => ::Thrift::Types::LIST, :name => 'fids', :element => {:type => ::Thrift::Types::I64}}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Get_files_by_ids_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+    O2 = 2
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::LIST, :name => 'success', :element => {:type => ::Thrift::Types::STRUCT, :class => ::SFile}},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::FileOperationException},
       O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::MetaException}
     }
@@ -12203,6 +12592,74 @@ module ThriftHiveMetastore
     ::Thrift::Struct.generate_accessors self
   end
 
+  class ListDevsByNode_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    NODENAME = 1
+
+    FIELDS = {
+      NODENAME => {:type => ::Thrift::Types::STRING, :name => 'nodeName'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class ListDevsByNode_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::LIST, :name => 'success', :element => {:type => ::Thrift::Types::STRING}},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class ListFilesByDevs_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    DEVIDS = 1
+
+    FIELDS = {
+      DEVIDS => {:type => ::Thrift::Types::LIST, :name => 'devids', :element => {:type => ::Thrift::Types::STRING}}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class ListFilesByDevs_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::LIST, :name => 'success', :element => {:type => ::Thrift::Types::I64}},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
   class FilterTableFiles_args
     include ::Thrift::Struct, ::Thrift::Struct_Union
     DBNAME = 1
@@ -12665,6 +13122,109 @@ module ThriftHiveMetastore
 
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::STRUCT, :name => 'success', :class => ::Statfs},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class GetMaxFid_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+
+    FIELDS = {
+
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class GetMaxFid_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::I64, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class OfflineDevicePhysically_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    DEVID = 1
+
+    FIELDS = {
+      DEVID => {:type => ::Thrift::Types::STRING, :name => 'devid'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class OfflineDevicePhysically_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class FlSelectorWatch_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    TABLE = 1
+    OP = 2
+
+    FIELDS = {
+      TABLE => {:type => ::Thrift::Types::STRING, :name => 'table'},
+      OP => {:type => ::Thrift::Types::I32, :name => 'op'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class FlSelectorWatch_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
     }
 

@@ -56,6 +56,7 @@ enum HiveObjectType {
   TABLE = 3,
   PARTITION = 4,
   COLUMN = 5,
+  SCHEMA = 6,
 }
 
 enum PrincipalType {
@@ -380,6 +381,7 @@ struct Device {
   2: i32    prop,
   3: string node_name,
   4: i32	status,
+  5: string ng_name,
 }
 
 struct SFileLocation {
@@ -667,6 +669,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   string pingPong(1:string str) throws (1:MetaException o1);
   
 //end up with cry
+
+  bool alterNodeGroup(1:NodeGroup ng) throws (1:AlreadyExistsException o1, 2:MetaException o2)
 
   void create_database(1:Database database) throws(1:AlreadyExistsException o1, 2:InvalidObjectException o2, 3:MetaException o3)
   Database get_database(1:string name) throws(1:NoSuchObjectException o1, 2:MetaException o2)
@@ -979,9 +983,15 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   bool offline_filelocation(1:SFileLocation sfl) throws (1:MetaException o1)
   
+  bool del_filelocation(1:SFileLocation slf) throws (1:MetaException o1)
+  
+  bool set_loadstatus_bad(1:i64 fid) throws (1:MetaException o1)
+  
   bool toggle_safemode() throws (1:MetaException o1)
   
   SFile get_file_by_id(1:i64 fid) throws (1:FileOperationException o1, 2:MetaException o2)
+  
+  list<SFile> get_files_by_ids(list<i64> fids) throws (1:FileOperationException o1, 2:MetaException o2)
   
   SFile get_file_by_name(1:string node, 2:string devid, 3:string location) throws (1:FileOperationException o1, 2:MetaException o2)
   
@@ -1047,6 +1057,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   list<i64> listTableFiles(1:string dbName,2:string tabName,3:i32 from, 4:i32 to)  throws (1:MetaException o1)
   list<i64> listFilesByDigest(1:string digest) throws (1:MetaException o1)
+  list<string> listDevsByNode(1:string nodeName) throws (1:MetaException o1)
+  list<i64> listFilesByDevs(1:list<string> devids) throws (1:MetaException o1)
   list<SFile> filterTableFiles(1:string dbName,2:string tabName,3:list<SplitValue> values)  throws (1:MetaException o1)
   void truncTableFiles(1:string dbName, 2:string tabName) throws (1:MetaException o1)
   
@@ -1065,6 +1077,12 @@ service ThriftHiveMetastore extends fb303.FacebookService
       4:list<FieldSchema> part_keys,5:list<NodeGroup> ngs) throws (1:InvalidObjectException o1, 2:NoSuchObjectException o2, 3:MetaException o3)
   
   statfs statFileSystem(1:i64 begin_time, 2:i64 end_time) throws (1:MetaException o1)
+  
+  i64 getMaxFid() throws (1:MetaException o1)
+  
+  bool offlineDevicePhysically(1:string devid) throws (1:MetaException o1)
+  
+  bool flSelectorWatch(1:string table, 2:i32 op) throws (1:MetaException o1)
 }
 
 // * Note about the DDL_TIME: When creating or altering a table or a partition,

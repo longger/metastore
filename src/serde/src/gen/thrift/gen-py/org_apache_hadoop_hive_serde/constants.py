@@ -35,6 +35,7 @@ STRING_TYPE_NAME = "string"
 DATE_TYPE_NAME = "date"
 DATETIME_TYPE_NAME = "datetime"
 TIMESTAMP_TYPE_NAME = "timestamp"
+BLOB_TYPE_NAME = "blob"
 BINARY_TYPE_NAME = "binary"
 LIST_TYPE_NAME = "array"
 MAP_TYPE_NAME = "map"
@@ -55,6 +56,7 @@ PrimitiveTypes = set([
   "date",
   "datetime",
   "timestamp",
+  "blob",
   "binary",
 ])
 CollectionTypes = set([

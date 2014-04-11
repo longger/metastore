@@ -277,6 +277,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("pingPong\n");
   }
 
+  bool alterNodeGroup(const NodeGroup& ng) {
+    // Your implementation goes here
+    printf("alterNodeGroup\n");
+  }
+
   void create_database(const Database& database) {
     // Your implementation goes here
     printf("create_database\n");
@@ -727,6 +732,16 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("offline_filelocation\n");
   }
 
+  bool del_filelocation(const SFileLocation& slf) {
+    // Your implementation goes here
+    printf("del_filelocation\n");
+  }
+
+  bool set_loadstatus_bad(const int64_t fid) {
+    // Your implementation goes here
+    printf("set_loadstatus_bad\n");
+  }
+
   bool toggle_safemode() {
     // Your implementation goes here
     printf("toggle_safemode\n");
@@ -735,6 +750,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
   void get_file_by_id(SFile& _return, const int64_t fid) {
     // Your implementation goes here
     printf("get_file_by_id\n");
+  }
+
+  void get_files_by_ids(std::vector<SFile> & _return, const std::vector<int64_t> & fids) {
+    // Your implementation goes here
+    printf("get_files_by_ids\n");
   }
 
   void get_file_by_name(SFile& _return, const std::string& node, const std::string& devid, const std::string& location) {
@@ -912,6 +932,16 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("listFilesByDigest\n");
   }
 
+  void listDevsByNode(std::vector<std::string> & _return, const std::string& nodeName) {
+    // Your implementation goes here
+    printf("listDevsByNode\n");
+  }
+
+  void listFilesByDevs(std::vector<int64_t> & _return, const std::vector<std::string> & devids) {
+    // Your implementation goes here
+    printf("listFilesByDevs\n");
+  }
+
   void filterTableFiles(std::vector<SFile> & _return, const std::string& dbName, const std::string& tabName, const std::vector<SplitValue> & values) {
     // Your implementation goes here
     printf("filterTableFiles\n");
@@ -975,6 +1005,21 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
   void statFileSystem(statfs& _return, const int64_t begin_time, const int64_t end_time) {
     // Your implementation goes here
     printf("statFileSystem\n");
+  }
+
+  int64_t getMaxFid() {
+    // Your implementation goes here
+    printf("getMaxFid\n");
+  }
+
+  bool offlineDevicePhysically(const std::string& devid) {
+    // Your implementation goes here
+    printf("offlineDevicePhysically\n");
+  }
+
+  bool flSelectorWatch(const std::string& table, const int32_t op) {
+    // Your implementation goes here
+    printf("flSelectorWatch\n");
   }
 
 };

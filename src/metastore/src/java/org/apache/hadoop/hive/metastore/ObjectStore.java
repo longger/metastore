@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -57,6 +58,7 @@ import org.apache.hadoop.hive.common.classification.InterfaceAudience;
 import org.apache.hadoop.hive.common.classification.InterfaceStability;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
+import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BinaryColumnStatsData;
@@ -209,6 +211,31 @@ public class ObjectStore implements RawStore, Configurable {
         rollbackTransaction();
       }
     }
+  }
+
+  public long getMinFID() throws MetaException {
+    boolean commited = false;
+    long r = 0;
+
+    try {
+      openTransaction();
+      Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT min(fid) FROM FILES");
+      List results = (List) query.execute();
+      BigDecimal minfid = (BigDecimal) results.iterator().next();
+      if (minfid != null) {
+        r = minfid.longValue();
+      }
+      commited = commitTransaction();
+    } catch (javax.jdo.JDODataStoreException e) {
+      LOG.info(e, e);
+    }catch (Exception e) {
+      LOG.info(e, e);
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    return r;
   }
 
   public long getNextFID() {
@@ -492,6 +519,11 @@ public class ObjectStore implements RawStore, Configurable {
       transactionStatus = TXN_STATUS.ROLLBACK;
       // could already be rolled back
       currentTransaction.rollback();
+      // XXX: HIVE-3826
+      // remove all detached objects from the cache, since the transaction is
+      // being rolled back they are no longer relevant, and this prevents them
+      // from reattaching in future transactions
+      pm.evictAll();
     }
   }
 
@@ -528,15 +560,12 @@ public class ObjectStore implements RawStore, Configurable {
     try {
       openTransaction();
       String dbname = name.toLowerCase().trim();
-      LOG.info("*****************zqh*****************getMDatabase" + dbname);
       Query query = pm.newQuery(MDatabase.class, "name == dbname");
-      LOG.info("*****************zqh*****************query successfully");
       query.declareParameters("java.lang.String dbname");
       query.setUnique(true);
       mdb = (MDatabase) query.execute(dbname);
       pm.retrieve(mdb);
       commited = commitTransaction();
-      LOG.info("*****************zqh*****************commited successfully");
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -619,7 +648,9 @@ public class ObjectStore implements RawStore, Configurable {
       committed = commitTransaction();
 
       HashMap<String, Object> params = new HashMap<String, Object>();
-      params.put("param_name",new ArrayList<String>().addAll( mdb.getParameters().keySet()));
+      ArrayList<String>  ps = new ArrayList<String>();
+      ps.addAll(mdb.getParameters().keySet());
+      params.put("param_name",ps);
       if(committed) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALTER_DATABESE_PARAM,db_id,-1, pm, mdb,params));
       }
@@ -811,12 +842,12 @@ public class ObjectStore implements RawStore, Configurable {
     }
     try {
       openTransaction();
-      Query q = pm.newQuery(MFile.class, "this.table.tableName == tableName && this.table.database.name == dbName");
+      Query q = pm.newQuery(MFile.class);
+
+      filter += "this.table.tableName == tableName && this.table.database.name == dbName ";
+
       for (int i = 0; i < values.size(); i++) {
-        if (i != 0) {
-          filter += "&&";
-        }
-        filter += "(this.values.contains(v" + i + ") && (v"
+        filter += "&& (this.values.contains(v" + i + ") && (v"
             + i + ".pkname == v" + i + "pkname && v"
             + i + ".level == v" + i + "level && v"
             + i + ".value == v" + i + "value && v"
@@ -870,8 +901,10 @@ public class ObjectStore implements RawStore, Configurable {
   @Override
   public List<Long> listTableFiles(String dbName, String tableName, int begin, int end) throws MetaException {
     List<Long> rls = new ArrayList<Long>();
+    boolean commited = false;
 
     try {
+      openTransaction();
       Query q0 = pm.newQuery(MFile.class, "this.table.tableName == tableName && this.table.database.name == dbName");
       q0.setResult("count(fid)");
       q0.declareParameters("java.lang.String tableName, java.lang.String dbName");
@@ -888,11 +921,10 @@ public class ObjectStore implements RawStore, Configurable {
       if (end < begin) {
         end = begin;
       }
-      // FIXME: do NOT ordering on large data set!
-      if (fnr <= 1000) {
-        q.setOrdering("fid ascending");
-      }
+      // BUG-XXX: if unordering, we will got corrupt result, thus, do ordering
+      q.setOrdering("fid ascending");
       q.setRange(begin, end);
+      q.setIgnoreCache(true);
       q.declareParameters("java.lang.String tableName, java.lang.String dbName");
       Collection files = (Collection)q.execute(tableName, dbName);
       Iterator iter = files.iterator();
@@ -904,7 +936,11 @@ public class ObjectStore implements RawStore, Configurable {
         }
         rls.add(mf.getFid());
       }
+      commited = commitTransaction();
     } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
     }
 
     return rls;
@@ -965,6 +1001,38 @@ public class ObjectStore implements RawStore, Configurable {
     }
     return r;
   }
+
+  public List<Long> listFilesByDevs(List<String> devids) throws MetaException {
+    boolean commited = false;
+    List<Long> r = new ArrayList<Long>();
+    Set<Long> s = new TreeSet<Long>();
+
+    try {
+      openTransaction();
+      for (String devid : devids) {
+        Query q = pm.newQuery(MFileLocation.class, "dev.dev_name == devid");
+        q.declareParameters("java.lang.String devid");
+        Collection fls = (Collection)q.execute(devid);
+        Iterator iter = fls.iterator();
+        while (iter.hasNext()) {
+          MFileLocation mfl = (MFileLocation)iter.next();
+          if (mfl == null) {
+            continue;
+          }
+          pm.retrieveAll(mfl);
+          s.add(mfl.getFile().getFid());
+        }
+      }
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    r.addAll(s);
+    return r;
+  }
+
   public void findVoidFiles(List<SFile> voidFiles) throws MetaException {
     boolean commited = false;
 
@@ -1087,6 +1155,7 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query q = pm.newQuery(MFile.class, "this.store_status != increate");
       q.declareParameters("int increate");
+      q.setOrdering("fid ascending");
       q.setRange(from, to);
       Collection allFiles = (Collection)q.execute(MetaStoreConst.MFileStoreStatus.INCREATE);
       Iterator iter = allFiles.iterator();
@@ -1579,7 +1648,6 @@ public class ObjectStore implements RawStore, Configurable {
 
   public void createFileLocaiton(SFileLocation fl) throws InvalidObjectException, MetaException {
     boolean commited = false;
-
     try {
       openTransaction();
       MFileLocation mfl = convertToMFileLocation(fl);
@@ -1610,6 +1678,15 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       MFile mfile = convertToMFile(file);
       pm.makePersistent(mfile);
+
+//      LOG.info("---zy-- in createfile: table:"+mfile.getTable() == null);
+//      if(mfile.getTable() != null) {
+//        tableName = mfile.getTable().getTableName();
+//      }
+//      if(mfile.getTable() != null && mfile.getTable().getDatabase() != null) {
+//        dbName = mfile.getTable().getDatabase().getName();
+//      }
+
       newf = convertToSFile(mfile);
       commited = commitTransaction();
 
@@ -1634,6 +1711,30 @@ public class ObjectStore implements RawStore, Configurable {
       return null;
     }
   }
+  
+  /**
+   * 与createfile方法功能基本一致，区别在于不会重新设置参数的fid，不发消息
+   * @param file
+   * @throws InvalidObjectException 
+   */
+  public boolean persistFile(SFile file) throws InvalidObjectException
+  {
+  	boolean commited = false;
+  	MFile f = getMFile(file.getFid());
+  	if(f != null)
+  		throw new InvalidObjectException("file(fid="+file.getFid()+") already exists.");
+    try {
+      openTransaction();
+      MFile mfile = convertToMFile(file);
+      pm.makePersistent(mfile);
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    return commited;
+  }
 
   public boolean createFileLocation(SFileLocation location) throws InvalidObjectException, MetaException {
     boolean r = true;
@@ -1644,24 +1745,38 @@ public class ObjectStore implements RawStore, Configurable {
     }
     MFileLocation mfloc;
 
+    String dbName = null,tableName=null;
     try {
       openTransaction();
       mfloc = convertToMFileLocation(location);
       if (mfloc != null) {
         pm.makePersistent(mfloc);
       }
+//      dbName = mfloc.getFile().getTable().getDatabase().getName();
+//      tableName = mfloc.getFile().getTable().getTableName();
+      if(mfloc.getFile().getTable() != null) {
+        tableName = mfloc.getFile().getTable().getTableName();
+      }
+      if(mfloc.getFile().getTable() != null && mfloc.getFile().getTable().getDatabase() != null) {
+        dbName = mfloc.getFile().getTable().getDatabase().getName();
+      }
       commited = commitTransaction();
     } finally {
       if (!commited) {
         rollbackTransaction();
+      } else {
+        DMProfile.sflcreateR.incrementAndGet();
       }
     }
     if (r && mfloc != null && commited) {
       // send the sfile rep change message
       HashMap<String, Object> old_params = new HashMap<String, Object>();
-      old_params.put("f_id", location.getFid());
+      old_params.put("f_id", new Long(location.getFid()));
       old_params.put("devid", location.getDevid());
       old_params.put("location", location.getLocation());
+      old_params.put("db_name", dbName);
+      old_params.put("table_name", tableName);
+      old_params.put("op", "add");
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfloc.getFile(), old_params));
     }
     return r && commited;
@@ -1673,7 +1788,12 @@ public class ObjectStore implements RawStore, Configurable {
     if (mds != null) {
       ds = new ArrayList<Device>();
       for (MDevice md : mds) {
-        Device d = new Device(md.getDev_name(), md.getProp(), md.getNode().getNode_name(), md.getStatus());
+        String ng_name = null;
+        if (md.getNg() != null) {
+          ng_name = md.getNg().getNode_group_name();
+        }
+        Device d = new Device(md.getDev_name(), md.getProp(),
+            md.getNode().getNode_name(), md.getStatus(), ng_name);
         ds.add(d);
       }
     }
@@ -1701,6 +1821,30 @@ public class ObjectStore implements RawStore, Configurable {
     return ds;
   }
 
+  @Override
+  public List<String> listDevsByNode(String nodeName) throws MetaException {
+    List<String> devs = new ArrayList<String>();
+    boolean success = false;
+
+    try {
+      openTransaction();
+      Query query = pm.newQuery(MDevice.class, "node.node_name == nodeName");
+      query.declareParameters("java.lang.String nodeName");
+      Collection cols = (Collection)query.execute(nodeName);
+      Iterator iter = cols.iterator();
+      while (iter.hasNext()) {
+        MDevice d = (MDevice)iter.next();
+        devs.add(d.getDev_name());
+      }
+      success = commitTransaction();
+    } finally {
+      if (!success) {
+        rollbackTransaction();
+      }
+    }
+    return devs;
+  }
+
   public Device modifyDevice(Device dev, Node node) throws MetaException, NoSuchObjectException, InvalidObjectException {
     MDevice md = getMDevice(dev.getDevid());
     MNode mn;
@@ -1717,14 +1861,19 @@ public class ObjectStore implements RawStore, Configurable {
     }
     md.setProp(dev.getProp());
     md.setStatus(dev.getStatus());
+    md.setNg(getMNodeGroup(dev.getNg_name()));
 
     createDevice(md);
     return convertToDevice(md);
   }
 
-  public void createOrUpdateDevice(DeviceInfo di, Node node) throws MetaException, InvalidObjectException {
+  public void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng) throws MetaException, InvalidObjectException {
     MDevice md = getMDevice(di.dev.trim());
     boolean doCreate = false;
+    String ng_name = null;
+    if (ng != null) {
+      ng_name = ng.getNode_group_name();
+    }
 
     if (md == null) {
       // create it now
@@ -1732,10 +1881,15 @@ public class ObjectStore implements RawStore, Configurable {
       if (mn == null) {
         throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
       }
-      if (di.mp == null) {
-        md = new MDevice(mn, di.dev.trim(), di.prop);
-      } else {
-        md = new MDevice(mn, di.dev.trim(), di.prop, MetaStoreConst.MDeviceStatus.ONLINE);
+      try {
+        if (di.mp == null) {
+          md = new MDevice(mn, getMNodeGroup(ng_name), di.dev.trim(), di.prop);
+        } else {
+          md = new MDevice(mn, getMNodeGroup(ng_name), di.dev.trim(), di.prop, MetaStoreConst.MDeviceStatus.ONLINE);
+        }
+      } catch (NoSuchObjectException e) {
+        LOG.error(e, e);
+        throw new MetaException(e.getMessage());
       }
       doCreate = true;
     } else {
@@ -1743,6 +1897,7 @@ public class ObjectStore implements RawStore, Configurable {
       if (di.mp != null && md.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT) {
         // if the Device is in SUSPECT state, update it to ONLINE
         md.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
+        doCreate = true;
       }
       if (!md.getNode().getNode_name().equals(node.getNode_name()) &&
           md.getProp() == MetaStoreConst.MDeviceProp.ALONE) {
@@ -1755,6 +1910,7 @@ public class ObjectStore implements RawStore, Configurable {
         md.setNode(mn);
         doCreate = true;
       }
+      // NOTE: do not update NG in this function, please use modifyDevice to update NG!
     }
     if (doCreate) {
       createDevice(md);
@@ -1791,8 +1947,8 @@ public class ObjectStore implements RawStore, Configurable {
     Node n = new Node("macan", ips, MetaStoreConst.MNodeStatus.SUSPECT);
     SFile sf = new SFile(0, "db", "table", 5, 6, "xyzadfads", 1, 2, null, 100, null, null, 0);
     createNode(n);
-    MDevice md1 = new MDevice(getMNode("macan"), "dev-hello", 0, 0);
-    MDevice md2 = new MDevice(getMNode("macan"), "xyz1", 0, 0);
+    MDevice md1 = new MDevice(getMNode("macan"), null, "dev-hello", 0, 0);
+    MDevice md2 = new MDevice(getMNode("macan"), null, "xyz1", 0, 0);
     createDevice(md1);
     createDevice(md2);
 
@@ -1816,11 +1972,9 @@ public class ObjectStore implements RawStore, Configurable {
 
   public void createTable(Table tbl) throws InvalidObjectException, MetaException {
     boolean commited = false;
-    LOG.info("*****************zqh*****************createTable");
     try {
       openTransaction();
       MTable mtbl = convertToMTable(tbl);
-      LOG.info("*****************zqh*****************createTable--convertToMTable");
       boolean make_table = false;
       if(mtbl.getSd().getCD().getCols() != null){//增加业务类型查询支持
         List<MBusiTypeColumn> bcs = new ArrayList<MBusiTypeColumn>();
@@ -1885,8 +2039,6 @@ public class ObjectStore implements RawStore, Configurable {
         rollbackTransaction();
       }
     }
-
-
   }
 
   private void deleteBusiTypeCol(MTable mtbl) {
@@ -1923,6 +2075,45 @@ public class ObjectStore implements RawStore, Configurable {
             bcs.add(bc);
           }
         }
+      }
+    }
+  }
+  private void deleteBusiTypeCol(MBusiTypeColumn mbc) 
+  {
+  	boolean commited = false;
+  	MTable mtbl = mbc.getTable();
+    try {
+      openTransaction();
+      Query query = pm.newQuery(MBusiTypeColumn.class, "table.tableName == tabName && table.database.name == dbName && column == column");
+      query.declareParameters("java.lang.String tabName, java.lang.String dbName, java.lang.String column");
+      Collection cols = (Collection)query.execute(mtbl.getTableName(), mtbl.getDatabase().getName(), mbc.getColumn());
+      Iterator iter = cols.iterator();
+      while (iter.hasNext()) {
+        MBusiTypeColumn col = (MBusiTypeColumn)iter.next();
+        LOG.debug("---zy--  DEL BusiType " + col.getBusiType() + " on col " + col.getColumn() + " for db " +
+            mtbl.getDatabase().getName() + " table " + mtbl.getTableName());
+        pm.deletePersistent(col);
+      }
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+  }
+  private void insertBusiTypeCol(MBusiTypeColumn mbc) 
+  {
+  	boolean commited = false;
+  	MTable mtbl = mbc.getTable();
+    try {
+      openTransaction();
+      LOG.debug("---zy-- insert BusiType " + mbc.getBusiType() + " on col " + mbc.getColumn() + " for db " +
+          mtbl.getDatabase().getName() + " table " + mtbl.getTableName());
+      pm.makePersistent(mbc);
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
       }
     }
   }
@@ -2262,13 +2453,17 @@ public class ObjectStore implements RawStore, Configurable {
     return f;
   }
 
+  // FIXME: getSFileLocations use repeatable-read? QUICK or CORRECT, choose one, boy!
   public List<SFileLocation> getSFileLocations(long fid) throws MetaException {
     boolean commited = false;
     List<SFileLocation> sfl = new ArrayList<SFileLocation>();
+    // BUG-XXX can not alter transacction level here
     try {
       openTransaction();
+      //currentTransaction.setIsolationLevel("repeatable-read");
       sfl = convertToSFileLocation(getMFileLocations(fid));
       commited = commitTransaction();
+      //currentTransaction.setIsolationLevel("read-committed");
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -2326,12 +2521,14 @@ public class ObjectStore implements RawStore, Configurable {
   public boolean reopenSFile(SFile file) throws MetaException {
     boolean commited = false;
     MFile mf = null;
-    SFile f = null;
     boolean changed = false;
 
     try {
       List<MFileLocation> toOffline = new ArrayList<MFileLocation>();
 
+      // TODO: FIXME: there might be one bug: on recv file rep report, dm change sfl vstatus
+      // to online if file's storestatus is NOT in INCREATE. thus, we should commit
+      // INCREATE change firstly.
       openTransaction();
       mf = getMFile(file.getFid());
       if (mf.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
@@ -2379,8 +2576,8 @@ public class ObjectStore implements RawStore, Configurable {
         if (toOffline.size() > 0) {
           for (MFileLocation y : toOffline) {
             HashMap<String, Object> params = new HashMap<String, Object>();
-            old_params.put("f_id", file.getFid());
-            old_params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+            params.put("f_id", file.getFid());
+            params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
             MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, pm, y, params));
           }
         }
@@ -2399,6 +2596,8 @@ public class ObjectStore implements RawStore, Configurable {
     boolean stat_changed = false;
     MFile mf = null;
     SFile f = null;
+
+    String dbName = null,tableName=null;
     try {
       openTransaction();
       mf = getMFile(newfile.getFid());
@@ -2415,10 +2614,18 @@ public class ObjectStore implements RawStore, Configurable {
       mf.setStore_status(newfile.getStore_status());
       mf.setLoad_status(newfile.getLoad_status());
       mf.setLength(newfile.getLength());
+      mf.setRef_files(newfile.getRef_files());
+
+      tableName = newfile.getTableName();
+      dbName = newfile.getDbName();
 
       pm.makePersistent(mf);
       f = convertToSFile(mf);
+
+//      tableName = mf.getTable().getTableName();
+//      dbName = mf.getTable().getDatabase().getName();
       commited = commitTransaction();
+
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -2433,13 +2640,20 @@ public class ObjectStore implements RawStore, Configurable {
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", newfile.getFid());
       old_params.put("new_status", newfile.getStore_status());
+      old_params.put("db_name", dbName);
+      old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, pm, mf, old_params));
+      if (newfile.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+        DMProfile.freplicateR.incrementAndGet();
+      }
     }
     if (repnr_changed) {
       // send the SFile state change message
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", newfile.getFid());
       old_params.put("new_repnr", newfile.getRep_nr());
+      old_params.put("db_name", dbName);
+      old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_FILE_USER_SET_REP_CHANGE, -1l, -1l, pm, mf, old_params));
     }
     return f;
@@ -2450,11 +2664,20 @@ public class ObjectStore implements RawStore, Configurable {
     boolean changed = false;
     SFileLocation sfl = null;
     MFileLocation mfl = null;
+
+    String dbName=null,tableName=null;
     try {
       openTransaction();
       mfl = getMFileLocation(newsfl.getDevid(), newsfl.getLocation());
       if (mfl == null) {
         throw new MetaException("Invalid SFileLocation provided or JDO Commit failed!");
+      }
+      pm.retrieveAll(mfl);
+      if(mfl.getFile().getTable() != null) {
+        tableName = mfl.getFile().getTable().getTableName();
+      }
+      if(mfl.getFile().getTable() != null && mfl.getFile().getTable().getDatabase() != null) {
+        dbName = mfl.getFile().getTable().getDatabase().getName();
       }
       mfl.setUpdate_time(System.currentTimeMillis());
       if (mfl.getVisit_status() != newsfl.getVisit_status()) {
@@ -2466,6 +2689,8 @@ public class ObjectStore implements RawStore, Configurable {
 
       pm.makePersistent(mfl);
       sfl = convertToSFileLocation(mfl);
+
+
       commited = commitTransaction();
     } finally {
       if (!commited) {
@@ -2478,10 +2703,23 @@ public class ObjectStore implements RawStore, Configurable {
     }
 
     if (changed) {
+      switch (newsfl.getVisit_status()) {
+      case MetaStoreConst.MFileLocationVisitStatus.ONLINE:
+        DMProfile.sflonlineR.incrementAndGet();
+        break;
+      case MetaStoreConst.MFileLocationVisitStatus.OFFLINE:
+        DMProfile.sflofflineR.incrementAndGet();
+        break;
+      case MetaStoreConst.MFileLocationVisitStatus.SUSPECT:
+        DMProfile.sflsuspectR.incrementAndGet();
+        break;
+      }
       // send the SFL state change message
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", newsfl.getFid());
       old_params.put("new_status", newsfl.getVisit_status());
+      old_params.put("db_name", dbName);
+      old_params.put("table_name", tableName);
       MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, pm, mfl, old_params));
     }
 
@@ -2778,7 +3016,7 @@ public class ObjectStore implements RawStore, Configurable {
     return mfl;
   }
 
-  private List<MFileLocation> getMFileLocations(long fid) {
+  private List<MFileLocation> getMFileLocations(long fid) throws MetaException {
     List<MFileLocation> mfl = new ArrayList<MFileLocation>();
     boolean commited = false;
 
@@ -2798,6 +3036,7 @@ public class ObjectStore implements RawStore, Configurable {
     } finally {
       if (!commited) {
         rollbackTransaction();
+        throw new MetaException("Rollbacked, please retry.");
       }
     }
     return mfl;
@@ -2953,8 +3192,12 @@ public class ObjectStore implements RawStore, Configurable {
     if (md == null) {
       return null;
     }
+    String ng_name = null;
+    if (md.getNg() != null) {
+      ng_name = md.getNg().getNode_group_name();
+    }
     return new Device(md.getDev_name(), md.getProp(), md.getNode() != null ? md.getNode().getNode_name() : null,
-        md.getStatus());
+        md.getStatus(), ng_name);
   }
 
   private SFile convertToSFile(MFile mf) throws MetaException {
@@ -3052,8 +3295,14 @@ public class ObjectStore implements RawStore, Configurable {
       return null;
     }
     MNode mn = this.getMNode(device.getNode_name());
+    MNodeGroup mng;
+    try {
+      mng = this.getMNodeGroup(device.getNg_name());
+    } catch (NoSuchObjectException e) {
+      mng = null;
+    }
 
-    return new MDevice(mn, device.getDevid(), device.getProp(), device.getStatus());
+    return new MDevice(mn, mng, device.getDevid(), device.getProp(), device.getStatus());
   }
 
   private MFile convertToMFile(SFile file) throws InvalidObjectException {
@@ -3076,6 +3325,10 @@ public class ObjectStore implements RawStore, Configurable {
         throw new InvalidObjectException("This file does not belong to any TABLE or table contains NONE file split keys, you should not set SplitValues!");
       }
       for (SplitValue sv : file.getValues()) {
+        // Bug-XXX: In XJ, we got Nullpointer Exception, so check here.
+        if (sv.getSplitKeyName() == null) {
+          throw new InvalidObjectException("Null SplitKeyName in SplitValue?!!");
+        }
         values.add(new MSplitValue(sv.getSplitKeyName().toLowerCase(), sv.getLevel(), sv.getValue(), sv.getVerison()));
         if (version == -1) {
           version = sv.getVerison();
@@ -3122,20 +3375,14 @@ public class ObjectStore implements RawStore, Configurable {
 
   private MTable convertToMTable(Table tbl) throws InvalidObjectException,
       MetaException {
-    LOG.info("*****************zqh*****************convertToMTable");
     if (tbl == null) {
       return null;
     }
-    LOG.info("*****************zqh*****************convertToMTable!=null");
     MDatabase mdb = null;
     MSchema mSchema = null;
     try {
-      LOG.info("*****************zqh*****************" + tbl.getDbName());
-      LOG.info("*****************zqh*****************" + tbl.getSchemaName());
       mdb = getMDatabase(tbl.getDbName());
-      LOG.info("*****************zqh*****************" + mdb.getName());
       mSchema = getMSchema(tbl.getSchemaName());
-      LOG.info("*****************zqh*****************" + mSchema.getSchemaName());
     } catch (NoSuchObjectException e) {
       LOG.error(StringUtils.stringifyException(e));
       throw new InvalidObjectException("Database " + tbl.getDbName()
@@ -3145,9 +3392,7 @@ public class ObjectStore implements RawStore, Configurable {
     // If the table has property EXTERNAL set, update table type
     // accordingly
     String tableType = tbl.getTableType();
-    LOG.info("*****************zqh*****************" + tableType);
     boolean isExternal = "TRUE".equals(tbl.getParameters().get("EXTERNAL"));
-    LOG.info("*****************zqh*****************" + isExternal);
     if (TableType.MANAGED_TABLE.toString().equals(tableType)) {
       if (isExternal) {
         tableType = TableType.EXTERNAL_TABLE.toString();
@@ -4621,11 +4866,12 @@ public class ObjectStore implements RawStore, Configurable {
 
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(newt.getDatabase()).toString()));
       ArrayList<MSGFactory.DDLMsg> msgs = new ArrayList<MSGFactory.DDLMsg>();     //先把消息存储起来，修改执行成功了再发
-      HashMap<String, Object> params = new HashMap<String, Object>();
+
 
       //alt table name
       if(!oldt.getTableName().toLowerCase().equals(newt.getTableName().toLowerCase()))
       {
+        HashMap<String, Object> params = new HashMap<String, Object>();
         params.put("table_name", newt.getTableName());
         params.put("old_table_name", oldt.getTableName());
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME,db_id,-1, pm, oldt,params));
@@ -4647,6 +4893,7 @@ public class ObjectStore implements RawStore, Configurable {
           ps.put("table_name", oldt.getTableName());
           LOG.info("---zy--in alterTable delCol,colname:"+omfs.getName());
           ps.put("column_name",omfs.getName());
+          ps.put("column_type", omfs.getType());
 //          MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL,db_id,-1, pm, oldt.getSd().getCD(),ps));
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL,db_id,-1, pm, newt.getSd().getCD(),ps));
         }
@@ -4668,6 +4915,7 @@ public class ObjectStore implements RawStore, Configurable {
           ps.put("table_name", oldt.getTableName());
           LOG.info("---zy--in alterTable addCol,colname:"+nmfs.getName());
           ps.put("column_name",nmfs.getName());
+          ps.put("column_type", nmfs.getType());
 //            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL,db_id,-1, pm, oldt.getSd().getCD(),ps));
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL,db_id,-1, pm, newt.getSd().getCD(),ps));
         }
@@ -4684,6 +4932,7 @@ public class ObjectStore implements RawStore, Configurable {
         newCols.removeAll(oldt.getSd().getCD().getCols());
         if(oldCols.size() == 1 && newCols.size() == 1 && !oldCols.get(0).getName().equals(newCols.get(0).getName()))    //说明只有一列是不同的,且是名字不同
         {
+          HashMap<String, Object> params = new HashMap<String, Object>();
           params.put("db_name", oldt.getDatabase().getName());
           params.put("table_name", oldt.getTableName());
           params.put("column_name",newCols.get(0).getName());
@@ -4693,6 +4942,7 @@ public class ObjectStore implements RawStore, Configurable {
         }
         else if(oldCols.size() == 1 && newCols.size() == 1 && !oldCols.get(0).getType().equals(newCols.get(0).getType()))         //修改了列类型
         {
+          HashMap<String, Object> params = new HashMap<String, Object>();
           params.put("db_name", oldt.getDatabase().getName());
           params.put("table_name", oldt.getTableName());
           params.put("column_name", oldCols.get(0).getName());
@@ -4705,20 +4955,189 @@ public class ObjectStore implements RawStore, Configurable {
       //alt table param
       if(!tableParamEquals(oldt.getParameters(), newt.getParameters()) )
       {
+        HashMap<String, Object> params = new HashMap<String, Object>();
         LOG.debug("---zy--in ObjectStore alterTable: alt table param");
         params.put("db_name", oldt.getDatabase().getName());
         params.put("table_name", oldt.getTableName());
-        params.put("tbl_param_keys", new ArrayList<String>().addAll(newt.getParameters().keySet()));
+        ArrayList<String>  ps = new ArrayList<String>();
+        ps.addAll(newt.getParameters().keySet());
+        params.put("tbl_param_keys", ps);
 
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
       }
-      //MSG_ALT_TALBE_PARTITIONING
-      if(!oldt.getPartitionKeys().equals(newt.getPartitionKeys()))      //要传什么参数呢．．
+      
+      //alter comment
       {
-//        params.put("old_table_name", oldt.getTableName());
+      	 List<MFieldSchema> oldCols = new ArrayList<MFieldSchema>();
+         oldCols.addAll( oldt.getSd().getCD().getCols());
+         List<MFieldSchema> newCols = new ArrayList<MFieldSchema>();
+         newCols.addAll( newt.getSd().getCD().getCols());
+
+         oldCols.removeAll(newCols);
+         for(MFieldSchema mf : oldCols)		//del col, delete busitype
+         {
+        	 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        	 {
+        		 if(mf.getComment() != null && mf.getComment().indexOf(bt) != -1)
+        		 {
+        			 HashMap<String, Object> params = new HashMap<String, Object>();
+        			 params.put("db_name", oldt.getDatabase().getName());
+               params.put("table_name", oldt.getTableName());
+        			 params.put("column_name", mf.getName());
+        			 params.put("action", "del");
+        			 params.put("comment", mf.getComment());
+        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+							 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, mf.getName()));
+        			 
+        		 }
+        	 }
+         }
+         oldCols.clear();
+         oldCols.addAll( oldt.getSd().getCD().getCols());
+         
+         newCols.removeAll(oldCols);
+         for(MFieldSchema mf : newCols)		//add col, insert busitype
+         {
+        	 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        	 {
+        		 if(mf.getComment() != null && mf.getComment().indexOf(bt) != -1)
+        		 {
+        			 HashMap<String, Object> params = new HashMap<String, Object>();
+        			 params.put("db_name", oldt.getDatabase().getName());
+               params.put("table_name", oldt.getTableName());
+        			 params.put("column_name", mf.getName());
+        			 params.put("action", "add");
+        			 params.put("comment", mf.getComment());
+        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+							 this.insertBusiTypeCol(new MBusiTypeColumn(bt, oldt, mf.getName()));
+							 try {
+									this.append_busi_type_datacenter(new BusiTypeDatacenter(bt, convertToDatabase(oldt.getDatabase())));
+								} catch (TException e) {
+									LOG.error(e,e);
+								}
+        		 }
+        	 }
+         }
+         newCols.clear();
+         newCols.addAll(newt.getSd().getCD().getCols());
+        
+         
+         oldCols.retainAll(newCols);			//留下的是两者的交集
+         newCols.retainAll(oldCols);
+         for(MFieldSchema omf : oldCols)
+         {
+        	 for(MFieldSchema nmf : newCols)
+        	 { 
+        		 if(omf.equals(nmf))
+        		 {
+        			 if(nmf.getComment() == null && omf.getComment() == null)
+        			 {
+        				 //nothing to do
+        			 }
+        			 else if(omf.getComment() == null)
+        			 {
+        				 for(String bt : MetaStoreUtils.BUSI_TYPES)			//insert busitype
+              	 {
+              		 if(nmf.getComment() != null && nmf.getComment().indexOf(bt) != -1)
+              		 {
+              			 HashMap<String, Object> params = new HashMap<String, Object>();
+              			 params.put("db_name", oldt.getDatabase().getName());
+                     params.put("table_name", oldt.getTableName());
+              			 params.put("column_name", nmf.getName());
+              			 params.put("action", "add");
+              			 params.put("comment", nmf.getComment());
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+              			 this.insertBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
+              			 try {
+ 											this.append_busi_type_datacenter(new BusiTypeDatacenter(bt, convertToDatabase(oldt.getDatabase())));
+ 										} catch (TException e) {
+ 											LOG.error(e,e);
+ 										}
+              		 }
+              	 }
+        			 }
+        			 else if(nmf.getComment() == null)			//del busitype
+        			 {
+        				 for(String bt : MetaStoreUtils.BUSI_TYPES)
+              	 {
+              		 if(nmf.getComment() != null && nmf.getComment().indexOf(bt) != -1)
+              		 {
+              			 HashMap<String, Object> params = new HashMap<String, Object>();
+              			 params.put("db_name", oldt.getDatabase().getName());
+                     params.put("table_name", oldt.getTableName());
+              			 params.put("column_name", nmf.getName());
+              			 params.put("action", "del");
+              			 params.put("comment", nmf.getComment());
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+										 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
+              			 
+              		 }
+              	 }
+        			 }
+        			 else if(!nmf.getComment().equals(omf.getComment()))
+        			 {
+        				 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        				 {
+        					 if(nmf.getComment().indexOf(bt) != -1){			//insert busitype
+        						 HashMap<String, Object> params = new HashMap<String, Object>();
+              			 params.put("db_name", oldt.getDatabase().getName());
+                     params.put("table_name", oldt.getTableName());
+              			 params.put("column_name", nmf.getName());
+              			 params.put("action", "add");
+              			 params.put("comment", nmf.getComment());
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+										 this.insertBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
+              			 try {
+											this.append_busi_type_datacenter(new BusiTypeDatacenter(bt, convertToDatabase(oldt.getDatabase())));
+										} catch (TException e) {
+											LOG.error(e,e);
+										}
+        					 }
+        					 if(omf.getComment().indexOf(bt) != -1){			//del busitype
+	    	        			 HashMap<String, Object> params = new HashMap<String, Object>();
+	    	        			 params.put("db_name", oldt.getDatabase().getName());
+	    	               params.put("table_name", oldt.getTableName());
+	    	        			 params.put("column_name", omf.getName());
+	    	        			 params.put("action", "del");
+	    	        			 params.put("comment", omf.getComment());
+	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
+	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
+											 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, omf.getName()));
+      	        	 
+        					 }
+        				 }
+        			 }
+        			 
+        		 }
+        	 }
+        	 
+         }
+      }
+    //MSG_ALT_TALBE_PARTITIONING
+      HashMap<String, Object> altPartitioningParams = new HashMap<String, Object>();
+      LOG.warn("---zy-- in alter table,old partition keys:"+oldt.getPartitionKeys()+",new partition keys"+newt.getPartitionKeys());
+      if(newt.getPartitionKeys().size() > oldt.getPartitionKeys().size())
+//      if(newt.getPartitionKeys().size() > 0)
+      {
+        altPartitioningParams.put("table_name", oldt.getTableName());
+        altPartitioningParams.put("db_name", oldt.getDatabase().getName());
+//        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,params));
+      }
+
+      //ALT_TABLE_SPLITKEYS
+      HashMap<String, Object> altSplitKeyParams = new HashMap<String, Object>();
+      LOG.warn("---zy-- in alter table,old split keys:"+oldt.getFileSplitKeys()+",new split keys"+newt.getFileSplitKeys());
+      if(newt.getFileSplitKeys().size() > 0)
+      {
+        altSplitKeyParams.put("table_name", oldt.getTableName());
+        altSplitKeyParams.put("db_name", oldt.getDatabase().getName());
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,params));
-        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,params));
       }
       //MSG_ALT_TALBE_DISTRIBUTE        似乎没有修改过..
 
@@ -4727,6 +5146,13 @@ public class ObjectStore implements RawStore, Configurable {
       oldt.setTableName(newt.getTableName().toLowerCase());
       oldt.setParameters(newt.getParameters());
       oldt.setOwner(newt.getOwner());
+      if(null != newt.getGroupDistribute()){
+        LOG.info("##############null != newt.getGroupDistribute()");
+        for(MNodeGroup mng :newt.getGroupDistribute()){
+          LOG.info("##############ZQH#############OBJECTSTORE" + mng.getNode_group_name());
+        }
+        oldt.setGroupDistribute(newt.getGroupDistribute());
+      }
 
       // Fully copy over the contents of the new SD into the old SD,
       // so we don't create an extra SD in the metastore db that has no references.
@@ -4753,6 +5179,11 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
       oldt.setPartitionKeys(newFS);
+      if(!altPartitioningParams.isEmpty())    //说明该事件被触发了
+      {
+        altPartitioningParams.put("version", cur_version);
+        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_PARTITIONING,db_id,-1, pm, oldt,altPartitioningParams));
+      }
       // !NOTE: append new file split keys to old file split key list with new version
       newFS.clear();
       cur_version = -1;
@@ -4760,8 +5191,8 @@ public class ObjectStore implements RawStore, Configurable {
         for (MFieldSchema mfs : oldt.getFileSplitKeys()) {
           if (mfs.getVersion() > cur_version) {
             cur_version = mfs.getVersion();
-            newFS.add(mfs);
           }
+          newFS.add(mfs);
         }
       }
       cur_version++;
@@ -4786,13 +5217,10 @@ public class ObjectStore implements RawStore, Configurable {
 //        }
 //      }
       oldt.setFileSplitKeys(newFS);
-      LOG.info("---zjw-- in alter filesplit size:"+oldt.getFileSplitKeys().size());
-      if(oldt.getFileSplitKeys().size() >0){
-        for(MFieldSchema fsFieldSchema : oldt.getFileSplitKeys()){
-          LOG.info("---zjw-- fs name"+fsFieldSchema.getName());
-          LOG.info("---zjw-- fs name"+fsFieldSchema.getType());
-          LOG.info("---zjw-- fs name"+fsFieldSchema.getComment());
-        }
+      if(!altSplitKeyParams.isEmpty())
+      {
+        altSplitKeyParams.put("version", cur_version);
+        msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_SPLITKEYS,db_id,-1, pm, oldt,altSplitKeyParams));
       }
       oldt.setTableType(newt.getTableType());
       oldt.setLastAccessTime(newt.getLastAccessTime());
@@ -4888,7 +5316,12 @@ public class ObjectStore implements RawStore, Configurable {
 
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(oldi.getOrigTable().getDatabase()).toString()));
       HashMap<String,Object> params = new HashMap<String,Object>();
-      params.put("param_name", new ArrayList<String>().addAll(oldi.getParameters().keySet()));
+      ArrayList<String>  ps = new ArrayList<String>();
+      ps.addAll(oldi.getParameters().keySet());
+      params.put("param_name", ps);
+      params.put("db_name", dbname);
+      params.put("table_name", baseTblName.toLowerCase());
+      params.put("index_name", name);
       if(success) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_INDEX_PARAM, db_id, -1, pm, oldi, params));
       }
@@ -5233,6 +5666,8 @@ public class ObjectStore implements RawStore, Configurable {
         long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(tmpOrigTable.getDatabase()).toString()));
         HashMap<String,Object> params = new HashMap<String,Object>();
         params.put("index_name", indexName);
+        params.put("db_name",dbName);
+        params.put("table_name", origTableName);
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_DEL_INDEX, db_id, -1, pm, index, params));
       }
     } finally {
@@ -5257,7 +5692,7 @@ public class ObjectStore implements RawStore, Configurable {
       }
 
       Query query = pm.newQuery(MIndex.class,
-        "origTable.tableName == t1 && origTable.database.name == t2 && indexName == t3");
+        "origTable.tableName == t1 && origTable.database.name == t2 && (indexName.toUpperCase() == t3 || indexName.toLowerCase() == t3)");
       query.declareParameters("java.lang.String t1, java.lang.String t2, java.lang.String t3");
       query.setUnique(true);
       midx = (MIndex) query.execute(originalTblName, dbName, indexName);
@@ -6446,6 +6881,126 @@ public MUser getMUser(String userName) {
         pm.makePersistentAll(persistentObjs);
       }
       committed = commitTransaction();
+
+      //add by zy for msg queue
+      if(committed)
+      {
+        for(Object obj : persistentObjs)
+        {
+          if(obj instanceof MGlobalPrivilege)
+          {
+            MGlobalPrivilege mgp = (MGlobalPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mgp.getGrantor());
+            params.put("grantor_type", mgp.getGrantorType());
+            params.put("principal_name", mgp.getPrincipalName());
+            params.put("principal_type", mgp.getPrincipalType());
+            params.put("privilege", mgp.getPrivilege());
+            params.put("create_time",mgp.getCreateTime());
+            params.put("grant_option",mgp.getGrantOption());
+
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_GLOBAL,-1l,-1l, pm, mgp,params));
+          }
+          else if(obj instanceof MDBPrivilege)
+          {
+            MDBPrivilege mdbp = (MDBPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mdbp.getGrantor());
+            params.put("grantor_type", mdbp.getGrantorType());
+            params.put("principal_name", mdbp.getPrincipalName());
+            params.put("principal_type", mdbp.getPrincipalType());
+            params.put("privilege", mdbp.getPrivilege());
+            params.put("create_time",mdbp.getCreateTime());
+            params.put("grant_option",mdbp.getGrantOption());
+            params.put("db_name", mdbp.getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mdbp.getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_DB,db_id,-1l, pm, mdbp.getDatabase(),params));
+          }
+
+          else if(obj instanceof MTablePrivilege)
+          {
+            MTablePrivilege mtp = (MTablePrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mtp.getGrantor());
+            params.put("grantor_type", mtp.getGrantorType());
+            params.put("principal_name", mtp.getPrincipalName());
+            params.put("principal_type", mtp.getPrincipalType());
+            params.put("privilege", mtp.getPrivilege());
+            params.put("create_time",mtp.getCreateTime());
+            params.put("grant_option",mtp.getGrantOption());
+            params.put("table_name", mtp.getTable().getTableName());
+            params.put("db_name", mtp.getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtp.getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_TABLE,db_id,-1l, pm, mtp.getTable(),params));
+          }
+          else if(obj instanceof MSchemaPrivilege)
+          {
+            MSchemaPrivilege msp = (MSchemaPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", msp.getGrantor());
+            params.put("grantor_type", msp.getGrantorType());
+            params.put("principal_name", msp.getPrincipalName());
+            params.put("principal_type", msp.getPrincipalType());
+            params.put("privilege", msp.getPrivilege());
+            params.put("create_time",msp.getCreateTime());
+            params.put("grant_option",msp.getGrantOption());
+            params.put("schema_name", msp.getSchema().getSchemaName());
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_SCHEMA,-1l,-1l, pm, msp.getSchema(),params));
+          }
+          else if(obj instanceof MPartitionPrivilege)
+          {
+            MPartitionPrivilege mpp = (MPartitionPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mpp.getGrantor());
+            params.put("grantor_type", mpp.getGrantorType());
+            params.put("principal_name", mpp.getPrincipalName());
+            params.put("principal_type", mpp.getPrincipalType());
+            params.put("privilege", mpp.getPrivilege());
+            params.put("create_time",mpp.getCreateTime());
+            params.put("grant_option",mpp.getGrantOption());
+            params.put("partition_name", mpp.getPartition().getPartitionName());
+            params.put("table_name", mpp.getPartition().getTable().getTableName());
+            params.put("db_name", mpp.getPartition().getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpp.getPartition().getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_PARTITION,db_id,-1l, pm, mpp.getPartition(),params));
+          }
+          else if(obj instanceof MPartitionColumnPrivilege)
+          {
+            MPartitionColumnPrivilege mpcp = (MPartitionColumnPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mpcp.getGrantor());
+            params.put("grantor_type", mpcp.getGrantorType());
+            params.put("principal_name", mpcp.getPrincipalName());
+            params.put("principal_type", mpcp.getPrincipalType());
+            params.put("privilege", mpcp.getPrivilege());
+            params.put("create_time",mpcp.getCreateTime());
+            params.put("grant_option",mpcp.getGrantOption());
+            params.put("column_name", mpcp.getColumnName());
+            params.put("partition_name", mpcp.getPartition().getPartitionName());
+            params.put("table_name", mpcp.getPartition().getTable().getTableName());
+            params.put("db_name", mpcp.getPartition().getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpcp.getPartition().getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_PARTITION_COLUMN,db_id,-1l, pm, mpcp.getPartition().getTable().getSd().getCD(),params));
+          }
+          else if(obj instanceof MTableColumnPrivilege)
+          {
+            MTableColumnPrivilege mtcp = (MTableColumnPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mtcp.getGrantor());
+            params.put("grantor_type", mtcp.getGrantorType());
+            params.put("principal_name", mtcp.getPrincipalName());
+            params.put("principal_type", mtcp.getPrincipalType());
+            params.put("privilege", mtcp.getPrivilege());
+            params.put("create_time",mtcp.getCreateTime());
+            params.put("grant_option",mtcp.getGrantOption());
+            params.put("column_name", mtcp.getColumnName());
+            params.put("table_name", mtcp.getTable().getTableName());
+            params.put("db_name", mtcp.getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtcp.getTable().getDatabase()).toString()));
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_GRANT_TABLE_COLUMN,db_id,-1l, pm, mtcp.getTable().getSd().getCD(),params));
+          }
+        }
+      }
     } finally {
       if (!committed) {
         rollbackTransaction();
@@ -6632,11 +7187,134 @@ public MUser getMUser(String userName) {
           }
         }
       }
-
+      List<MSGFactory.DDLMsg> msgs = new ArrayList<MSGFactory.DDLMsg>();
       if (persistentObjs.size() > 0) {
+        //add by zy for msg queue
+        for(Object obj : persistentObjs)
+        {
+          if(obj instanceof MGlobalPrivilege)
+          {
+            MGlobalPrivilege mgp = (MGlobalPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mgp.getGrantor());
+            params.put("grantor_type", mgp.getGrantorType());
+            params.put("principal_name", mgp.getPrincipalName());
+            params.put("principal_type", mgp.getPrincipalType());
+            params.put("privilege", mgp.getPrivilege());
+            params.put("create_time",mgp.getCreateTime());
+            params.put("grant_option",mgp.getGrantOption());
+
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_GLOBAL,-1l,-1l, pm, mgp,params));
+          }
+          else if(obj instanceof MDBPrivilege)
+          {
+            MDBPrivilege mdbp = (MDBPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mdbp.getGrantor());
+            params.put("grantor_type", mdbp.getGrantorType());
+            params.put("principal_name", mdbp.getPrincipalName());
+            params.put("principal_type", mdbp.getPrincipalType());
+            params.put("privilege", mdbp.getPrivilege());
+            params.put("create_time",mdbp.getCreateTime());
+            params.put("grant_option",mdbp.getGrantOption());
+            params.put("db_name", mdbp.getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mdbp.getDatabase()).toString()));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_DB,db_id,-1l, pm, mdbp.getDatabase(),params));
+          }
+
+          else if(obj instanceof MTablePrivilege)
+          {
+            MTablePrivilege mtp = (MTablePrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mtp.getGrantor());
+            params.put("grantor_type", mtp.getGrantorType());
+            params.put("principal_name", mtp.getPrincipalName());
+            params.put("principal_type", mtp.getPrincipalType());
+            params.put("privilege", mtp.getPrivilege());
+            params.put("create_time",mtp.getCreateTime());
+            params.put("grant_option",mtp.getGrantOption());
+            params.put("table_name", mtp.getTable().getTableName());
+            params.put("db_name", mtp.getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtp.getTable().getDatabase()).toString()));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE,db_id,-1l, pm, mtp.getTable(),params));
+          }
+          else if(obj instanceof MSchemaPrivilege)
+          {
+            MSchemaPrivilege msp = (MSchemaPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", msp.getGrantor());
+            params.put("grantor_type", msp.getGrantorType());
+            params.put("principal_name", msp.getPrincipalName());
+            params.put("principal_type", msp.getPrincipalType());
+            params.put("privilege", msp.getPrivilege());
+            params.put("create_time",msp.getCreateTime());
+            params.put("grant_option",msp.getGrantOption());
+            params.put("schema_name", msp.getSchema().getSchemaName());
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_SCHEMA,-1l,-1l, pm, msp.getSchema(),params));
+          }
+          else if(obj instanceof MPartitionPrivilege)
+          {
+            MPartitionPrivilege mpp = (MPartitionPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mpp.getGrantor());
+            params.put("grantor_type", mpp.getGrantorType());
+            params.put("principal_name", mpp.getPrincipalName());
+            params.put("principal_type", mpp.getPrincipalType());
+            params.put("privilege", mpp.getPrivilege());
+            params.put("create_time",mpp.getCreateTime());
+            params.put("grant_option",mpp.getGrantOption());
+            params.put("partition_name", mpp.getPartition().getPartitionName());
+            params.put("table_name", mpp.getPartition().getTable().getTableName());
+            params.put("db_name", mpp.getPartition().getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpp.getPartition().getTable().getDatabase()).toString()));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION,db_id,-1l, pm, mpp.getPartition(),params));
+          }
+          else if(obj instanceof MPartitionColumnPrivilege)
+          {
+            MPartitionColumnPrivilege mpcp = (MPartitionColumnPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mpcp.getGrantor());
+            params.put("grantor_type", mpcp.getGrantorType());
+            params.put("principal_name", mpcp.getPrincipalName());
+            params.put("principal_type", mpcp.getPrincipalType());
+            params.put("privilege", mpcp.getPrivilege());
+            params.put("create_time",mpcp.getCreateTime());
+            params.put("grant_option",mpcp.getGrantOption());
+            params.put("column_name", mpcp.getColumnName());
+            params.put("partition_name", mpcp.getPartition().getPartitionName());
+            params.put("table_name", mpcp.getPartition().getTable().getTableName());
+            params.put("db_name", mpcp.getPartition().getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mpcp.getPartition().getTable().getDatabase()).toString()));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_PARTITION_COLUMN,db_id,-1l, pm, mpcp.getPartition().getTable().getSd().getCD(),params));
+          }
+          else if(obj instanceof MTableColumnPrivilege)
+          {
+            MTableColumnPrivilege mtcp = (MTableColumnPrivilege)obj;
+            HashMap<String,Object> params = new HashMap<String,Object>();
+            params.put("grantor", mtcp.getGrantor());
+            params.put("grantor_type", mtcp.getGrantorType());
+            params.put("principal_name", mtcp.getPrincipalName());
+            params.put("principal_type", mtcp.getPrincipalType());
+            params.put("privilege", mtcp.getPrivilege());
+            params.put("create_time",mtcp.getCreateTime());
+            params.put("grant_option",mtcp.getGrantOption());
+            params.put("column_name", mtcp.getColumnName());
+            params.put("table_name", mtcp.getTable().getTableName());
+            params.put("db_name", mtcp.getTable().getDatabase().getName());
+            long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtcp.getTable().getDatabase()).toString()));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_REVOKE_TABLE_COLUMN,db_id,-1l, pm, mtcp.getTable().getSd().getCD(),params));
+          }
+        }
         pm.deletePersistentAll(persistentObjs);
       }
       committed = commitTransaction();
+
+      if(committed)
+      {
+        for(MSGFactory.DDLMsg msg : msgs) {
+          MetaMsgServer.sendMsg(msg);
+        }
+      }
     } finally {
       if (!committed) {
         rollbackTransaction();
@@ -8555,7 +9233,9 @@ public MUser getMUser(String userName) {
       }
       success = commitTransaction();
       if(success) {
-        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_DEL_NODE,-1,-1,pm,mnode,null));
+      	HashMap<String,Object> params = new HashMap<String,Object>();
+      	params.put("node_name", node_name);
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_DEL_NODE,-1,-1,pm,mnode,params));
       }
     } finally {
       if (!success) {
@@ -8574,11 +9254,20 @@ public MUser getMUser(String userName) {
 //      long db_id = -1;
       HashMap<String, Object> old_params = new HashMap<String, Object>();
 
+
       if (mf != null) {
+        pm.retrieveAll(mf);
+        String dbName = null,tableName = null;
+        if(mf.getTable() != null) {
+          tableName = mf.getTable().getTableName();
+        }
+        if(mf.getTable() != null && mf.getTable().getDatabase() != null) {
+          dbName = mf.getTable().getDatabase().getName();
+        }
 //        db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mf.getTable().getDatabase()).toString()));
         old_params.put("f_id", mf.getFid());
-//        old_params.put("db_name", mf.getTable().getDatabase().getName());
-//        old_params.put("table_name", mf.getTable().getTableName() );
+        old_params.put("db_name", dbName);
+        old_params.put("table_name", tableName );
         pm.deletePersistent(mf);
       }
       success = commitTransaction();
@@ -8589,6 +9278,8 @@ public MUser getMUser(String userName) {
     } finally {
       if (!success) {
         rollbackTransaction();
+      } else {
+        DMProfile.fdelR.incrementAndGet();
       }
     }
     return success;
@@ -8613,17 +9304,40 @@ public MUser getMUser(String userName) {
 
   public boolean delSFileLocation(String devid, String location) throws MetaException {
     boolean success = false;
+    MFileLocation mfl = null;
+    long fid = 0;
+    String db_name = null, table_name = null;
+
     try {
       openTransaction();
-      MFileLocation mfl = getMFileLocation(devid, location);
+      mfl = getMFileLocation(devid, location);
       if (mfl != null) {
+        fid = mfl.getFile().getFid();
+        if (mfl.getFile().getTable() != null &&
+            mfl.getFile().getTable().getDatabase() != null) {
+          db_name = mfl.getFile().getTable().getDatabase().getName();
+          table_name = mfl.getFile().getTable().getTableName();
+        }
         pm.deletePersistent(mfl);
       }
       success = commitTransaction();
     } finally {
       if (!success) {
         rollbackTransaction();
+      } else {
+        DMProfile.sfldelR.incrementAndGet();
       }
+    }
+    if (mfl != null && success) {
+      // send the sfile rep change message
+      HashMap<String, Object> old_params = new HashMap<String, Object>();
+      old_params.put("f_id", fid);
+      old_params.put("devid", devid);
+      old_params.put("location", location);
+      old_params.put("db_name", db_name);
+      old_params.put("table_name", table_name);
+      old_params.put("op", "del");
+      MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, mfl.getFile(), old_params));
     }
     return success;
   }
@@ -8815,6 +9529,16 @@ public MUser getMUser(String userName) {
       MDirectDDL mdd = new MDirectDDL(dwNum,sql,now,now);
       pm.makePersistent(mdd);
       success = commitTransaction();
+      if(success){
+        long event_id = 0;
+        if(mdd.getDwNum() == 1) {
+          event_id = MSGType.MSG_DDL_DIRECT_DW1;
+        }
+        if(mdd.getDwNum() == 2) {
+          event_id = MSGType.MSG_DDL_DIRECT_DW2;
+        }
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(event_id, -1l, -1l, pm, mdd, null));
+      }
     } finally {
       if (!success) {
         rollbackTransaction();
@@ -8981,16 +9705,29 @@ public MUser getMUser(String userName) {
         LOG.warn("No database:"+busiTypeDatacenter.getDb().getName());
       }
       MBusiTypeDatacenter mtdc = null;
-      if(mdb !=null){
-        mtdc = new MBusiTypeDatacenter(busiTypeDatacenter.getBusiType(), mdb);
-        pm.makePersistent(mtdc);
-      }else{
-        mtdc = new MBusiTypeDatacenter(busiTypeDatacenter.getBusiType(),
-            convertToMDatabase(busiTypeDatacenter.getDb()));
-        pm.makePersistent(mtdc);
+      Query query = pm.newQuery(MBusiTypeDatacenter.class, "db.name == dbName && busiType == bt ");
+      query.declareParameters("java.lang.String dbName, java.lang.String bt");
+//      LOG.debug("---zy-- busitype:"+busiTypeDatacenter.getBusiType());
+    	Collection cols = (Collection)query.execute(busiTypeDatacenter.getDb().getName(), busiTypeDatacenter.getBusiType());
+      Iterator iter = cols.iterator();
+      if (iter.hasNext()) {
+      	MBusiTypeDatacenter m = (MBusiTypeDatacenter)iter.next();
+        LOG.debug("---zy-- BusiTypeDatacenter busitype:" + m.getBusiType() + " dbname: "+
+            m.getDb().getName() + " exists ."+cols.size());
+      }
+      else
+      {
+	      if(mdb !=null){
+	        mtdc = new MBusiTypeDatacenter(busiTypeDatacenter.getBusiType(), mdb);
+	        pm.makePersistent(mtdc);
+	      }else{
+	        mtdc = new MBusiTypeDatacenter(busiTypeDatacenter.getBusiType(),
+	            convertToMDatabase(busiTypeDatacenter.getDb()));
+	        pm.makePersistent(mtdc);
+	      }
       }
       success = commitTransaction();
-    } finally {
+    }finally {
       if (!success) {
         rollbackTransaction();
       }
@@ -9324,7 +10061,6 @@ public MUser getMUser(String userName) {
 
       commited = commitTransaction();
 
-
       long db_id = -1;
       if(commited) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_SCHEMA,db_id,-1, pm, mSchema,null));
@@ -9436,6 +10172,13 @@ public MUser getMUser(String userName) {
         params.put("schema_name", mSchema.getSchemaName());
         params.put("old_schema_name", schemaName);
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_NAME,db_id,-1, pm, oldSchema,params));
+        for(MTable oldt : mtbls)
+        {
+        	HashMap<String,Object> p = new HashMap<String,Object>();
+        	p.put("table_name", mSchema.getSchemaName().toLowerCase());
+          p.put("old_table_name", oldt.getTableName());
+        	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME, db_id, -1, pm, oldt, p));
+        }
       }
       //del col   可以删除多个列,删除多个时,发送多次消息
       if(oldSchema.getSd().getCD().getCols().size() > mSchema.getSd().getCD().getCols().size())
@@ -9452,6 +10195,15 @@ public MUser getMUser(String userName) {
           ps.put("schema_name", schemaName);
           ps.put("column_name",omfs.getName());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_DEL_COL,db_id,-1, pm, mSchema.getSd().getCD(),ps));
+          for(MTable oldt : mtbls)
+          {
+          	HashMap<String,Object> p = new HashMap<String,Object>();
+          	p.put("db_name", oldt.getDatabase().getName());
+            p.put("table_name", oldt.getTableName());
+            p.put("column_name",omfs.getName());
+            p.put("column_type", omfs.getType());
+          	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL, db_id, -1, pm, oldt, p));
+          }
         }
       }
       //add col
@@ -9468,6 +10220,15 @@ public MUser getMUser(String userName) {
           ps.put("schema_name", schemaName);
           ps.put("column_name",nmfs.getName());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_ADD_COL,db_id,-1, pm, mSchema.getSd().getCD(),ps));
+          for(MTable oldt : mtbls)
+          {
+          	HashMap<String,Object> p = new HashMap<String,Object>();
+          	p.put("db_name", oldt.getDatabase().getName());
+            p.put("table_name", oldt.getTableName());
+            p.put("column_name",nmfs.getName());
+            p.put("column_type", nmfs.getType());
+          	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL, db_id, -1, pm, oldt, p));
+          }
         }
       }
       //修改列名，列类型  一次只能修改一个
@@ -9486,6 +10247,15 @@ public MUser getMUser(String userName) {
           params.put("column_name",newCols.get(0).getName());
           params.put("old_column_name", oldCols.get(0).getName());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_ALT_COL_NAME,db_id,-1, pm, mSchema.getSd().getCD(),params));
+          for(MTable oldt : mtbls)
+          {
+          	HashMap<String,Object> p = new HashMap<String,Object>();
+          	p.put("db_name", oldt.getDatabase().getName());
+            p.put("table_name", oldt.getTableName());
+            p.put("column_name",newCols.get(0).getName());
+            p.put("old_column_name", oldCols.get(0).getName());
+          	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ALT_COL_NAME, db_id, -1, pm, oldt, p));
+          }
         }
         else if(oldCols.size() == 1 && newCols.size() == 1 && !oldCols.get(0).getType().equals(newCols.get(0).getType()))         //修改了列类型
         {
@@ -9494,14 +10264,36 @@ public MUser getMUser(String userName) {
           params.put("column_type",newCols.get(0).getType());
           params.put("old_column_type", oldCols.get(0).getType());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_ALT_COL_TYPE,db_id,-1, pm, mSchema.getSd().getCD(),params));
+          for(MTable oldt : mtbls)
+          {
+          	HashMap<String,Object> p = new HashMap<String,Object>();
+          	p.put("db_name", oldt.getDatabase().getName());
+            p.put("table_name", oldt.getTableName());
+            p.put("column_name",oldCols.get(0).getName());
+            p.put("column_type",newCols.get(0).getType());
+            p.put("old_column_type", oldCols.get(0).getType());
+          	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ALT_COL_TYPE, db_id, -1, pm, oldt, p));
+          }
         }
       }
       //alt schema param    不知道判断schema的参数有没有和判断table有不一样的地方
       if(!tableParamEquals(oldSchema.getParameters(), mSchema.getParameters()) )
       {
         params.put("schema_name", schemaName);
-        params.put("tbl_param_keys", new ArrayList<String>().addAll(mSchema.getParameters().keySet()));
+        ArrayList<String>  ps = new ArrayList<String>();
+        ps.addAll(mSchema.getParameters().keySet());
+        params.put("tbl_param_keys",ps);
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_PARAM,db_id,-1, pm, oldSchema,params));
+        for(MTable oldt : mtbls)
+        {
+        	HashMap<String,Object> p = new HashMap<String,Object>();
+        	p.put("db_name", oldt.getDatabase().getName());
+          p.put("table_name", oldt.getTableName());
+          ArrayList<String>  ls = new ArrayList<String>();
+          ls.addAll(mSchema.getParameters().keySet());
+          params.put("tbl_param_keys", ps);
+        	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM, db_id, -1, pm, oldt, p));
+        }
       }
 
       oldSchema.setSchemaName(mSchema.getSchemaName().toLowerCase());
@@ -9730,7 +10522,6 @@ public MUser getMUser(String userName) {
     boolean success = false;
     boolean commited = false;
 
-    LOG.info("---zjw--in addNodeGroup");
     try {
       openTransaction();
       MNodeGroup mng = convertToMNodeGroup(ng);
@@ -9740,6 +10531,49 @@ public MUser getMUser(String userName) {
       commited = commitTransaction();
       if(commited) {
         MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODEGROUP,-1,-1,pm,mng,null));
+      }
+      success = true;
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    return success;
+  }
+
+  @Override
+  public boolean alterNodeGroup(NodeGroup ng) throws InvalidObjectException, MetaException {
+
+    boolean success = false;
+    boolean commited = false;
+
+    try {
+      openTransaction();
+      MNodeGroup mng;
+      try {
+        mng = this.getMNodeGroup(ng.getNode_group_name());
+      } catch (NoSuchObjectException e) {
+        throw new MetaException("There in no Nodegroup named " + ng.getNode_group_name());
+      }
+      Set<MNode> mNode = new HashSet<MNode>();
+      for(Node node : ng.getNodes()){
+        MNode mnode = getMNode(node.getNode_name());
+        mNode.add(mnode);
+      }
+      mng.setNodes(mNode);
+      pm.makePersistent(mng);
+//      pm.makePersistentAll(mng.getNodes());
+      commited = commitTransaction();
+
+      HashMap<String,Object> params = new HashMap<String,Object>();
+      String r = "";
+      for (MNode mn : mng.getNodes()) {
+        r += mn.getNode_name() + ",";
+      }
+      params.put("nodes", r);
+      params.put("nodegroup_name", mng.getNode_group_name());
+      if(commited) {
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_ALTER_NODEGROUP,-1,-1,pm,mng,params));
       }
       success = true;
     } finally {
@@ -9915,10 +10749,10 @@ public MUser getMUser(String userName) {
     if(nodegroupName == null ) {
       return null;
     }
-    LOG.info("getMnodeGroup groupName:["+nodegroupName+"]");
+    LOG.debug("getMnodeGroup groupName:["+nodegroupName+"]");
     try {
       openTransaction();
-      nodegroupName = nodegroupName.toLowerCase().trim();
+      nodegroupName = nodegroupName.trim();//.toLowerCase()
       Query query = pm.newQuery(MNodeGroup.class, "node_group_name == nodegroupName");
       query.declareParameters("java.lang.String nodegroupName");
       query.setUnique(true);
@@ -9931,7 +10765,7 @@ public MUser getMUser(String userName) {
       }
     }
     if (mng == null) {
-      throw new NoSuchObjectException("There is no schema named " + nodegroupName);
+      throw new NoSuchObjectException("There is no nodegroup named " + nodegroupName);
     }
     return mng;
   }
@@ -10015,10 +10849,10 @@ public MUser getMUser(String userName) {
   private MNodeGroup convertToMNodeGroup(NodeGroup ng) {
     if(ng.getNodes() != null && !ng.getNodes().isEmpty()){
       for(Node node : ng.getNodes()){
-        LOG.info("---zjw--" + node.getNode_name());
+        LOG.debug("---zjw--" + node.getNode_name());
       }
     }else{
-      LOG.info("---zjw--nodes is null");
+      LOG.debug("---zjw--nodes is null");
     }
 
     MNodeGroup mng = new MNodeGroup(ng.getNode_group_name(),
@@ -10457,6 +11291,75 @@ public MUser getMUser(String userName) {
       NoSuchObjectException {
     // TODO Auto-generated method stub
     return false;
+
+  }
+
+  public class MsgHandler
+  {
+    public void refresh(MSGFactory.DDLMsg msg)
+    {
+      int eventId = (int) msg.getEvent_id();
+      switch(eventId)
+      {
+        case MSGType.MSG_NEW_TALBE:
+          String d1 = (String) msg.getMsg_data().get("db_name");
+          String t1 = (String)msg.getMsg_data().get("table_name");
+          getMTable(d1,t1);
+          break;
+        //所有修改表和列的事件，都做同一处理，都是把整个表的缓存更新
+        case MSGType.MSG_ALT_TALBE_NAME:
+        case MSGType.MSG_ALT_TALBE_DISTRIBUTE:
+        case MSGType.MSG_ALT_TALBE_PARTITIONING:
+        case MSGType.MSG_ALT_TABLE_SPLITKEYS:
+        case MSGType.MSG_ALT_TALBE_DEL_COL:
+        case MSGType.MSG_ALT_TALBE_ADD_COL:
+        case MSGType.MSG_ALT_TALBE_ALT_COL_NAME:
+        case MSGType.MSG_ALT_TALBE_ALT_COL_TYPE:
+        case MSGType.MSG_ALT_TABLE_PARAM:
+          String dbName = (String) msg.getMsg_data().get("db_name");
+          String tableName = (String)msg.getMsg_data().get("table_name");
+          MTable mt = getMTable(dbName, tableName);
+          //javax.jdo.JDOUserException: Object of type "org.apache.hadoop.hive.metastore.model.MTable"
+          //is detached. Detached objects cannot be used with this operation.
+          //evict，refresh都报这个错
+//          pm.evict(mt);
+//          pm.refresh(mt);
+//          Object obj = pm.getObjectById(msg.getObject_id() );
+//          pm.refresh(obj);
+//          mt = getMTable(dbName, tableName);
+
+
+          break;
+
+        //删除表
+        case MSGType.MSG_DROP_TABLE:
+          String d = (String) msg.getMsg_data().get("db_name");
+          String t = (String)msg.getMsg_data().get("table_name");
+          pm.evict(getMTable(d,t));
+          break;
+
+        case MSGType.MSG_ADD_PARTITION_FILE:
+        case MSGType.MSG_DEL_PARTITION_FILE:
+          break;
+        case MSGType.MSG_ALT_PARTITION_FILE:
+          //未实现
+          break;
+        case MSGType.MSG_REP_FILE_CHANGE:
+        case MSGType.MSG_STA_FILE_CHANGE:
+        case MSGType.MSG_REP_FILE_ONOFF:
+        case MSGType.MSG_FILE_USER_SET_REP_CHANGE:
+
+          break;
+        case MSGType.MSG_NEW_PARTITION_INDEX_FILE:
+        case MSGType.MSG_ALT_PARTITION_INDEX_FILE:
+        case MSGType.MSG_DEL_PARTITION_INDEX_FILE:
+          //未实现
+          break;
+
+
+      }
+
+    }
   }
 
 }

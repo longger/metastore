@@ -383,7 +383,6 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
    */
   public void alter_table(String dbname, String tbl_name, Table new_tbl)
       throws InvalidOperationException, MetaException, TException {
-    LOG.info("*****************zqh**************** before alter_table");
     client.alter_table(dbname, tbl_name, new_tbl);
   }
 
@@ -1785,18 +1784,7 @@ public boolean authentication(String user_name, String passwd)
   // ignore non exist files.
   public List<SFile> get_files_by_ids(List<Long> fids) throws FileOperationException,
       MetaException, TException {
-    List<SFile> lsf = new ArrayList<SFile>();
-    if (fids.size() > 0) {
-      for (Long id : fids) {
-        // FIXME: ignore nonexist files.
-        try {
-          lsf.add(client.get_file_by_id(id));
-        } catch (FileOperationException e) {
-        }
-      }
-    }
-
-    return lsf;
+    return client.get_files_by_ids(fids);
   }
 
   @Override
@@ -2221,6 +2209,12 @@ public boolean authentication(String user_name, String passwd)
   }
 
   @Override
+  public boolean alterNodeGroup(NodeGroup ng) throws AlreadyExistsException, MetaException,
+      TException {
+    return client.alterNodeGroup(ng);
+  }
+
+  @Override
   public boolean modifyNodeGroup(String schemaName, NodeGroup ng) throws MetaException, TException {
     return client.modifyNodeGroup(schemaName, ng);
   }
@@ -2426,5 +2420,50 @@ public boolean authentication(String user_name, String passwd)
   @Override
   public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException {
     client.set_file_repnr(fid, repnr);
+  }
+
+  @Override
+  public boolean set_loadstatus_bad(long fid) throws MetaException, TException {
+    return client.set_loadstatus_bad(fid);
+  }
+
+  @Override
+  public long getMaxFid() throws MetaException, TException {
+    return client.getMaxFid();
+  }
+
+  @Override
+  public boolean del_filelocation(String devid, String location) throws MetaException, TException {
+    SFileLocation sfl = new SFileLocation();
+    assert devid != null;
+    assert location != null;
+
+    sfl.setDevid(devid);
+    sfl.setLocation(location);
+    return client.del_filelocation(sfl);
+  }
+
+  @Override
+  public boolean offlineDevicePhysically(String devid) throws MetaException, TException {
+    assert devid != null;
+    return client.offlineDevicePhysically(devid);
+  }
+
+  @Override
+  public boolean flSelectorWatch(String table, int op) throws MetaException, TException {
+    assert table != null;
+    return client.flSelectorWatch(table, op);
+  }
+
+  @Override
+  public List<String> listDevsByNode(String nodeName) throws MetaException, TException {
+    assert nodeName != null;
+    return client.listDevsByNode(nodeName);
+  }
+
+  @Override
+  public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException {
+    assert devids != null;
+    return client.listFilesByDevs(devids);
   }
 }
