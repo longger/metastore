@@ -65,7 +65,7 @@ public class SFileImage implements Serializable{
 
 	public static String generateSflkey(String location, String devid) {
 		String s = location + "_" + devid;
-		return s.hashCode() + "";
+		return MurmurHash.hash64(s)+"";
 	}
 
 	public long getFid() {

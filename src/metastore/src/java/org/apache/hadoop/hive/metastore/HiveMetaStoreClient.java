@@ -1784,6 +1784,7 @@ public boolean authentication(String user_name, String passwd)
   // ignore non exist files.
   public List<SFile> get_files_by_ids(List<Long> fids) throws FileOperationException,
       MetaException, TException {
+    assert fids != null;
     return client.get_files_by_ids(fids);
   }
 

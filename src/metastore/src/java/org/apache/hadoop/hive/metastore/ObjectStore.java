@@ -1142,6 +1142,25 @@ public class ObjectStore implements RawStore, Configurable {
     }
   }
 
+  public long countFiles() throws MetaException {
+    boolean commited = false;
+    Long fnr = 0L;
+
+    try {
+      openTransaction();
+      Query q0 = pm.newQuery(MFile.class);
+      q0.setResult("count(fid)");
+      fnr = (Long)q0.execute();
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+
+    return fnr;
+  }
+
   public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering,
       long from, long to) throws MetaException {
     long node_nr = countNode();
@@ -1214,17 +1233,22 @@ public class ObjectStore implements RawStore, Configurable {
           lingering.add(s);
         }
         if (m.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-          int offnr = 0, onnr = 0;
+          int offnr = 0, onnr = 0, suspnr = 0;
 
           for (SFileLocation fl : l) {
             if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
               onnr++;
             } else if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
               offnr++;
+            } else if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
+              suspnr++;
             }
           }
-          if ((m.getRep_nr() <= onnr && offnr > 0) ||
-              (onnr + offnr >= node_nr && offnr > 0)) {
+          // NOTE: logic is ->
+          // if online nr >= requested nr, we try to remove any offline/suspect SFLs,
+          // otherwise, if online + offline + suspect >= node_nr, try to remove offline SFLs
+          if ((m.getRep_nr() <= onnr && (offnr > 0 || suspnr > 0)) ||
+              (onnr + offnr + suspnr >= node_nr && offnr > 0)) {
             try {
               SFile s = convertToSFile(m);
               s.setLocations(l);
@@ -1751,14 +1775,14 @@ public class ObjectStore implements RawStore, Configurable {
       mfloc = convertToMFileLocation(location);
       if (mfloc != null) {
         pm.makePersistent(mfloc);
-      }
-//      dbName = mfloc.getFile().getTable().getDatabase().getName();
-//      tableName = mfloc.getFile().getTable().getTableName();
-      if(mfloc.getFile().getTable() != null) {
-        tableName = mfloc.getFile().getTable().getTableName();
-      }
-      if(mfloc.getFile().getTable() != null && mfloc.getFile().getTable().getDatabase() != null) {
-        dbName = mfloc.getFile().getTable().getDatabase().getName();
+        if (mfloc.getFile().getTable() != null) {
+          tableName = mfloc.getFile().getTable().getTableName();
+        }
+        if (mfloc.getFile().getTable() != null && mfloc.getFile().getTable().getDatabase() != null) {
+          dbName = mfloc.getFile().getTable().getDatabase().getName();
+        }
+      } else {
+        throw new InvalidObjectException("FID" + location.getFid() + " create Loc " + location.getLocation() + " failed.");
       }
       commited = commitTransaction();
     } finally {
@@ -2543,10 +2567,24 @@ public class ObjectStore implements RawStore, Configurable {
           for (int i = 0; i < mfl.size(); i++) {
             MFileLocation x = mfl.get(i);
 
-            if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE &&
+                (x.getDev().getProp() == MetaStoreConst.MDeviceProp.ALONE ||
+                x.getDev().getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE)) {
               selected = true;
               idx = i;
               break;
+            }
+          }
+          if (!selected) {
+            // ok, try to select shared device
+            for (int i = 0; i < mfl.size(); i++) {
+              MFileLocation x = mfl.get(i);
+
+              if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+                selected = true;
+                idx = i;
+                break;
+              }
             }
           }
           if (selected) {
@@ -10174,10 +10212,10 @@ public MUser getMUser(String userName) {
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_NAME,db_id,-1, pm, oldSchema,params));
         for(MTable oldt : mtbls)
         {
-        	HashMap<String,Object> p = new HashMap<String,Object>();
-        	p.put("table_name", mSchema.getSchemaName().toLowerCase());
+          HashMap<String,Object> p = new HashMap<String,Object>();
+          p.put("table_name", mSchema.getSchemaName().toLowerCase());
           p.put("old_table_name", oldt.getTableName());
-        	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME, db_id, -1, pm, oldt, p));
+          msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME, db_id, -1, pm, oldt, p));
         }
       }
       //del col   可以删除多个列,删除多个时,发送多次消息
@@ -10197,12 +10235,12 @@ public MUser getMUser(String userName) {
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_DEL_COL,db_id,-1, pm, mSchema.getSd().getCD(),ps));
           for(MTable oldt : mtbls)
           {
-          	HashMap<String,Object> p = new HashMap<String,Object>();
-          	p.put("db_name", oldt.getDatabase().getName());
+            HashMap<String,Object> p = new HashMap<String,Object>();
+            p.put("db_name", oldt.getDatabase().getName());
             p.put("table_name", oldt.getTableName());
             p.put("column_name",omfs.getName());
             p.put("column_type", omfs.getType());
-          	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL, db_id, -1, pm, oldt, p));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_DEL_COL, db_id, -1, pm, oldt, p));
           }
         }
       }
@@ -10222,12 +10260,12 @@ public MUser getMUser(String userName) {
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_ADD_COL,db_id,-1, pm, mSchema.getSd().getCD(),ps));
           for(MTable oldt : mtbls)
           {
-          	HashMap<String,Object> p = new HashMap<String,Object>();
-          	p.put("db_name", oldt.getDatabase().getName());
+            HashMap<String,Object> p = new HashMap<String,Object>();
+            p.put("db_name", oldt.getDatabase().getName());
             p.put("table_name", oldt.getTableName());
             p.put("column_name",nmfs.getName());
             p.put("column_type", nmfs.getType());
-          	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL, db_id, -1, pm, oldt, p));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ADD_COL, db_id, -1, pm, oldt, p));
           }
         }
       }
@@ -10249,12 +10287,12 @@ public MUser getMUser(String userName) {
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_ALT_COL_NAME,db_id,-1, pm, mSchema.getSd().getCD(),params));
           for(MTable oldt : mtbls)
           {
-          	HashMap<String,Object> p = new HashMap<String,Object>();
-          	p.put("db_name", oldt.getDatabase().getName());
+            HashMap<String,Object> p = new HashMap<String,Object>();
+            p.put("db_name", oldt.getDatabase().getName());
             p.put("table_name", oldt.getTableName());
             p.put("column_name",newCols.get(0).getName());
             p.put("old_column_name", oldCols.get(0).getName());
-          	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ALT_COL_NAME, db_id, -1, pm, oldt, p));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ALT_COL_NAME, db_id, -1, pm, oldt, p));
           }
         }
         else if(oldCols.size() == 1 && newCols.size() == 1 && !oldCols.get(0).getType().equals(newCols.get(0).getType()))         //修改了列类型
@@ -10266,13 +10304,13 @@ public MUser getMUser(String userName) {
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_ALT_COL_TYPE,db_id,-1, pm, mSchema.getSd().getCD(),params));
           for(MTable oldt : mtbls)
           {
-          	HashMap<String,Object> p = new HashMap<String,Object>();
-          	p.put("db_name", oldt.getDatabase().getName());
+            HashMap<String,Object> p = new HashMap<String,Object>();
+            p.put("db_name", oldt.getDatabase().getName());
             p.put("table_name", oldt.getTableName());
             p.put("column_name",oldCols.get(0).getName());
             p.put("column_type",newCols.get(0).getType());
             p.put("old_column_type", oldCols.get(0).getType());
-          	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ALT_COL_TYPE, db_id, -1, pm, oldt, p));
+            msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_ALT_COL_TYPE, db_id, -1, pm, oldt, p));
           }
         }
       }
@@ -10286,13 +10324,13 @@ public MUser getMUser(String userName) {
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_MODIFY_SCHEMA_PARAM,db_id,-1, pm, oldSchema,params));
         for(MTable oldt : mtbls)
         {
-        	HashMap<String,Object> p = new HashMap<String,Object>();
-        	p.put("db_name", oldt.getDatabase().getName());
+          HashMap<String,Object> p = new HashMap<String,Object>();
+          p.put("db_name", oldt.getDatabase().getName());
           p.put("table_name", oldt.getTableName());
           ArrayList<String>  ls = new ArrayList<String>();
           ls.addAll(mSchema.getParameters().keySet());
           params.put("tbl_param_keys", ps);
-        	msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM, db_id, -1, pm, oldt, p));
+          msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM, db_id, -1, pm, oldt, p));
         }
       }
 

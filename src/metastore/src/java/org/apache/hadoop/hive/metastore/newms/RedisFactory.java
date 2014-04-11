@@ -1,8 +1,10 @@
 package org.apache.hadoop.hive.metastore.newms;
 
 
-import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisInstance;
+import org.apache.hadoop.hive.conf.HiveConf;
+//import org.apache.hadoop.hive.conf.HiveConf.RedisMode;
 
+import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
@@ -10,14 +12,13 @@ import redis.clients.jedis.JedisSentinelPool;
 
 
 public class RedisFactory {
-	private static NewMSConf conf;
+	private static HiveConf conf = new HiveConf();
 	private static JedisSentinelPool jsp = null;
 	private static JedisPool jp = null;
-	private static RedisInstance ri = null;
+	private static HostAndPort ri = null;
 	private final JedisPoolConfig config;
 
-	public RedisFactory(NewMSConf conf) {
-		RedisFactory.conf = conf;
+	public RedisFactory(){
 		config = new JedisPoolConfig();
 		config.setBlockWhenExhausted(false);
 		config.setMaxTotal(2000);
@@ -42,23 +43,25 @@ public class RedisFactory {
 	public synchronized Jedis getDefaultInstance() {
 		switch (conf.getRedisMode()) {
 		case STANDALONE:
-
+		{
 			if (ri == null) {
-				ri = conf.getRedisInstance();
+				ri = conf.getRedisHP();
 				if (ri != null) {
-          jp = new JedisPool(config, ri.hostname, ri.port);
+          jp = new JedisPool(config, ri.getHost(), ri.getPort());
         }
 			}
 			if (jp != null) {
         return jp.getResource();
       }
+			break;
+		}
 		case SENTINEL:
 		{
 			Jedis r;
 			if (jsp != null) {
         r = jsp.getResource();
       } else {
-				jsp = new JedisSentinelPool("mymaster", conf.getSentinels(), config);
+				jsp = new JedisSentinelPool("mymaster", conf.getSentinel(), config);
 				r = jsp.getResource();
 			}
 			return r;

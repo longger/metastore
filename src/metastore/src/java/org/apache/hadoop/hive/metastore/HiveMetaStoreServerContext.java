@@ -6,6 +6,7 @@ import org.apache.thrift.server.ServerContext;
 
 public class HiveMetaStoreServerContext implements ServerContext {
   private String userName;
+  private String password;
   private boolean isAuthenticated = false;
   private final long sessionId;
 
@@ -13,7 +14,12 @@ public class HiveMetaStoreServerContext implements ServerContext {
     Random rand = new Random(System.currentTimeMillis());
     sessionId = rand.nextLong();
   }
-
+  public String getPassword(){
+    return this.password;
+  }
+  public void setPassword(String password){
+    this.password = password;
+  }
   public String getUserName() {
     return userName;
   }
