@@ -62,7 +62,9 @@ import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
 import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
 import org.apache.hadoop.hive.metastore.model.MUser;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.metastore.msg.MSGFactory;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
+import org.apache.hadoop.hive.metastore.msg.MetaMsgServer;
 import org.apache.thrift.TException;
 
 import redis.clients.jedis.exceptions.JedisConnectionException;
@@ -289,21 +291,44 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public boolean updateNode(Node node) throws MetaException {
+		boolean changed = false;
 	  try {
       Node n = (Node) cs.readObject(ObjectType.NODE,node.getNode_name());
-      if(n==null){
-        throw new Exception("Node" + node.getNode_name() + "is not in redis.");
+      if(n == null){
+        return false;
       }else{
-      	cs.removeObject(ObjectType.NODE, node.getNode_name());
+      	if (n.getStatus() != node.getStatus()) {
+          changed = true;
+        }
         n.setStatus(node.getStatus());
         n.setIps(node.getIps());
         cs.writeObject(ObjectType.NODE, n.getNode_name(), n);
+        
+        //不抛异常就说明更新操作成功了，可以发消息了
+        if (changed) {
+          HashMap<String, Object> old_params = new HashMap<String, Object>();
+          long event = 0;
+
+          old_params.put("node_name", node.getNode_name());
+          old_params.put("status", node.getStatus());
+          if (node.getStatus() == MetaStoreConst.MNodeStatus.SUSPECT ||
+              node.getStatus() == MetaStoreConst.MNodeStatus.OFFLINE) {
+            event = MSGType.MSG_FAIL_NODE;
+          } else if (node.getStatus() == MetaStoreConst.MNodeStatus.ONLINE) {
+            event = MSGType.MSG_BACK_NODE;
+          }
+          if (event != 0) {
+            MsgServer.addMsg(MsgServer.generateDDLMsg(event, -1l, -1l, null, n, old_params));
+          }
+        }
         return true;
       }
     } catch (Exception e) {
       LOG.error(e,e);
       throw new MetaException(e.getMessage());
     }
+	  
+	  
 	}
 
 	@Override
@@ -420,21 +445,32 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public SFile updateSFile(SFile newfile) throws MetaException {
+		return updateSFile(newfile, false);
+	}
+
+	//为了不改变原有的updatesfile的语义，添加一个是否连sfl一起更新的方法
+	public SFile updateSFile(SFile newfile, boolean isWithSfl) throws MetaException {
 		SFile sf = this.getSFile(newfile.getFid());
 		boolean repnr_changed = false;
 	  boolean stat_changed = false;
-		if(sf == null) {
-      throw new MetaException("Invalid SFile object provided!");
-    }
-		 if (sf.getRep_nr() != newfile.getRep_nr()) {
-       repnr_changed = true;
-     }
-     if (sf.getStore_status() != newfile.getStore_status()) {
-       stat_changed = true;
-     }
+
+	  if (sf == null) {
+	    throw new MetaException("Invalid SFile object provided!");
+	  }
+	  if (sf.getRep_nr() != newfile.getRep_nr()) {
+	    repnr_changed = true;
+	  }
+	  if (sf.getStore_status() != newfile.getStore_status()) {
+	    stat_changed = true;
+	  }
 
 		try {
-			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
+//			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
+			//update index here
+			if(!sf.getDigest().equals(newfile.getDigest()))
+				cs.removeLfbdValue(sf.getDigest(), sf.getFid()+"");
+			if(stat_changed)
+				cs.removeSfileStatValue(sf.getStore_status(), sf.getFid()+"");
 			sf.setRep_nr(newfile.getRep_nr());
       sf.setDigest(newfile.getDigest());
       sf.setRecord_nr(newfile.getRecord_nr());
@@ -443,6 +479,9 @@ public class RawStoreImp implements RawStore {
       sf.setLoad_status(newfile.getLoad_status());
       sf.setLength(newfile.getLength());
       sf.setRef_files(newfile.getRef_files());
+      if(isWithSfl) {
+        sf.setLocations(newfile.getLocations());
+      }
       cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
 
       if (stat_changed) {
@@ -467,34 +506,6 @@ public class RawStoreImp implements RawStore {
         MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_FILE_USER_SET_REP_CHANGE, -1l, -1l, null, sf, old_params));
       }
 
-      return sf;
-		} catch (Exception e) {
-			LOG.error(e,e);
-			throw new MetaException(e.getMessage());
-		}
-
-	}
-
-	//为了不改变原有的updatesfile的语义，添加一个是否连sfl一起更新的方法
-	public SFile updateSFile(SFile newfile, boolean isWithSfl) throws MetaException {
-		SFile sf = this.getSFile(newfile.getFid());
-		if(sf == null) {
-      throw new MetaException("Invalid SFile object provided!");
-    }
-		try {
-			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
-			sf.setRep_nr(newfile.getRep_nr());
-      sf.setDigest(newfile.getDigest());
-      sf.setRecord_nr(newfile.getRecord_nr());
-      sf.setAll_record_nr(newfile.getAll_record_nr());
-      sf.setStore_status(newfile.getStore_status());
-      sf.setLoad_status(newfile.getLoad_status());
-      sf.setLength(newfile.getLength());
-      sf.setRef_files(newfile.getRef_files());
-      if(isWithSfl) {
-        sf.setLocations(newfile.getLocations());
-      }
-      cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
       return sf;
 		} catch (Exception e) {
 			LOG.error(e,e);
@@ -557,8 +568,12 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<SFileLocation> getSFileLocations(String devid, long curts,
 			long timeout) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		try {
+			return cs.getSFileLocations(devid, curts, timeout);
+		} catch (IOException e) {
+			e.printStackTrace();
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -579,22 +594,27 @@ public class RawStoreImp implements RawStore {
 		boolean changed = false;
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
+			if (sfl == null) {
+        throw new MetaException("Invalid SFileLocation provided");
+      }
 			//防止缓存中的sfile的location与更新之后的sfl不一致。。。。
 			// FIXME 这样手动维护sfile与sfilelocation的关系很麻烦，很容易出错。。。
 			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
 			sf.getLocations().remove(sfl);
-			sf.addToLocations(newsfl);
-			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
-			//状态改变的话，还需要改变更新关于visit status的索引
-			cs.removeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
+
 			sfl.setUpdate_time(System.currentTimeMillis());
 			if (sfl.getVisit_status() != newsfl.getVisit_status()) {
         changed = true;
       }
+			//update index
+			if(changed)
+				cs.removeSflStatValue(sfl.getVisit_status(), SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
 			sfl.setVisit_status(newsfl.getVisit_status());
 			sfl.setRep_id(newsfl.getRep_id());
 			sfl.setDigest(newsfl.getDigest());
-			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
+//			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
+			sf.addToLocations(sfl);
+			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);			//写入了sfile，也就把sfilelocation写入了
 
 			if (changed) {
 	      switch (newsfl.getVisit_status()) {
@@ -1754,11 +1774,10 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public void truncTableFiles(String dbName, String tableName) throws MetaException, NoSuchObjectException {
-
       for (int i = 0, step = 1000; i < Integer.MAX_VALUE; i+=step) {
         List<Long> files = listTableFiles(dbName, tableName, i, i + step);
         for (int j = 0; j < files.size(); j++) {
-        	LOG.debug("truncTableFiles, sfile.size()="+files.size());
+        	LOG.debug("truncTableFiles, sfile.size()=" + files.size());
           SFile f = this.getSFile(files.get(j));
           if (f != null) {
             f.setStore_status(MetaStoreConst.MFileStoreStatus.RM_PHYSICAL);
@@ -1776,12 +1795,11 @@ public class RawStoreImp implements RawStore {
 		boolean changed = false;
 		SFile sf = this.getSFile(file.getFid());
 		List<SFileLocation> toOffline = new ArrayList<SFileLocation>();
-		if(sf == null) {
-      throw new MetaException("No SFile found by id:"+file.getFid());
+		if (sf == null) {
+      throw new MetaException("No SFile found by id " + file.getFid());
     }
 		if (sf.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
       sf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
-//      pm.makePersistent(mf);
       this.updateSFile(sf);
 
       List<SFileLocation> sfl = sf.getLocations();
@@ -1805,7 +1823,6 @@ public class RawStoreImp implements RawStore {
               SFileLocation x = sfl.get(i);
               // mark it as OFFLINE
               x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-//              pm.makePersistent(x);
               this.updateSFileLocation(x);
               toOffline.add(x);
             }
@@ -1869,15 +1886,29 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public List<String> listDevsByNode(String nodeName) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		List<String> ls = new LinkedList<String>();
+		Iterator<Device> iter = CacheStore.getDeviceHm().values().iterator();
+		while(iter.hasNext()){
+			Device dev = iter.next();
+			if(dev.getNode_name().equals(nodeName))
+				ls.add(dev.getDevid());
+		}
+		return ls;
 	}
 
 	@Override
 	public List<Long> listFilesByDevs(List<String> devids) throws MetaException,
 			TException {
-		// TODO Auto-generated method stub
-		return null;
+		List<Long> ids = new LinkedList<Long>();
+		long ct = System.currentTimeMillis();
+		for(String devid : devids)
+		{
+			for(SFileLocation sfl : this.getSFileLocations(devid, ct, 0))
+			{
+				ids.add(sfl.getFid());
+			}
+		}
+		return ids;
 	}
 
 

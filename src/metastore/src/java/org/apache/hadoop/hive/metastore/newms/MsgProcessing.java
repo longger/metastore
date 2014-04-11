@@ -16,6 +16,7 @@ import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
+import org.apache.hadoop.hive.metastore.api.FileOperationException;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
 import org.apache.hadoop.hive.metastore.api.Index;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -320,7 +321,6 @@ public class MsgProcessing {
 				break;
 			}
 
-			/*
 			case MSGType.MSG_REP_FILE_CHANGE:
 			case MSGType.MSG_STA_FILE_CHANGE:
 			case MSGType.MSG_REP_FILE_ONOFF:
@@ -364,7 +364,7 @@ public class MsgProcessing {
 				}
 				break;
 			}
-			*/
+			
 			case MSGType.MSG_NEW_INDEX:
 			case MSGType.MSG_ALT_INDEX:
 			case MSGType.MSG_ALT_INDEX_PARAM:
@@ -516,7 +516,7 @@ public class MsgProcessing {
 		    }
 			default:
 			{
-				LOG.debug("unhandled msg : "+msg.getEvent_id());
+				LOG.debug("unhandled msg from metaq: "+msg.getEvent_id());
 				break;
 			}
 		}
