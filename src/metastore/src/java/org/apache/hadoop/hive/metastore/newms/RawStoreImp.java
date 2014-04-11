@@ -422,7 +422,7 @@ public class RawStoreImp implements RawStore {
 	  try {
 	    SFile sf = getSFile(fid);
 	    if (sf == null) {
-	      return false;
+	      return true;
 	    }
 	    cs.removeObject(ObjectType.SFILE, fid+"");
 	    success = true;
@@ -652,7 +652,7 @@ public class RawStoreImp implements RawStore {
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
 			if(sfl == null) {
-        return false;
+        return true;
       }
 			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
 			if(sf == null) {

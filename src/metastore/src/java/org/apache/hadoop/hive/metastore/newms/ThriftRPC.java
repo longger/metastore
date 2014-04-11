@@ -2,6 +2,7 @@ package org.apache.hadoop.hive.metastore.newms;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.apache.commons.lang.StringUtils.join;
 
 import java.io.IOException;
 import java.util.AbstractMap;
@@ -90,6 +91,10 @@ import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
+import org.apache.hadoop.hive.serde2.Deserializer;
+import org.apache.hadoop.hive.serde2.SerDeException;
+import org.apache.hadoop.hive.serde2.SerDeUtils;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TException;
 
 import com.facebook.fb303.FacebookBase;
@@ -106,6 +111,7 @@ public class ThriftRPC extends FacebookBase implements
     org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface {
 
   private final NewMSConf conf;
+  private final HiveConf hiveConf = new HiveConf(this.getClass());
   private final RawStoreImp rs;
   private IMetaStoreClient client;
   private final static ConcurrentHashMap<String, IMetaStoreClient> clients = new ConcurrentHashMap<String, IMetaStoreClient>();
@@ -654,6 +660,21 @@ public class ThriftRPC extends FacebookBase implements
       MetaStoreUtils.printStackTrace(e);
     }
     return function;
+  }
+  public String startFunction(String function) {
+    return startFunction(function, "");
+  }
+  public String startMultiTableFunction(String function, String db, List<String> tbls) {
+    String tableNames = join(tbls, ",");
+    return startFunction(function, " : db=" + db + " tbls=" + tableNames);
+  }
+  public String startTableFunction(String function, String db, String tbl) {
+    return startFunction(function, " : db=" + db + " tbl=" + tbl);
+  }
+  public String startPartitionFunction(String function, String db, String tbl,
+      List<String> partVals) {
+    return startFunction(function, " : db=" + db + " tbl=" + tbl
+        + "[" + join(partVals, ",") + "]");
   }
 
   public void endFunction(String function, boolean successful, Exception e) {
@@ -1637,9 +1658,25 @@ public class ThriftRPC extends FacebookBase implements
 
   @Override
   public List<String> get_all_databases() throws MetaException, TException {
-    List<String> dbNames = new ArrayList<String>();
-    dbNames.addAll(CacheStore.getDatabaseHm().keySet());
-    return dbNames;
+  	startFunction("get_all_databases");
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getAllDatabases();
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_all_databases", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
@@ -1652,7 +1689,25 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public List<String> get_all_tables(String dbName) throws MetaException,
       TException {
-    return rs.getAllTables(dbName);
+  	startFunction("get_all_tables", ": db=" + dbName);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getAllTables(dbName);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_all_tables", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
@@ -1672,14 +1727,46 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public Database get_database(String dbName) throws NoSuchObjectException,
       MetaException, TException {
-    Database db = rs.getDatabase(dbName);
+  	startFunction("get_database", ": " + dbName);
+    Database db = null;
+    Exception ex = null;
+    try {
+      db = rs.getDatabase(dbName);
+    } catch (NoSuchObjectException e) {
+      ex = e;
+      throw e;
+    } catch (Exception e) {
+      ex = e;
+      assert (e instanceof RuntimeException);
+      throw (RuntimeException) e;
+    } finally {
+      endFunction("get_database", db != null, ex);
+    }
     return db;
   }
 
   @Override
   public List<String> get_databases(String pattern) throws MetaException,
       TException {
-    return rs.getDatabases(pattern);
+  	startFunction("get_databases", ": " + pattern);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getDatabases(pattern);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_databases", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
@@ -1696,13 +1783,52 @@ public class ThriftRPC extends FacebookBase implements
   }
 
   @Override
-  public List<FieldSchema> get_fields(String dbname, String tablename)
+  public List<FieldSchema> get_fields(String db, String tableName)
       throws MetaException, UnknownTableException, UnknownDBException, TException {
-    Table t = rs.getTable(dbname, tablename);
-    if (t == null) {
-      throw new UnknownTableException("Table not found by name:" + dbname + "." + tablename);
+  	startFunction("get_fields", ": db=" + db + "tbl=" + tableName);
+    String[] names = tableName.split("\\.");
+    String base_table_name = names[0];
+
+    Table tbl;
+    List<FieldSchema> ret = null;
+    Exception ex = null;
+    try {
+      try {
+        tbl = get_table(db, base_table_name);
+      } catch (NoSuchObjectException e) {
+        throw new UnknownTableException(e.getMessage());
+      }
+      boolean getColsFromSerDe = SerDeUtils.shouldGetColsFromSerDe(
+          tbl.getSd().getSerdeInfo().getSerializationLib());
+      if (!getColsFromSerDe) {
+        ret = tbl.getSd().getCols();
+      } else {
+        try {
+          Deserializer s = MetaStoreUtils.getDeserializer(hiveConf, tbl);
+          ret = MetaStoreUtils.getFieldsFromDeserializer(tableName, s);
+        } catch (SerDeException e) {
+          StringUtils.stringifyException(e);
+          throw new MetaException(e.getMessage());
+        }
+      }
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof UnknownDBException) {
+        throw (UnknownDBException) e;
+      } else if (e instanceof UnknownTableException) {
+        throw (UnknownTableException) e;
+      } else if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_fields", ret != null, ex);
     }
-    return t.getSd().getCols();
+
+    return ret;
   }
 
   // for each file, lookup cached device firstly
@@ -1740,9 +1866,9 @@ public class ThriftRPC extends FacebookBase implements
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
-      r.getLocations().clear();
       break;
     default:
+    	r.setLocations(rs.getSFileLocations(fid));
     }
     identifySharedDevice(r.getLocations());
 
@@ -1752,7 +1878,6 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public SFile get_file_by_name(String node, String devid, String location)
       throws FileOperationException, MetaException, TException {
-    DMProfile.fgetR.incrementAndGet();
     SFile r = rs.getSFile(devid, location);
     if (r == null) {
       throw new FileOperationException("Can not find SFile by name: " + node + ":" + devid + ":"
@@ -1762,9 +1887,9 @@ public class ThriftRPC extends FacebookBase implements
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
-      r.getLocations().clear();
       break;
     default:
+    	r.setLocations(rs.getSFileLocations(r.getFid()));
     }
     identifySharedDevice(r.getLocations());
 
@@ -1772,41 +1897,98 @@ public class ThriftRPC extends FacebookBase implements
   }
 
   @Override
-  public Index get_index_by_name(String dbName, String tableName, String indexName)
+  public Index get_index_by_name(String dbName, String tblName, String indexName)
       throws MetaException, NoSuchObjectException, TException {
-    String key = dbName + "." + tableName + "." + indexName;
-    Index ind = rs.getIndex(dbName, tableName, indexName);
+  	startFunction("get_index_by_name", ": db=" + dbName + " tbl="
+        + tblName + " index=" + indexName);
 
-    if (ind == null) {
-      throw new NoSuchObjectException("Index not found by name:" + key);
+    Index ret = null;
+    Exception ex = null;
+    try {
+      ret = get_index_by_name_core(rs, dbName, tblName, indexName);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("drop_index_by_name", ret != null, ex);
     }
-    return ind;
+    return ret;
   }
 
+  private Index get_index_by_name_core(final RawStore ms, final String db_name,
+      final String tbl_name, final String index_name)
+      throws MetaException, NoSuchObjectException, TException {
+    Index index = ms.getIndex(db_name, tbl_name, index_name);
+
+    if (index == null) {
+      throw new NoSuchObjectException(db_name + "." + tbl_name
+          + " index=" + index_name + " not found");
+    }
+    return index;
+  }
+  
   @Override
-  public List<String> get_index_names(String dbName, String tblName, short arg2)
+  public List<String> get_index_names(String dbName, String tblName, short maxIndexes)
       throws MetaException, TException {
-    List<String> indNames = new ArrayList<String>();
-    for (String key : CacheStore.getIndexHm().keySet()) {
-      String[] keys = key.split("\\.");
-      if (dbName.equalsIgnoreCase(keys[0]) && tblName.equalsIgnoreCase(keys[1])) {
-        indNames.add(keys[2]);
+  	startTableFunction("get_index_names", dbName, tblName);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.listIndexNames(dbName, tblName, maxIndexes);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
       }
+    } finally {
+      endFunction("get_index_names", ret != null, ex);
     }
-    return indNames;
+    return ret;
   }
 
   @Override
-  public List<Index> get_indexes(String dbName, String tblName, short arg2)
+  public List<Index> get_indexes(String dbName, String tblName, short maxIndexes)
       throws NoSuchObjectException, MetaException, TException {
-    List<Index> inds = new ArrayList<Index>();
-    for (String key : CacheStore.getIndexHm().keySet()) {
-      String[] keys = key.split("\\.");
-      if (dbName.equalsIgnoreCase(keys[0]) && tblName.equalsIgnoreCase(keys[1])) {
-        inds.add(CacheStore.getIndexHm().get(key));
+  	startTableFunction("get_indexes", dbName, tblName);
+
+    List<Index> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getIndexes(dbName, tblName, maxIndexes);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
       }
+    } finally {
+      endFunction("get_indexes", ret != null, ex);
     }
-    return inds;
+    return ret;
   }
 
   @Override
@@ -1835,18 +2017,74 @@ public class ThriftRPC extends FacebookBase implements
   }
 
   @Override
-  public Partition get_partition(final String dbName, final String tableName,
-      final List<String> partVals)
+  public Partition get_partition(final String db_name, final String tbl_name,
+      final List<String> part_vals)
       throws MetaException, NoSuchObjectException, TException {
-    return rs.getPartition(dbName, tableName, partVals);
+  	startPartitionFunction("get_partition", db_name, tbl_name, part_vals);
+
+    Partition ret = null;
+    Exception ex = null;
+    try {
+      // TODO: fix it
+      ret = rs.getPartition(db_name, tbl_name, part_vals);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partition", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
-  public Partition get_partition_by_name(String dbName, String tableName, String partName)
+  public Partition get_partition_by_name(String db_name, String tbl_name, String part_name)
       throws MetaException, NoSuchObjectException, TException {
-    return rs.getPartition(dbName, tableName, partName);
+  	startFunction("get_partition_by_name", ": db=" + db_name + " tbl="
+        + tbl_name + " part=" + part_name);
+
+    Partition ret = null;
+    Exception ex = null;
+    try {
+      ret = get_partition_by_name_core(rs, db_name, tbl_name, part_name);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partition_by_name", ret != null, ex);
+    }
+    return ret;
   }
 
+  private Partition get_partition_by_name_core(final RawStore ms, final String db_name,
+      final String tbl_name, final String part_name)
+      throws MetaException, NoSuchObjectException, TException {
+    Partition p = ms.getPartition(db_name, tbl_name, part_name);
+
+    if (p == null) {
+      throw new NoSuchObjectException(db_name + "." + tbl_name
+          + " partition (" + part_name + ") not found");
+    }
+    return p;
+  }
+  
   @Override
   public ColumnStatistics get_partition_column_statistics(String dbName,
       String tableName, String partitionName, String colName)
@@ -1867,65 +2105,274 @@ public class ThriftRPC extends FacebookBase implements
   }
 
   @Override
-  public List<String> get_partition_names(String dbName, String tableName, short maxPart)
+  public List<String> get_partition_names(String db_name, String tbl_name, short max_parts)
       throws MetaException, TException {
-    return rs.listPartitionNames(dbName, tableName, maxPart);
+  	startTableFunction("get_partition_names", db_name, tbl_name);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.listPartitionNames(db_name, tbl_name, max_parts);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partition_names", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
-  public List<String> get_partition_names_ps(String dbName, String tableName,
-      List<String> partVals, short maxParts) throws MetaException,
+  public List<String> get_partition_names_ps(final String db_name,
+      final String tbl_name, final List<String> part_vals, final short max_parts) throws MetaException,
       NoSuchObjectException, TException {
-    return rs.listPartitionNamesPs(dbName, tableName, partVals, maxParts);
+  	startPartitionFunction("get_partitions_names_ps", db_name, tbl_name, part_vals);
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.listPartitionNamesPs(db_name, tbl_name, part_vals, max_parts);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_names_ps", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
-  public Partition get_partition_with_auth(String dbName, String tableName,
-      List<String> pvals, String userName, List<String> groupNames)
+  public Partition get_partition_with_auth(final String db_name,
+      final String tbl_name, final List<String> part_vals,
+      final String user_name, final List<String> group_names)
       throws MetaException, NoSuchObjectException, TException {
-    return rs.getPartitionWithAuth(dbName, tableName, pvals, userName, groupNames);
+  	startPartitionFunction("get_partition_with_auth", db_name, tbl_name,
+        part_vals);
+
+    Partition ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getPartitionWithAuth(db_name, tbl_name, part_vals,
+          user_name, group_names);
+    } catch (InvalidObjectException e) {
+      ex = e;
+      throw new NoSuchObjectException(e.getMessage());
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partition_with_auth", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
-  public List<Partition> get_partitions(String dbName, String tableName, short maxParts)
+  public List<Partition> get_partitions(String db_name, String tbl_name, short max_parts)
       throws NoSuchObjectException, MetaException, TException {
-    return rs.getPartitions(dbName, tableName, maxParts);
+  	startTableFunction("get_partitions", db_name, tbl_name);
+
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getPartitions(db_name, tbl_name, max_parts);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
   public List<Partition> get_partitions_by_filter(String dbName, String tblName,
       String filter, short maxParts) throws MetaException,
       NoSuchObjectException, TException {
-    return rs.getPartitionsByFilter(dbName, tblName, filter, maxParts);
+  	startTableFunction("get_partitions_by_filter", dbName, tblName);
+
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getPartitionsByFilter(dbName, tblName, filter, maxParts);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_by_filter", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
   public List<Partition> get_partitions_by_names(String tblName, String dbName,
-      List<String> partVals) throws MetaException, NoSuchObjectException,
+      List<String> partNames) throws MetaException, NoSuchObjectException,
       TException {
-    return rs.getPartitionsByNames(dbName, tblName, partVals);
+  	 startTableFunction("get_partitions_by_names", dbName, tblName);
+
+     List<Partition> ret = null;
+     Exception ex = null;
+     try {
+       ret = rs.getPartitionsByNames(dbName, tblName, partNames);
+     } catch (Exception e) {
+       ex = e;
+       if (e instanceof MetaException) {
+         throw (MetaException) e;
+       } else if (e instanceof NoSuchObjectException) {
+         throw (NoSuchObjectException) e;
+       } else if (e instanceof TException) {
+         throw (TException) e;
+       } else {
+         MetaException me = new MetaException(e.toString());
+         me.initCause(e);
+         throw me;
+       }
+     } finally {
+       endFunction("get_partitions_by_names", ret != null, ex);
+     }
+     return ret;
   }
 
   @Override
-  public List<Partition> get_partitions_ps(String dbName, String tableName,
-      List<String> partVals, short maxParts) throws MetaException,
+  public List<Partition> get_partitions_ps(final String db_name,
+      final String tbl_name, final List<String> part_vals,
+      final short max_parts) throws MetaException,
       NoSuchObjectException, TException {
-    return rs.listPartitionsPsWithAuth(dbName, tableName, partVals, maxParts, null, null);
+  	startPartitionFunction("get_partitions_ps", db_name, tbl_name, part_vals);
+
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = get_partitions_ps_with_auth(db_name, tbl_name, part_vals,
+          max_parts, null, null);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_ps", ret != null, ex);
+    }
+
+    return ret;
   }
 
   @Override
-  public List<Partition> get_partitions_ps_with_auth(String dbName,
-      String tblName, List<String> partVals, short maxParts, String userName,
-      List<String> groupNames) throws NoSuchObjectException, MetaException,
+  public List<Partition> get_partitions_ps_with_auth(final String db_name,
+      final String tbl_name, final List<String> part_vals,
+      final short max_parts, final String userName,
+      final List<String> groupNames) throws NoSuchObjectException, MetaException,
       TException {
-    return rs.listPartitionsPsWithAuth(dbName, tblName, partVals, maxParts, userName, groupNames);
+  	startPartitionFunction("get_partitions_ps_with_auth", db_name, tbl_name,
+        part_vals);
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.listPartitionsPsWithAuth(db_name, tbl_name, part_vals, max_parts,
+          userName, groupNames);
+    } catch (InvalidObjectException e) {
+      ex = e;
+      throw new MetaException(e.getMessage());
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_ps_with_auth", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
   public List<Partition> get_partitions_with_auth(String dbName, String tblName,
       short maxParts, String userName, List<String> groupNames)
       throws NoSuchObjectException, MetaException, TException {
-    return rs.getPartitionsWithAuth(dbName, tblName, maxParts, userName, groupNames);
+  	startTableFunction("get_partitions_with_auth", dbName, tblName);
+
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getPartitionsWithAuth(dbName, tblName, maxParts,
+          userName, groupNames);
+    } catch (InvalidObjectException e) {
+      ex = e;
+      throw new NoSuchObjectException(e.getMessage());
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_with_auth", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
@@ -1975,23 +2422,49 @@ public class ThriftRPC extends FacebookBase implements
 
   @Override
   // 模仿HiveMetaStore中的方法写的
-  public List<FieldSchema> get_schema(String dbname, String tablename)
+  public List<FieldSchema> get_schema(String db, String tableName)
       throws MetaException, UnknownTableException, UnknownDBException, TException {
+  	startFunction("get_schema", ": db=" + db + "tbl=" + tableName);
+    boolean success = false;
+    Exception ex = null;
     try {
-      String baseTableName = tablename.split("\\.")[0];
-      // Table baseTable = (Table) ms.readObject(ObjectType.TABLE, dbname+"."+baseTableName);
-      Table baseTable = rs.getTable(dbname, baseTableName);
-      if (baseTable == null) {
-        throw new UnknownTableException("Table not found by name:" + baseTableName);
+      String[] names = tableName.split("\\.");
+      String base_table_name = names[0];
+
+      Table tbl;
+      try {
+        tbl = get_table(db, base_table_name);
+      } catch (NoSuchObjectException e) {
+        throw new UnknownTableException(e.getMessage());
       }
-      List<FieldSchema> fss = baseTable.getSd().getCols();
-      if (baseTable.getPartitionKeys() != null) {
-        fss.addAll(baseTable.getPartitionKeys());
+      List<FieldSchema> fieldSchemas = get_fields(db, base_table_name);
+
+      if (tbl == null || fieldSchemas == null) {
+        throw new UnknownTableException(tableName + " doesn't exist");
       }
 
-      return fss;
+      if (tbl.getPartitionKeys() != null) {
+        // Combine the column field schemas and the partition keys to create the
+        // whole schema
+        fieldSchemas.addAll(tbl.getPartitionKeys());
+      }
+      success = true;
+      return fieldSchemas;
     } catch (Exception e) {
-      throw new MetaException(e.getMessage());
+      ex = e;
+      if (e instanceof UnknownDBException) {
+        throw (UnknownDBException) e;
+      } else if (e instanceof UnknownTableException) {
+        throw (UnknownTableException) e;
+      } else if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_schema", success, ex);
     }
   }
 
@@ -2010,12 +2483,30 @@ public class ThriftRPC extends FacebookBase implements
   }
 
   @Override
-  public Table get_table(String dbname, String tablename) throws MetaException,
+  public Table get_table(String dbname, String name) throws MetaException,
       NoSuchObjectException, TException {
-    Table t = rs.getTable(dbname, tablename);
-    if (t == null)
-    {
-      throw new NoSuchObjectException(dbname + "." + tablename + " table not found");
+  	Table t = null;
+    startTableFunction("get_table", dbname, name);
+    Exception ex = null;
+    try {
+      t = rs.getTable(dbname, name);
+      if (t == null) {
+        throw new NoSuchObjectException(dbname + "." + name
+            + " table not found");
+      }
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_table", t != null, ex);
     }
     return t;
   }
@@ -2033,26 +2524,94 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public List<String> get_table_names_by_filter(String dbName, String filter, short maxTables)
       throws MetaException, InvalidOperationException, UnknownDBException, TException {
-    return rs.listTableNamesByFilter(dbName, filter, maxTables);
+  	List<String> tables = null;
+    startFunction("get_table_names_by_filter", ": db = " + dbName + ", filter = " + filter);
+    Exception ex = null;
+    try {
+      if (dbName == null || dbName.isEmpty()) {
+        throw new UnknownDBException("DB name is null or empty");
+      }
+      if (filter == null) {
+        throw new InvalidOperationException(filter + " cannot apply null filter");
+      }
+      tables = rs.listTableNamesByFilter(dbName, filter, maxTables);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof InvalidOperationException) {
+        throw (InvalidOperationException) e;
+      } else if (e instanceof UnknownDBException) {
+        throw (UnknownDBException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_table_names_by_filter", tables != null, ex);
+    }
+    return tables;
   }
 
   @Override
   public List<Table> get_table_objects_by_name(String dbname, List<String> names)
       throws MetaException, InvalidOperationException, UnknownDBException,
       TException {
-    if (dbname == null || dbname.isEmpty()) {
-      throw new UnknownDBException("DB name is null or empty");
+  	List<Table> tables = null;
+    startMultiTableFunction("get_multi_table", dbname, names);
+    Exception ex = null;
+    try {
+
+      if (dbname == null || dbname.isEmpty()) {
+        throw new UnknownDBException("DB name is null or empty");
+      }
+      if (names == null)
+      {
+        throw new InvalidOperationException(dbname + " cannot find null tables");
+      }
+      tables = rs.getTableObjectsByName(dbname, names);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof InvalidOperationException) {
+        throw (InvalidOperationException) e;
+      } else if (e instanceof UnknownDBException) {
+        throw (UnknownDBException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_multi_table", tables != null, ex);
     }
-    if (names == null) {
-      throw new InvalidOperationException("table names are null");
-    }
-    return rs.getTableObjectsByName(dbname, names);
+    return tables;
   }
 
   @Override
-  public List<String> get_tables(String dbName, String tablePattern)
+  public List<String> get_tables(String dbname, String pattern)
       throws MetaException, TException {
-    return rs.getTables(dbName, tablePattern);
+  	startFunction("get_tables", ": db=" + dbname + " pat=" + pattern);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getTables(dbname, pattern);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_tables", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
@@ -2064,9 +2623,11 @@ public class ThriftRPC extends FacebookBase implements
   }
 
   @Override
-  public Map<String, Type> get_type_all(String arg0) throws MetaException,
+  public Map<String, Type> get_type_all(String name) throws MetaException,
       TException {
     // FIXME HiveMetaStore just do this
+  	 startFunction("get_type_all", ": " + name);
+     endFunction("get_type_all", false, null);
     throw new MetaException("not yet implemented");
   }
 
@@ -2115,7 +2676,7 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public List<Long> listFilesByDigest(String digest) throws MetaException,
       TException {
-
+  	startFunction("listFilesByDigest:", "digest: " + digest);
     return rs.findSpecificDigestFiles(digest);
   }
 
@@ -2581,12 +3142,12 @@ public class ThriftRPC extends FacebookBase implements
 
   @Override
   public void truncTableFiles(String dbName, String tabName) throws MetaException, TException {
-    // startFunction("truncTableFiles", "DB: " + dbName + " Table: " + tabName);
-    // try {
-    rs.truncTableFiles(dbName, tabName);
-    // } finally {
-    // endFunction("truncTableFiles", true, null);
-    // }
+     startFunction("truncTableFiles", "DB: " + dbName + " Table: " + tabName);
+     try {
+    	 rs.truncTableFiles(dbName, tabName);
+     } finally {
+    	 endFunction("truncTableFiles", true, null);
+     }
   }
 
   @Override

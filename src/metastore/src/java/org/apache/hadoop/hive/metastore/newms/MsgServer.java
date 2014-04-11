@@ -15,6 +15,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.Node;
 import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory;
@@ -68,6 +69,8 @@ public class MsgServer {
 		case MSGType.MSG_STA_FILE_CHANGE:
 		case MSGType.MSG_CREATE_FILE:
 		case MSGType.MSG_DEL_FILE:
+		case MSGType.MSG_FAIL_NODE:
+    case MSGType.MSG_BACK_NODE:
 			localQueue.add(msg);
 			lc.release();
 		}
@@ -478,6 +481,19 @@ public class MsgServer {
 							}
 	          	break;
 						}
+	          
+	          
+	          case MSGType.MSG_FAIL_NODE:
+	          case MSGType.MSG_BACK_NODE:
+	          {
+	          	Node n = (Node) msg.getEventObject();
+	          	try {
+								ob.updateNode(n);
+							} catch (MetaException e) {
+								LOG.error(e,e);
+								LOG.info("handle msg failed:"+msg.toJson());
+							}
+	          }
 	        }//end of switch
 			}
 			
