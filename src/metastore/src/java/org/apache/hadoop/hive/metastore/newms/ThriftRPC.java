@@ -824,9 +824,6 @@ public class ThriftRPC extends FacebookBase implements
     SFile cfile = null;
 
     // Step 1: find best device to put a file
-    if (dm == null) {
-      return null;
-    }
     try {
       if (flp == null) {
         flp = new FileLocatingPolicy(null, null, FileLocatingPolicy.EXCLUDE_NODES,
@@ -2527,7 +2524,7 @@ public class ThriftRPC extends FacebookBase implements
 
   @Override
   public void set_file_repnr(long fid, int repnr) throws FileOperationException, TException {
-    // startFunction("set_file_repnr", "fid " + fid + " repnr " + repnr);
+    startFunction("set_file_repnr", "fid " + fid + " repnr " + repnr);
     SFile f = get_file_by_id(fid);
     if (f != null) {
       f.setRep_nr(repnr);
@@ -2709,7 +2706,17 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public boolean del_filelocation(SFileLocation sfl) throws MetaException,
       TException {
-    return rs.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+    boolean r = false;
+    SFileLocation saved = rs.getSFileLocation(sfl.getDevid(), sfl.getLocation());
+    
+    if(saved != null){
+      startFunction("del_filelocation", ": FID " + saved.getFid() + " dev " + saved.getDevid() + " loc " + saved.getLocation());
+      r = rs.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+      if(r){
+        dm.asyncDelSFL(saved);
+      }
+    }
+    return r;
   }
 
   @Override
