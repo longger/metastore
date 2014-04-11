@@ -201,15 +201,23 @@ public class ActiveMasterManager extends ZooKeeperListener {
        return false;
      }
      synchronized (this.clusterHasActiveMaster) {
+
+       LOG.info("master1:"+this.clusterHasActiveMaster.get() +"======stop:"+ !this.master.isStopped());
        while (this.clusterHasActiveMaster.get() && !this.master.isStopped()) {
          try {
+           LOG.info("before ##======wait");
            this.clusterHasActiveMaster.wait();
+           LOG.info("after  ##======wait");
          } catch (InterruptedException e) {
            // We expect to be interrupted when a master dies,
            //  will fall out if so
            LOG.debug("Interrupted waiting for master to die", e);
          }
+         catch(Exception e) {
+           LOG.error(e, e);
+         }
        }
+       LOG.info("master2:"+this.clusterHasActiveMaster.get() +"======stop:"+ !this.master.isStopped());
        if (clusterShutDown.get()) {
          this.master.stop(
            "Cluster went down before this master became active");

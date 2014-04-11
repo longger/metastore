@@ -95,6 +95,7 @@ import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.metastore.zk.ServerName;
 import org.apache.hadoop.hive.metastore.zk.ZKUtil;
 import org.apache.hadoop.hive.metastore.zk.ZooKeeperWatcher;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
@@ -141,7 +142,9 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     LOG.info("#####msUri address:"+msUri+",zkUri:"+zkUri+",zkport:"+zkPort);
     if(!msUri.contains("thrift")){//
       zkUri = msUri;
-      zkUri = zkUri +":"+ zkPort;
+      if(zkUri.indexOf(":") < 0){
+        zkUri = zkUri +":"+ zkPort;
+      }
       LOG.info("#####connecting to zk address:"+msUri);
       if(zkUri != null){
         ZooKeeperWatcher zkw = null;

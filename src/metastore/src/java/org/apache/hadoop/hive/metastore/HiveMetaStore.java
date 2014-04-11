@@ -7069,6 +7069,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
       });
 
+      ////**********Here for HA
 //      if(!conf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION)){
         HMSHandler.LOG.info("===========register zk master not top===========");
         master = new MetaMaster(conf);
