@@ -64,6 +64,7 @@ import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
+import org.apache.hadoop.hive.metastore.api.BusiTypeSchemaColumn;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsDesc;
@@ -7145,6 +7146,17 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException {
       return getMS().listFilesByDevs(devids);
+    }
+
+    @Override
+    public List<BusiTypeSchemaColumn> get_busi_type_schema_cols() throws MetaException, TException {
+      return getMS().get_busi_type_schema_cols();
+    }
+
+    @Override
+    public List<BusiTypeSchemaColumn> get_busi_type_schema_cols_by_name(String schemaName)
+        throws InvalidObjectException, MetaException, TException {
+      return getMS().get_busi_type_schema_cols_by_name(schemaName);
     }
 
   }

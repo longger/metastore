@@ -87,6 +87,16 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("createBusitype\n");
   }
 
+  void get_busi_type_schema_cols(std::vector<BusiTypeSchemaColumn> & _return) {
+    // Your implementation goes here
+    printf("get_busi_type_schema_cols\n");
+  }
+
+  void get_busi_type_schema_cols_by_name(std::vector<BusiTypeSchemaColumn> & _return, const std::string& schemaName) {
+    // Your implementation goes here
+    printf("get_busi_type_schema_cols_by_name\n");
+  }
+
   int32_t add_partition_files(const Partition& part, const std::vector<SFile> & files) {
     // Your implementation goes here
     printf("add_partition_files\n");

@@ -707,6 +707,24 @@ class Table
   ::Thrift::Struct.generate_accessors self
 end
 
+class Busitype
+  include ::Thrift::Struct, ::Thrift::Struct_Union
+  NAME = 1
+  COMMENT = 2
+
+  FIELDS = {
+    NAME => {:type => ::Thrift::Types::STRING, :name => 'name'},
+    COMMENT => {:type => ::Thrift::Types::STRING, :name => 'comment'}
+  }
+
+  def struct_fields; FIELDS; end
+
+  def validate
+  end
+
+  ::Thrift::Struct.generate_accessors self
+end
+
 class BusiTypeColumn
   include ::Thrift::Struct, ::Thrift::Struct_Union
   BUSITYPE = 1
@@ -716,6 +734,26 @@ class BusiTypeColumn
   FIELDS = {
     BUSITYPE => {:type => ::Thrift::Types::STRING, :name => 'busiType'},
     TABLE => {:type => ::Thrift::Types::STRUCT, :name => 'table', :class => ::Table},
+    COLUMN => {:type => ::Thrift::Types::STRING, :name => 'column'}
+  }
+
+  def struct_fields; FIELDS; end
+
+  def validate
+  end
+
+  ::Thrift::Struct.generate_accessors self
+end
+
+class BusiTypeSchemaColumn
+  include ::Thrift::Struct, ::Thrift::Struct_Union
+  BUSITYPE = 1
+  SCHEMA = 2
+  COLUMN = 3
+
+  FIELDS = {
+    BUSITYPE => {:type => ::Thrift::Types::STRUCT, :name => 'busiType', :class => ::Busitype},
+    SCHEMA => {:type => ::Thrift::Types::STRUCT, :name => 'schema', :class => ::GlobalSchema},
     COLUMN => {:type => ::Thrift::Types::STRING, :name => 'column'}
   }
 
@@ -890,24 +928,6 @@ class SFileRef
   FIELDS = {
     FILE => {:type => ::Thrift::Types::STRUCT, :name => 'file', :class => ::SFile},
     ORIGIN_FID => {:type => ::Thrift::Types::I64, :name => 'origin_fid'}
-  }
-
-  def struct_fields; FIELDS; end
-
-  def validate
-  end
-
-  ::Thrift::Struct.generate_accessors self
-end
-
-class Busitype
-  include ::Thrift::Struct, ::Thrift::Struct_Union
-  NAME = 1
-  COMMENT = 2
-
-  FIELDS = {
-    NAME => {:type => ::Thrift::Types::STRING, :name => 'name'},
-    COMMENT => {:type => ::Thrift::Types::STRING, :name => 'comment'}
   }
 
   def struct_fields; FIELDS; end

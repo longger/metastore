@@ -5249,6 +5249,98 @@ class Table {
 
 }
 
+class Busitype {
+  static $_TSPEC;
+
+  public $name = null;
+  public $comment = null;
+
+  public function __construct($vals=null) {
+    if (!isset(self::$_TSPEC)) {
+      self::$_TSPEC = array(
+        1 => array(
+          'var' => 'name',
+          'type' => TType::STRING,
+          ),
+        2 => array(
+          'var' => 'comment',
+          'type' => TType::STRING,
+          ),
+        );
+    }
+    if (is_array($vals)) {
+      if (isset($vals['name'])) {
+        $this->name = $vals['name'];
+      }
+      if (isset($vals['comment'])) {
+        $this->comment = $vals['comment'];
+      }
+    }
+  }
+
+  public function getName() {
+    return 'Busitype';
+  }
+
+  public function read($input)
+  {
+    $xfer = 0;
+    $fname = null;
+    $ftype = 0;
+    $fid = 0;
+    $xfer += $input->readStructBegin($fname);
+    while (true)
+    {
+      $xfer += $input->readFieldBegin($fname, $ftype, $fid);
+      if ($ftype == TType::STOP) {
+        break;
+      }
+      switch ($fid)
+      {
+        case 1:
+          if ($ftype == TType::STRING) {
+            $xfer += $input->readString($this->name);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        case 2:
+          if ($ftype == TType::STRING) {
+            $xfer += $input->readString($this->comment);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        default:
+          $xfer += $input->skip($ftype);
+          break;
+      }
+      $xfer += $input->readFieldEnd();
+    }
+    $xfer += $input->readStructEnd();
+    return $xfer;
+  }
+
+  public function write($output) {
+    $xfer = 0;
+    $xfer += $output->writeStructBegin('Busitype');
+    if ($this->name !== null) {
+      $xfer += $output->writeFieldBegin('name', TType::STRING, 1);
+      $xfer += $output->writeString($this->name);
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->comment !== null) {
+      $xfer += $output->writeFieldBegin('comment', TType::STRING, 2);
+      $xfer += $output->writeString($this->comment);
+      $xfer += $output->writeFieldEnd();
+    }
+    $xfer += $output->writeFieldStop();
+    $xfer += $output->writeStructEnd();
+    return $xfer;
+  }
+
+}
+
 class BusiTypeColumn {
   static $_TSPEC;
 
@@ -5352,6 +5444,128 @@ class BusiTypeColumn {
       }
       $xfer += $output->writeFieldBegin('table', TType::STRUCT, 2);
       $xfer += $this->table->write($output);
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->column !== null) {
+      $xfer += $output->writeFieldBegin('column', TType::STRING, 3);
+      $xfer += $output->writeString($this->column);
+      $xfer += $output->writeFieldEnd();
+    }
+    $xfer += $output->writeFieldStop();
+    $xfer += $output->writeStructEnd();
+    return $xfer;
+  }
+
+}
+
+class BusiTypeSchemaColumn {
+  static $_TSPEC;
+
+  public $busiType = null;
+  public $schema = null;
+  public $column = null;
+
+  public function __construct($vals=null) {
+    if (!isset(self::$_TSPEC)) {
+      self::$_TSPEC = array(
+        1 => array(
+          'var' => 'busiType',
+          'type' => TType::STRUCT,
+          'class' => '\metastore\Busitype',
+          ),
+        2 => array(
+          'var' => 'schema',
+          'type' => TType::STRUCT,
+          'class' => '\metastore\GlobalSchema',
+          ),
+        3 => array(
+          'var' => 'column',
+          'type' => TType::STRING,
+          ),
+        );
+    }
+    if (is_array($vals)) {
+      if (isset($vals['busiType'])) {
+        $this->busiType = $vals['busiType'];
+      }
+      if (isset($vals['schema'])) {
+        $this->schema = $vals['schema'];
+      }
+      if (isset($vals['column'])) {
+        $this->column = $vals['column'];
+      }
+    }
+  }
+
+  public function getName() {
+    return 'BusiTypeSchemaColumn';
+  }
+
+  public function read($input)
+  {
+    $xfer = 0;
+    $fname = null;
+    $ftype = 0;
+    $fid = 0;
+    $xfer += $input->readStructBegin($fname);
+    while (true)
+    {
+      $xfer += $input->readFieldBegin($fname, $ftype, $fid);
+      if ($ftype == TType::STOP) {
+        break;
+      }
+      switch ($fid)
+      {
+        case 1:
+          if ($ftype == TType::STRUCT) {
+            $this->busiType = new \metastore\Busitype();
+            $xfer += $this->busiType->read($input);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        case 2:
+          if ($ftype == TType::STRUCT) {
+            $this->schema = new \metastore\GlobalSchema();
+            $xfer += $this->schema->read($input);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        case 3:
+          if ($ftype == TType::STRING) {
+            $xfer += $input->readString($this->column);
+          } else {
+            $xfer += $input->skip($ftype);
+          }
+          break;
+        default:
+          $xfer += $input->skip($ftype);
+          break;
+      }
+      $xfer += $input->readFieldEnd();
+    }
+    $xfer += $input->readStructEnd();
+    return $xfer;
+  }
+
+  public function write($output) {
+    $xfer = 0;
+    $xfer += $output->writeStructBegin('BusiTypeSchemaColumn');
+    if ($this->busiType !== null) {
+      if (!is_object($this->busiType)) {
+        throw new TProtocolException('Bad type in structure.', TProtocolException::INVALID_DATA);
+      }
+      $xfer += $output->writeFieldBegin('busiType', TType::STRUCT, 1);
+      $xfer += $this->busiType->write($output);
+      $xfer += $output->writeFieldEnd();
+    }
+    if ($this->schema !== null) {
+      if (!is_object($this->schema)) {
+        throw new TProtocolException('Bad type in structure.', TProtocolException::INVALID_DATA);
+      }
+      $xfer += $output->writeFieldBegin('schema', TType::STRUCT, 2);
+      $xfer += $this->schema->write($output);
       $xfer += $output->writeFieldEnd();
     }
     if ($this->column !== null) {
@@ -6559,98 +6773,6 @@ class SFileRef {
     if ($this->origin_fid !== null) {
       $xfer += $output->writeFieldBegin('origin_fid', TType::I64, 2);
       $xfer += $output->writeI64($this->origin_fid);
-      $xfer += $output->writeFieldEnd();
-    }
-    $xfer += $output->writeFieldStop();
-    $xfer += $output->writeStructEnd();
-    return $xfer;
-  }
-
-}
-
-class Busitype {
-  static $_TSPEC;
-
-  public $name = null;
-  public $comment = null;
-
-  public function __construct($vals=null) {
-    if (!isset(self::$_TSPEC)) {
-      self::$_TSPEC = array(
-        1 => array(
-          'var' => 'name',
-          'type' => TType::STRING,
-          ),
-        2 => array(
-          'var' => 'comment',
-          'type' => TType::STRING,
-          ),
-        );
-    }
-    if (is_array($vals)) {
-      if (isset($vals['name'])) {
-        $this->name = $vals['name'];
-      }
-      if (isset($vals['comment'])) {
-        $this->comment = $vals['comment'];
-      }
-    }
-  }
-
-  public function getName() {
-    return 'Busitype';
-  }
-
-  public function read($input)
-  {
-    $xfer = 0;
-    $fname = null;
-    $ftype = 0;
-    $fid = 0;
-    $xfer += $input->readStructBegin($fname);
-    while (true)
-    {
-      $xfer += $input->readFieldBegin($fname, $ftype, $fid);
-      if ($ftype == TType::STOP) {
-        break;
-      }
-      switch ($fid)
-      {
-        case 1:
-          if ($ftype == TType::STRING) {
-            $xfer += $input->readString($this->name);
-          } else {
-            $xfer += $input->skip($ftype);
-          }
-          break;
-        case 2:
-          if ($ftype == TType::STRING) {
-            $xfer += $input->readString($this->comment);
-          } else {
-            $xfer += $input->skip($ftype);
-          }
-          break;
-        default:
-          $xfer += $input->skip($ftype);
-          break;
-      }
-      $xfer += $input->readFieldEnd();
-    }
-    $xfer += $input->readStructEnd();
-    return $xfer;
-  }
-
-  public function write($output) {
-    $xfer = 0;
-    $xfer += $output->writeStructBegin('Busitype');
-    if ($this->name !== null) {
-      $xfer += $output->writeFieldBegin('name', TType::STRING, 1);
-      $xfer += $output->writeString($this->name);
-      $xfer += $output->writeFieldEnd();
-    }
-    if ($this->comment !== null) {
-      $xfer += $output->writeFieldBegin('comment', TType::STRING, 2);
-      $xfer += $output->writeString($this->comment);
       $xfer += $output->writeFieldEnd();
     }
     $xfer += $output->writeFieldStop();

@@ -208,6 +208,11 @@ public class MSGType {
   public static final int MSG_DEL_SCHEMA = 1608;
 
   /**
+   * 修改schema 语义属性变化,action:add del
+   */
+  public static final int MSG_SCHEMA_BUSITYPE_CHANGED = 1609;
+
+  /**
    * dw1 专用DDL语句
    */
   public static final int MSG_DDL_DIRECT_DW1 = 2001;

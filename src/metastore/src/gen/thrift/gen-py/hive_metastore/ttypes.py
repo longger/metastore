@@ -3348,6 +3348,78 @@ class Table:
   def __ne__(self, other):
     return not (self == other)
 
+class Busitype:
+  """
+  Attributes:
+   - name
+   - comment
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.STRING, 'name', None, None, ), # 1
+    (2, TType.STRING, 'comment', None, None, ), # 2
+  )
+
+  def __init__(self, name=None, comment=None,):
+    self.name = name
+    self.comment = comment
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.STRING:
+          self.name = iprot.readString();
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.STRING:
+          self.comment = iprot.readString();
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('Busitype')
+    if self.name is not None:
+      oprot.writeFieldBegin('name', TType.STRING, 1)
+      oprot.writeString(self.name)
+      oprot.writeFieldEnd()
+    if self.comment is not None:
+      oprot.writeFieldBegin('comment', TType.STRING, 2)
+      oprot.writeString(self.comment)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
 class BusiTypeColumn:
   """
   Attributes:
@@ -3410,6 +3482,92 @@ class BusiTypeColumn:
     if self.table is not None:
       oprot.writeFieldBegin('table', TType.STRUCT, 2)
       self.table.write(oprot)
+      oprot.writeFieldEnd()
+    if self.column is not None:
+      oprot.writeFieldBegin('column', TType.STRING, 3)
+      oprot.writeString(self.column)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class BusiTypeSchemaColumn:
+  """
+  Attributes:
+   - busiType
+   - schema
+   - column
+  """
+
+  thrift_spec = (
+    None, # 0
+    (1, TType.STRUCT, 'busiType', (Busitype, Busitype.thrift_spec), None, ), # 1
+    (2, TType.STRUCT, 'schema', (GlobalSchema, GlobalSchema.thrift_spec), None, ), # 2
+    (3, TType.STRING, 'column', None, None, ), # 3
+  )
+
+  def __init__(self, busiType=None, schema=None, column=None,):
+    self.busiType = busiType
+    self.schema = schema
+    self.column = column
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.STRUCT:
+          self.busiType = Busitype()
+          self.busiType.read(iprot)
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.STRUCT:
+          self.schema = GlobalSchema()
+          self.schema.read(iprot)
+        else:
+          iprot.skip(ftype)
+      elif fid == 3:
+        if ftype == TType.STRING:
+          self.column = iprot.readString();
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('BusiTypeSchemaColumn')
+    if self.busiType is not None:
+      oprot.writeFieldBegin('busiType', TType.STRUCT, 1)
+      self.busiType.write(oprot)
+      oprot.writeFieldEnd()
+    if self.schema is not None:
+      oprot.writeFieldBegin('schema', TType.STRUCT, 2)
+      self.schema.write(oprot)
       oprot.writeFieldEnd()
     if self.column is not None:
       oprot.writeFieldBegin('column', TType.STRING, 3)
@@ -4218,78 +4376,6 @@ class SFileRef:
     if self.origin_fid is not None:
       oprot.writeFieldBegin('origin_fid', TType.I64, 2)
       oprot.writeI64(self.origin_fid)
-      oprot.writeFieldEnd()
-    oprot.writeFieldStop()
-    oprot.writeStructEnd()
-
-  def validate(self):
-    return
-
-
-  def __repr__(self):
-    L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
-    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
-
-  def __eq__(self, other):
-    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
-
-  def __ne__(self, other):
-    return not (self == other)
-
-class Busitype:
-  """
-  Attributes:
-   - name
-   - comment
-  """
-
-  thrift_spec = (
-    None, # 0
-    (1, TType.STRING, 'name', None, None, ), # 1
-    (2, TType.STRING, 'comment', None, None, ), # 2
-  )
-
-  def __init__(self, name=None, comment=None,):
-    self.name = name
-    self.comment = comment
-
-  def read(self, iprot):
-    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
-      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
-      return
-    iprot.readStructBegin()
-    while True:
-      (fname, ftype, fid) = iprot.readFieldBegin()
-      if ftype == TType.STOP:
-        break
-      if fid == 1:
-        if ftype == TType.STRING:
-          self.name = iprot.readString();
-        else:
-          iprot.skip(ftype)
-      elif fid == 2:
-        if ftype == TType.STRING:
-          self.comment = iprot.readString();
-        else:
-          iprot.skip(ftype)
-      else:
-        iprot.skip(ftype)
-      iprot.readFieldEnd()
-    iprot.readStructEnd()
-
-  def write(self, oprot):
-    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
-      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
-      return
-    oprot.writeStructBegin('Busitype')
-    if self.name is not None:
-      oprot.writeFieldBegin('name', TType.STRING, 1)
-      oprot.writeString(self.name)
-      oprot.writeFieldEnd()
-    if self.comment is not None:
-      oprot.writeFieldBegin('comment', TType.STRING, 2)
-      oprot.writeString(self.comment)
       oprot.writeFieldEnd()
     oprot.writeFieldStop()
     oprot.writeStructEnd()
