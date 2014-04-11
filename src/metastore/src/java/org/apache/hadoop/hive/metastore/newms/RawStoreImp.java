@@ -419,28 +419,27 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public boolean delSFile(long fid) throws MetaException {
 	  boolean success = false;
-		try{
-			SFile sf = getSFile(fid);
-			if(sf == null) {
-        return !success;
-      }
-			cs.removeObject(ObjectType.SFILE, fid+"");
-			success = true;
-			HashMap<String, Object> old_params = new HashMap<String, Object>();
-			old_params.put("f_id", sf.getFid());
-      old_params.put("db_name", sf.getDbName());
-      old_params.put("table_name", sf.getTableName() );
-      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_DEL_FILE, -1l, -1l, null, sf, old_params));
-      
-		}catch(Exception e){
-			LOG.error(e,e);
-			return !success;
-		}finally {
-      if (success) {
-        DMProfile.fdelR.incrementAndGet();
-      }
-		}
-		return success;
+	  try {
+	    SFile sf = getSFile(fid);
+	    if (sf == null) {
+	      return false;
+	    }
+	    cs.removeObject(ObjectType.SFILE, fid+"");
+	    success = true;
+	    HashMap<String, Object> old_params = new HashMap<String, Object>();
+	    old_params.put("f_id", sf.getFid());
+	    old_params.put("db_name", sf.getDbName());
+	    old_params.put("table_name", sf.getTableName() );
+	    MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_DEL_FILE, -1l, -1l, null, sf, old_params));
+	  } catch(Exception e) {
+	    LOG.error(e,e);
+	    return false;
+	  } finally {
+	    if (success) {
+	      DMProfile.fdelR.incrementAndGet();
+	    }
+	  }
+	  return success;
 	}
 
 	@Override
@@ -534,8 +533,8 @@ public class RawStoreImp implements RawStore {
       old_params.put("devid", location.getDevid());
       old_params.put("location", location.getLocation());
       old_params.put("op", "add");
-//      old_params.put("db_name", location);
-//      old_params.put("table_name", tableName);
+      old_params.put("db_name", sf.getDbName());
+      old_params.put("table_name", sf.getTableName());
       MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, location, old_params));
       DMProfile.sflcreateR.incrementAndGet();
       return true;
@@ -634,8 +633,8 @@ public class RawStoreImp implements RawStore {
 	      old_params.put("new_status", newsfl.getVisit_status());
 	      old_params.put("devid", newsfl.getDevid());
         old_params.put("location", newsfl.getLocation());
-//	      old_params.put("db_name", );
-//	      old_params.put("table_name", tableName);
+	      old_params.put("db_name", sf.getDbName());
+	      old_params.put("table_name", sf.getTableName());
 	      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, sfl, old_params));
 	    }
 
@@ -653,7 +652,7 @@ public class RawStoreImp implements RawStore {
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
 			if(sfl == null) {
-        return !success;
+        return false;
       }
 			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
 			if(sf == null) {
@@ -663,16 +662,16 @@ public class RawStoreImp implements RawStore {
 			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
 			cs.removeObject(ObjectType.SFILELOCATION, sflkey);
 			success = true;
-			
+
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
 			old_params.put("f_id", sfl.getFid());
 			old_params.put("devid", devid);
 			old_params.put("location", location);
-//			old_params.put("db_name", sf.getd);
-//			old_params.put("table_name", table_name);
+			old_params.put("db_name", sf.getDbName());
+			old_params.put("table_name", sf.getTableName());
 			old_params.put("op", "del");
 			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, sfl, old_params));
-			
+
 		}catch(Exception e){
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
