@@ -4749,6 +4749,12 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throw new FileOperationException("Can not find SFile by FID " + file.getFid(), FOFailReason.INVALID_FILE);
       }
 
+      if (saved.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
+        LOG.info("Try to set REPLICATED to fid " + file.getFid() + " to physically deleted it.");
+        saved.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
+        saved = getMS().updateSFile(saved);
+      }
+
       if (!(saved.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE ||
           saved.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED ||
           saved.getStore_status() == MetaStoreConst.MFileStoreStatus.RM_LOGICAL)) {

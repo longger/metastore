@@ -439,6 +439,7 @@ public class DiskManager {
       DMROperation op;
       String to_dc;
       int begin_idx;
+      int failnr = 0;
 
       public DMRequest(SFile f, DMROperation o, int idx) {
         file = f;
@@ -3246,11 +3247,14 @@ public class DiskManager {
                 }
               } catch (IOException e) {
                 LOG.error(e, e);
+                r.failnr++;
                 r.begin_idx = i;
-                // insert back to the queue;
-                synchronized (repQ) {
-                  repQ.add(r);
-                  repQ.notify();
+                if (r.failnr <= 50) {
+                  // insert back to the queue;
+                  synchronized (repQ) {
+                    repQ.add(r);
+                    repQ.notify();
+                  }
                 }
                 try {
                   Thread.sleep(500);
@@ -3841,6 +3845,8 @@ public class DiskManager {
                               newsfl.setDigest(args[3]);
                               rs.updateSFileLocation(newsfl);
                             }
+                          } else {
+                            LOG.warn("SFL " + newsfl.getDevid() + ":" + newsfl.getLocation() + " -> FID " + newsfl.getFid() + " nonexist.");
                           }
                         }
                       } catch (MetaException e) {
