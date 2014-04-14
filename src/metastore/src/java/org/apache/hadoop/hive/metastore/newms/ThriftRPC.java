@@ -255,6 +255,8 @@ public class ThriftRPC extends FacebookBase implements
                 clients.remove(context.getUserName());
                 rpc.authentication(context.getUserName(), context.getPassword());
                    }
+            }else{
+              clients.put(DEFAULT_USER_NAME, MsgProcessing.createMetaStoreClient());
                 }
             try {
               //用新连接重新执行客户端调用的方法一次，即重试，如果重试再次失败则抛出异常
