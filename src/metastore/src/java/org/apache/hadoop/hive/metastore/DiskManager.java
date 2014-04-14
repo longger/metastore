@@ -84,8 +84,8 @@ public class DiskManager {
     public Set<String> backupDevs = new TreeSet<String>();
 
     // TODO: REP limiting for low I/O bandwidth env
-    public Long closeRepLimit = 0L;
-    public Long fixRepLimit = 0L;
+    public AtomicLong closeRepLimit = new AtomicLong(0L);
+    public AtomicLong fixRepLimit = new AtomicLong(0L);
 
     public static long dmsnr = 0;
     public static FLSelector flselector = new FLSelector();
@@ -1351,8 +1351,8 @@ public class DiskManager {
         sb.append(DMProfile.newConn.get() + ",");
         sb.append(DMProfile.delConn.get() + ",");
         sb.append(DMProfile.query.get() + ",");
-        sb.append(closeRepLimit + ",");
-        sb.append(fixRepLimit + ",");
+        sb.append(closeRepLimit.get() + ",");
+        sb.append(fixRepLimit.get() + ",");
         synchronized (repQ) {
           sb.append(repQ.size() + ",");
         }
@@ -1450,15 +1450,11 @@ public class DiskManager {
           }
 
           if (last_limitTs + 3600 * 1000 < System.currentTimeMillis()) {
-            synchronized (closeRepLimit) {
-              if (closeRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
-                closeRepLimit++;
-              }
+            if (closeRepLimit.get() < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
+              closeRepLimit.incrementAndGet();
             }
-            synchronized (fixRepLimit) {
-              if (fixRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)){
-                fixRepLimit++;
-              }
+            if (fixRepLimit.get() < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)){
+              fixRepLimit.incrementAndGet();
             }
             last_limitTs = System.currentTimeMillis();
           }
@@ -1783,8 +1779,8 @@ public class DiskManager {
       this.rs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
-      closeRepLimit = hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT);
-      fixRepLimit = hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT);
+      closeRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT));
+      fixRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT));
       init();
     }
 
@@ -1802,9 +1798,7 @@ public class DiskManager {
     }
 
     public void release_fix_limit() {
-      synchronized (fixRepLimit) {
-        fixRepLimit++;
-      }
+      fixRepLimit.incrementAndGet();
     }
 
     public String getAnyNode(String devid) throws MetaException {
@@ -2077,7 +2071,7 @@ public class DiskManager {
       }
       r += "}\n";
       r += flselector.printWatched();
-      r += "Rep Limit: closeRepLimit " + closeRepLimit + ", fixRepLimit " + fixRepLimit + "\n";
+      r += "Rep Limit: closeRepLimit " + closeRepLimit.get() + ", fixRepLimit " + fixRepLimit.get() + "\n";
 
       dmsnr++;
       return r;
@@ -3002,30 +2996,21 @@ public class DiskManager {
       }
 
       public void release_rep_limit() {
-        synchronized (closeRepLimit) {
-          closeRepLimit++;
-        }
+        closeRepLimit.incrementAndGet();
       }
 
       public void run() {
         while (true) {
           // check limiting
           do {
-            boolean do_sleep = false;
-
-            synchronized (closeRepLimit) {
-              if (closeRepLimit > 0) {
-                closeRepLimit--;
-                break;
-              } else {
-                do_sleep = true;
-              }
-            }
-            if (do_sleep) {
+            if (closeRepLimit.decrementAndGet() < 0) {
+              closeRepLimit.incrementAndGet();
               try {
                   Thread.sleep(1000);
               } catch (InterruptedException e) {
               }
+            } else {
+              break;
             }
           } while (true);
 
@@ -3567,18 +3552,14 @@ public class DiskManager {
             // release limit
             boolean release_fix_limit = false;
 
-            synchronized (closeRepLimit) {
-              if (closeRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
-                closeRepLimit++;
-              } else {
-                release_fix_limit = true;
-              }
+            if (closeRepLimit.get() < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
+              closeRepLimit.incrementAndGet();
+            } else {
+              release_fix_limit = true;
             }
             if (release_fix_limit) {
-              synchronized (fixRepLimit) {
-                if (fixRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)) {
-                  fixRepLimit++;
-                }
+              if (fixRepLimit.get() < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)) {
+                fixRepLimit.incrementAndGet();
               }
             }
             //TODO: delete the SFL now
@@ -3796,18 +3777,14 @@ public class DiskManager {
                     // release limiting
                     boolean release_fix_limit = false;
 
-                    synchronized (closeRepLimit) {
-                      if (closeRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
-                        closeRepLimit++;
-                      } else {
-                        release_fix_limit = true;
-                      }
+                    if (closeRepLimit.get() < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
+                      closeRepLimit.incrementAndGet();
+                    } else {
+                      release_fix_limit = true;
                     }
                     if (release_fix_limit) {
-                      synchronized (fixRepLimit) {
-                        if (fixRepLimit < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)) {
-                          fixRepLimit++;
-                        }
+                      if (fixRepLimit.get() < hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT)) {
+                        fixRepLimit.incrementAndGet();
                       }
                     }
                     if (args.length < 3) {
