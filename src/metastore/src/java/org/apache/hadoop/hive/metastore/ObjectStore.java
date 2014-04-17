@@ -1727,14 +1727,14 @@ public class ObjectStore implements RawStore, Configurable {
       mfloc = convertToMFileLocation(location);
       if (mfloc != null) {
         pm.makePersistent(mfloc);
-      }
-//      dbName = mfloc.getFile().getTable().getDatabase().getName();
-//      tableName = mfloc.getFile().getTable().getTableName();
-      if(mfloc.getFile().getTable() != null) {
-        tableName = mfloc.getFile().getTable().getTableName();
-      }
-      if(mfloc.getFile().getTable() != null && mfloc.getFile().getTable().getDatabase() != null) {
-        dbName = mfloc.getFile().getTable().getDatabase().getName();
+        if (mfloc.getFile().getTable() != null) {
+          tableName = mfloc.getFile().getTable().getTableName();
+        }
+        if (mfloc.getFile().getTable() != null && mfloc.getFile().getTable().getDatabase() != null) {
+          dbName = mfloc.getFile().getTable().getDatabase().getName();
+        }
+      } else {
+        throw new InvalidObjectException("FID" + location.getFid() + " create Loc " + location.getLocation() + " failed.");
       }
       commited = commitTransaction();
     } finally {

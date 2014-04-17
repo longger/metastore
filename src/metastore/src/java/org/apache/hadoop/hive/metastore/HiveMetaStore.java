@@ -4498,24 +4498,27 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         // this means we should select Best Available Node and Best Available Device;
         // FIXME: add FLSelector here, filter already used nodes, update will used nodes;
         try {
-          node_name = dm.findBestNode(flp);
-          if (node_name == null) {
-            throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
-          }
           if (db_name != null && table_name != null && values.size() == 3) {
             try {
               String l2keys[] = values.get(2).getValue().split("-");
               if (l2keys.length == 2) {
-                LOG.info("FLSelector will choose " + DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
-                    Long.parseLong(values.get(0).getValue()),
-                    Long.parseLong(l2keys[1])) + " for " + db_name + "." + table_name +
+                node_name = DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
+                    Long.parseLong(values.get(0).getValue()), Long.parseLong(l2keys[1]));
+                LOG.info("FLSelector choose " + node_name +
+                    " for " + db_name + "." + table_name +
                     " L1Key=" + values.get(0).getValue() +
-                    " L2Key=" + l2keys[1] + ", vs " + node_name);
+                    " L2Key=" + l2keys[1]);
               }
             }
             catch (NumberFormatException nfe) {
               LOG.error(nfe, nfe);
             }
+          }
+          if (node_name == null) {
+            node_name = dm.findBestNode(flp);
+          }
+          if (node_name == null) {
+            throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
           }
         } catch (IOException e) {
           LOG.error(e, e);

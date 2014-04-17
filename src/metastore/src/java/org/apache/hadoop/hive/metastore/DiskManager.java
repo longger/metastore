@@ -2253,9 +2253,9 @@ public class DiskManager {
       }
       try {
         synchronized (rs) {
-          if ((double)ndmap.size() / (double)rs.countNode() <= 0.5) {
+          if ((double)ndmap.size() / (double)rs.countNode() < 0.1) {
             safeMode = true;
-            LOG.info("Lost too many Nodes, enter into SafeMode now.");
+            LOG.info("Lost too many Nodes(<10%), enter into SafeMode now.");
           }
         }
       } catch (MetaException e) {
@@ -2267,9 +2267,9 @@ public class DiskManager {
     public void SafeModeStateChange() {
       try {
         synchronized (rs) {
-          if ((double)ndmap.size() / (double)rs.countNode() <= 0.5) {
+          if ((double)ndmap.size() / (double)rs.countNode() < 0.1) {
             safeMode = true;
-            LOG.info("Lost too many Nodes, enter into SafeMode now.");
+            LOG.info("Lost too many Nodes(<10%), enter into SafeMode now.");
           }
         }
       } catch (MetaException e) {
@@ -2281,9 +2281,11 @@ public class DiskManager {
       NodeInfo ni = ndmap.get(nodeName);
       if (ni != null) {
         synchronized (ni) {
-          for (DeviceInfo di : ni.dis) {
-            if (di.dev.equalsIgnoreCase(devid)) {
-              return true;
+          if (ni.dis != null) {
+            for (DeviceInfo di : ni.dis) {
+              if (di.dev.equalsIgnoreCase(devid)) {
+                return true;
+              }
             }
           }
         }
@@ -2691,11 +2693,13 @@ public class DiskManager {
     private List<DeviceInfo> filterOfflineDevice(String node_name, List<DeviceInfo> orig) {
       List<DeviceInfo> r = new ArrayList<DeviceInfo>();
 
-      for (DeviceInfo di : orig) {
-        if (di.isOffline) {
-          continue;
-        } else {
-          r.add(di);
+      if (orig != null) {
+        for (DeviceInfo di : orig) {
+          if (di.isOffline) {
+            continue;
+          } else {
+            r.add(di);
+          }
         }
       }
 
@@ -2706,12 +2710,14 @@ public class DiskManager {
     private List<DeviceInfo> filterSharedDevice(String node_name, List<DeviceInfo> orig) {
       List<DeviceInfo> r = new ArrayList<DeviceInfo>();
 
-      for (DeviceInfo di : orig) {
-        if (di.isOffline) {
-          continue;
-        }
-        if (di.prop == MetaStoreConst.MDeviceProp.ALONE) {
-          r.add(di);
+      if (orig != null) {
+        for (DeviceInfo di : orig) {
+          if (di.isOffline) {
+            continue;
+          }
+          if (di.prop == MetaStoreConst.MDeviceProp.ALONE) {
+            r.add(di);
+          }
         }
       }
 
@@ -2808,8 +2814,10 @@ public class DiskManager {
         throw new IOException("Node '" + node + "' does not exist in NDMap, are you sure node '" + node + "' belongs to this MetaStore?" + hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION) + "\n");
       }
       List<DeviceInfo> dilist = new ArrayList<DeviceInfo>();
-      for (DeviceInfo di : ni.dis) {
-        dilist.add(new DeviceInfo(di));
+      if (ni.dis != null) {
+        for (DeviceInfo di : ni.dis) {
+          dilist.add(new DeviceInfo(di));
+        }
       }
       if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED ||
           flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
@@ -3001,6 +3009,7 @@ public class DiskManager {
 
       public void run() {
         while (true) {
+          try {
           // check limiting
           do {
             if (closeRepLimit.decrementAndGet() < 0) {
@@ -3319,6 +3328,9 @@ public class DiskManager {
               }
             }
           }
+        } catch (Exception e) {
+          LOG.error(e, e);
+        }
         }
       }
     }
@@ -3333,6 +3345,7 @@ public class DiskManager {
       @Override
       public void run() {
         while (true) {
+          try {
           Set<JSONObject> toRep = null;
           Set<SFileLocation> toDelete = null;
           NodeInfo ni = null;
@@ -3435,6 +3448,9 @@ public class DiskManager {
             if (!(toRep.size() > 0 || toDelete.size() > 0)) {
               break;
             }
+          }
+          } catch (Exception e) {
+            LOG.error(e, e);
           }
         }
       }
@@ -3727,6 +3743,11 @@ public class DiskManager {
                             if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
                               LOG.info("Failed Replication for file " + sfl.getFid() + " dev " + sfl.getDevid() + " loc " + sfl.getLocation() + ", delete it now.");
                               rs.delSFileLocation(args[1], args[2]);
+                              // BUG-XXX: shall we trigger a DELETE request to dservice?
+                              synchronized (oni.toDelete) {
+                                oni.toDelete.add(sfl);
+                                LOG.info("----> Add toDelete " + sfl.getLocation() + ", qs " + cleanQ.size() + ", dev " + sfl.getDevid());
+                              }
                             }
                           }
                         }
