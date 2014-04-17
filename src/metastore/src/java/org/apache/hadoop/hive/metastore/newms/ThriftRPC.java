@@ -20,6 +20,9 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -107,11 +110,13 @@ import com.google.common.base.Strings;
 public class ThriftRPC extends FacebookBase implements
     org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface {
 
+  private final static ConcurrentHashMap<String, IMetaStoreClient> clients = new ConcurrentHashMap<String, IMetaStoreClient>();
+  private final static String DEFAULT_USER_NAME = "_unauthed_user";
+  private final ThriftRPCInfo rpcInfo = new ThriftRPCInfo();
   private final NewMSConf conf;
   private final RawStoreImp rs;
   private IMetaStoreClient client;
-  private final static ConcurrentHashMap<String, IMetaStoreClient> clients = new ConcurrentHashMap<String, IMetaStoreClient>();
-  private final static String DEFAULT_USER_NAME = "_unauthed_user";
+
   private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
   private DiskManager dm;
   Random rand = new Random();
@@ -143,10 +148,13 @@ public class ThriftRPC extends FacebookBase implements
       client = MsgProcessing.createMetaStoreClient();
       clients.put(DEFAULT_USER_NAME, client);
     } catch (MetaException e) {
-      LOG.error("can't init IMetaStoreClient");
-      e.printStackTrace();
+      LOG.error("can't init IMetaStoreClient", e);
     }
   }
+    static{//初始化时为ThriftRPC类中所有的方法初始一个
+
+    }
+
 
   public static void setIpAddress(String ipAddress) {
     threadLocalIpAddress.set(ipAddress);
@@ -164,6 +172,7 @@ public class ThriftRPC extends FacebookBase implements
           "cmd=%s\t"; // command
   public static final Log auditLog = LogFactory.getLog(
       ThriftRPC.class.getName() + ".audit");
+  private final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
   private static ThreadLocal<Formatter> auditFormatter =
       new ThreadLocal<Formatter>() {
         @Override
@@ -208,6 +217,14 @@ public class ThriftRPC extends FacebookBase implements
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
+      //每10秒打印一次rpcInfo信息
+      schedule.scheduleAtFixedRate(new Runnable(){
+
+        @Override
+        public void run() {
+          LOG.info(rpcInfo);
+        }
+      }, 10,10, TimeUnit.SECONDS);
     } catch (MetaException e) {
       LOG.error(e, e);
       throw new IOException(e.getMessage());
@@ -222,9 +239,11 @@ public class ThriftRPC extends FacebookBase implements
 
     public _ProxyThriftRPC(ThriftRPC rpc) {
       this.rpc = rpc;
+      schedule = Executors.newScheduledThreadPool(1);
     }
 
     public ThriftRPC getRPC() {
+
       return (ThriftRPC) Proxy.newProxyInstance(rpc.getClass().getClassLoader(), rpc.getClass()
           .getInterfaces(), this);
     }
@@ -233,6 +252,7 @@ public class ThriftRPC extends FacebookBase implements
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
       String methodName = method.getName();
       Object result = null;
+      long startTime = System.currentTimeMillis();
       /*
        * 在客户端失效重连阶段会先从clients中移除失效的client，然后重新创建并认证新client
        * 如果移除旧client后认证新client前客户端调用rpc中使用client的方法可能会导致NullPointerException
@@ -241,36 +261,38 @@ public class ThriftRPC extends FacebookBase implements
       while (true) {
         if (!clients.contains(rpc.getUserName())) {
           continue;
-           }
+        }
         try {
           result = method.invoke(rpc, args);
+          rpcInfo.captureInfo(method.getName(), System.currentTimeMillis() - startTime);
           return result;
         } catch (Exception e) {
-          if (e instanceof TException) {//发生连接异常，自动重建连接
+          if (e instanceof TException) {// 发生连接异常，自动重建连接
             LOG.info("some error occured when call method " + methodName + " try reconnect");
             HiveMetaStoreServerContext context = rpc.getServerContext();
             if (rpc.getServerContext().isAuthenticated()) {
               // 如果重连之前客户端没有修改过密码，则重新验证能成功，但是还存在潜在风险
-              synchronized (this) {//移除和认证应该保持原子操作
+              synchronized (this) {// 移除和认证应该保持原子操作
                 clients.remove(context.getUserName());
                 rpc.authentication(context.getUserName(), context.getPassword());
-                   }
-            }else{
+              }
+            } else {
               clients.put(DEFAULT_USER_NAME, MsgProcessing.createMetaStoreClient());
-                }
+            }
             try {
-              //用新连接重新执行客户端调用的方法一次，即重试，如果重试再次失败则抛出异常
+              // 用新连接重新执行客户端调用的方法一次，即重试，如果重试再次失败则抛出异常
               result = method.invoke(rpc, args);
+              rpcInfo.captureInfo(method.getName(), System.currentTimeMillis() - startTime);
               return result;
             } catch (Exception t) {
               LOG.error(
                   "I have tried my best to retry, but still cause some exceptions,please check program",
                   t);
               throw t;
-                }
-          } else {//其他异常，直接抛出
+            }
+          } else {// 其他异常，直接抛出
             throw e;
-             }
+          }
         }
       }
 
