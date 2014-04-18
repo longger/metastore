@@ -707,6 +707,7 @@ public class HiveConf extends Configuration {
     DM_CHECK_DEL_TIMEOUT("hive.diskmanager.check.del.timeout", 5 * 60 * 1000),
     DM_CHECK_REREP_TIMEOUT("hive.diskmanager.check.rerep.timeout", 30 * 1000),
     DM_CHECK_OFFLINE_DEL_TIMEOUT("hive.diskmanager.check.offline.del.timeout", 3600 * 1000),
+    DM_CHECK_SUSPECT_DEL_TIMEOUT("hive.diskmanager.check.suspect.del.timeout", 24 * 3600 * 1000),
     DM_SAFEMODE_ENTER("hive.diskmanager.safemode.enter", (float)0.5),
     DM_SAFEMODE_LEAVE("hive.diskmanager.safemode.leave", (float)0.99),
     DM_APPEND_CMD_MAX("hive.diskmanager.nr.max", 4),

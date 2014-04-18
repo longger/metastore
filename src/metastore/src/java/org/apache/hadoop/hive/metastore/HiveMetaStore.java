@@ -4504,10 +4504,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
               if (l2keys.length == 2) {
                 node_name = DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
                     Long.parseLong(values.get(0).getValue()), Long.parseLong(l2keys[1]));
+                repnr = DiskManager.flselector.updateRepnr(table_name, repnr);
                 LOG.info("FLSelector choose " + node_name +
                     " for " + db_name + "." + table_name +
                     " L1Key=" + values.get(0).getValue() +
-                    " L2Key=" + l2keys[1]);
+                    " L2Key=" + l2keys[1] + ", repnr=" + repnr);
               }
             }
             catch (NumberFormatException nfe) {
@@ -7062,13 +7063,17 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public boolean flSelectorWatch(String table, int op) throws MetaException, TException {
-      switch (op) {
+      int true_op = op & 0xff;
+
+      switch (true_op) {
       case 0:
         return DiskManager.flselector.watched(table);
       case 1:
         return DiskManager.flselector.unWatched(table);
       case 2:
         return DiskManager.flselector.flushWatched(table);
+      case 3:
+        return DiskManager.flselector.repnrWatched(table, op >> 8);
       default:
         return false;
       }

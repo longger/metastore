@@ -93,6 +93,7 @@ public class DiskManager {
     public static class FLEntry {
       // single entry for one table
       public String table;
+      public int repnr = -1;
       public long l1Key;
       public long l2KeyMax;
       public TreeMap<Long, String> distribution;
@@ -167,6 +168,20 @@ public class DiskManager {
         return false;
       }
 
+      public boolean repnrWatched(String table, int repnr) {
+        if (repnr <= 0 || repnr > 5) {
+          return false;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null) {
+          synchronized (fle) {
+            fle.repnr = repnr;
+          }
+          return true;
+        }
+        return false;
+      }
+
       public String printWatched() {
         String r = "";
 
@@ -179,13 +194,26 @@ public class DiskManager {
         synchronized (context) {
           for (Map.Entry<String, FLEntry> e : context.entrySet()) {
             r += "Table '" + e.getKey() + "' -> {\n";
-            r += "\tl1Key=" + e.getValue().l1Key + ", l2KeyMax=" + e.getValue().l2KeyMax + "\n";
+            r += "\trepnr=" + e.getValue().repnr + ", ";
+            r += "l1Key=" + e.getValue().l1Key + ", l2KeyMax?=" + e.getValue().l2KeyMax + "\n";
             r += "\t" + e.getValue().distribution + "\n";
             r += "\t" + e.getValue().statis + "\n";
             r += "}\n";
           }
         }
         return r;
+      }
+
+      public int updateRepnr(String table, int repnr) {
+        if (!tableWatched.contains(table)) {
+          return repnr;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null && fle.repnr > 0) {
+          return fle.repnr;
+        } else {
+          return repnr;
+        }
       }
 
       // PLEASE USE REGULAR TABLE NAME HERE
@@ -918,6 +946,7 @@ public class DiskManager {
       public long rerepTimeout = 30 * 1000;
 
       public long offlineDelTimeout = 3600 * 1000; // 1 hour
+      public long suspectDelTimeout = 24 * 3600 * 1000; // 24 hour
 
       private long last_repTs = System.currentTimeMillis();
       private long last_rerepTs = System.currentTimeMillis();
@@ -1581,6 +1610,11 @@ public class DiskManager {
                 if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
                   // if this OFFLINE sfl exist too long or we do exceed the ng'size limit
                   if (do_clean || fl.getUpdate_time() + offlineDelTimeout < System.currentTimeMillis()) {
+                    s.add(fl);
+                  }
+                }
+                if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
+                  if (do_clean || fl.getUpdate_time() + suspectDelTimeout < System.currentTimeMillis()) {
                     s.add(fl);
                   }
                 }
@@ -3887,6 +3921,16 @@ public class DiskManager {
                             oni.toVerify.add(args[1] + ":" + oni.getMP(args[1]) + ":" + args[2]);
                             LOG.info("----> Add toVerify " + args[0] + " " + args[1] + "," + args[2] + ", qs " + oni.toVerify.size());
                             oni.totalVYR++;
+                          }
+                        } else {
+                          if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
+                            sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
+                            try {
+                              rs.updateSFileLocation(sfl);
+                            } catch (Exception e) {
+                              LOG.error(e, e);
+                            }
+                            LOG.info("Verify change dev: " + args[1] + " loc: " + args[2] + " sfl state from SUSPECT to ONLINE.");
                           }
                         }
                       }

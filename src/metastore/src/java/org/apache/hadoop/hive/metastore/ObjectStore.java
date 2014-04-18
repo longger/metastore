@@ -1214,17 +1214,22 @@ public class ObjectStore implements RawStore, Configurable {
           lingering.add(s);
         }
         if (m.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-          int offnr = 0, onnr = 0;
+          int offnr = 0, onnr = 0, suspnr = 0;
 
           for (SFileLocation fl : l) {
             if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
               onnr++;
             } else if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
               offnr++;
+            } else if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
+              suspnr++;
             }
           }
-          if ((m.getRep_nr() <= onnr && offnr > 0) ||
-              (onnr + offnr >= node_nr && offnr > 0)) {
+          // NOTE: logic is ->
+          // if online nr >= requested nr, we try to remove any offline/suspect SFLs,
+          // otherwise, if online + offline + suspect >= node_nr, try to remove offline SFLs
+          if ((m.getRep_nr() <= onnr && (offnr > 0 || suspnr > 0)) ||
+              (onnr + offnr + suspnr >= node_nr && offnr > 0)) {
             try {
               SFile s = convertToSFile(m);
               s.setLocations(l);
@@ -2480,10 +2485,24 @@ public class ObjectStore implements RawStore, Configurable {
           for (int i = 0; i < mfl.size(); i++) {
             MFileLocation x = mfl.get(i);
 
-            if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE &&
+                (x.getDev().getProp() == MetaStoreConst.MDeviceProp.ALONE ||
+                x.getDev().getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE)) {
               selected = true;
               idx = i;
               break;
+            }
+          }
+          if (!selected) {
+            // ok, try to select shared device
+            for (int i = 0; i < mfl.size(); i++) {
+              MFileLocation x = mfl.get(i);
+
+              if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+                selected = true;
+                idx = i;
+                break;
+              }
             }
           }
           if (selected) {
