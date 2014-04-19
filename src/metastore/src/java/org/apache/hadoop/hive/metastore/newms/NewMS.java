@@ -13,6 +13,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
+import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
 import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore;
 import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisInstance;
 import org.apache.hadoop.hive.metastore.newms.NewMSConf.RedisMode;
@@ -94,7 +95,8 @@ public class NewMS {
       try {
         TServerTransport serverTransport = tcpKeepAlive ?
             new TServerSocketKeepAlive(port) : new TServerSocket(port);
-			  TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
+			  //TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
+			  TProcessor tprocessor = new TSetIpAddressProcessor<ThriftRPC>(new ThriftRPC(conf));
 
 			  TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(serverTransport)
 			  .transportFactory(new TTransportFactory())

@@ -1866,9 +1866,10 @@ public class ThriftRPC extends FacebookBase implements
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+    	r.getLocations().clear();
       break;
     default:
-    	r.setLocations(rs.getSFileLocations(fid));
+//    	r.setLocations(rs.getSFileLocations(fid));
     }
     identifySharedDevice(r.getLocations());
 
@@ -1878,6 +1879,7 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public SFile get_file_by_name(String node, String devid, String location)
       throws FileOperationException, MetaException, TException {
+  	DMProfile.fgetR.incrementAndGet();
     SFile r = rs.getSFile(devid, location);
     if (r == null) {
       throw new FileOperationException("Can not find SFile by name: " + node + ":" + devid + ":"
@@ -1887,9 +1889,10 @@ public class ThriftRPC extends FacebookBase implements
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+    	r.getLocations().clear();
       break;
     default:
-    	r.setLocations(rs.getSFileLocations(r.getFid()));
+//    	r.setLocations(rs.getSFileLocations(r.getFid()));
     }
     identifySharedDevice(r.getLocations());
 
