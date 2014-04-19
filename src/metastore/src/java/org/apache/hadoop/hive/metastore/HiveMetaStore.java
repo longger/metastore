@@ -6665,7 +6665,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public List<Long> listFilesByDigest(String digest) throws MetaException, TException {
       startFunction("listFilesByDigest:", "digest: " + digest);
-      return getMS().findSpecificDigestFiles(digest);
+      try {
+        return getMS().findSpecificDigestFiles(digest);
+      } finally {
+        endFunction("listFilesByDigest:", true, null);
+      }
     }
 
     @Override
