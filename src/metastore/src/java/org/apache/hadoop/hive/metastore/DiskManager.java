@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -2328,13 +2329,19 @@ public class DiskManager {
     }
 
     public boolean isSharedDevice(String devid) throws MetaException, NoSuchObjectException {
-      synchronized (rs) {
-        Device d = rs.getDevice(devid);
-        if (d.getProp() == MetaStoreConst.MDeviceProp.SHARED ||
-            d.getProp() == MetaStoreConst.MDeviceProp.BACKUP) {
-          return true;
-        } else {
-          return false;
+      DeviceInfo di = admap.get(devid);
+      if (di != null) {
+        return (di.prop == MetaStoreConst.MDeviceProp.SHARED ||
+            di.prop == MetaStoreConst.MDeviceProp.BACKUP);
+      } else {
+        synchronized (rs) {
+          Device d = rs.getDevice(devid);
+          if (d.getProp() == MetaStoreConst.MDeviceProp.SHARED ||
+              d.getProp() == MetaStoreConst.MDeviceProp.BACKUP) {
+            return true;
+          } else {
+            return false;
+          }
         }
       }
     }
@@ -2355,7 +2362,7 @@ public class DiskManager {
           continue;
         }
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedDevice(node, ni.dis);
+          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(node, ni.dis);
           long thisfree = 0;
 
           if (dis == null) {
@@ -2404,7 +2411,7 @@ public class DiskManager {
       for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
         NodeInfo ni = entry.getValue();
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedDevice(entry.getKey(), ni.dis);
+          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(entry.getKey(), ni.dis);
           long thisfree = 0;
 
           if (dis == null) {
@@ -2454,7 +2461,7 @@ public class DiskManager {
       for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
         NodeInfo ni = entry.getValue();
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedDevice(entry.getKey(), ni.dis);
+          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(entry.getKey(), ni.dis);
 
           if (dis == null) {
             continue;
@@ -2516,6 +2523,7 @@ public class DiskManager {
       public static final int RANDOM_DEVS = 6;
       public static final int EXCLUDE_DEVS_AND_RANDOM = 7;
       public static final int EXCLUDE_NODES_AND_RANDOM = 8;
+      public static final int USE_CACHE = 9;  // active both on node and dev mode
 
       Set<String> nodes;
       Set<String> devs;
@@ -2587,6 +2595,40 @@ public class DiskManager {
         throw new IOException("Disk Manager is in Safe Mode, waiting for disk reports ...\n");
       }
       switch (flp.node_mode) {
+      case FileLocatingPolicy.USE_CACHE:
+      {
+        TreeMap<String, Long> candidate = new TreeMap<String, Long>();
+
+        for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
+          NodeInfo ni = e.getValue();
+          if (ni.dis != null && ni.dis.size() > 0) {
+            for (DeviceInfo di : ni.dis) {
+              if (di.prop == MetaStoreConst.MDeviceProp.CACHE && !di.isOffline) {
+                // ok, this node is a candidate
+                Long oldfree = candidate.get(e.getKey());
+                if (oldfree == null) {
+                  candidate.put(e.getKey(), di.free);
+                } else {
+                  candidate.put(e.getKey(), oldfree + di.free);
+                }
+              }
+            }
+          }
+        }
+        // find the LARGEST 3 nodes, and random select one
+        if (candidate.size() == 0) {
+          return null;
+        } else {
+          Random r = new Random();
+          __trim_candidate(candidate, 3);
+          String[] a = candidate.keySet().toArray(new String[0]);
+          if (a.length > 0) {
+            return a[r.nextInt(a.length)];
+          } else {
+            return null;
+          }
+        }
+      }
       case FileLocatingPolicy.EXCLUDE_NODES:
         if (flp.nodes == null || flp.nodes.size() == 0) {
           return findBestNode(false);
@@ -2691,6 +2733,10 @@ public class DiskManager {
             continue;
           }
           for (DeviceInfo di : dis) {
+            // Do not calculate cache device's space
+            if (di.prop == MetaStoreConst.MDeviceProp.CACHE) {
+              continue;
+            }
             if (!(ignoreShared && (di.prop == MetaStoreConst.MDeviceProp.SHARED || di.prop == MetaStoreConst.MDeviceProp.BACKUP))) {
               thisfree += di.free;
             }
@@ -2723,6 +2769,24 @@ public class DiskManager {
       }
     }
 
+    public void findCacheDevice(Set<String> dev, Set<String> node) {
+      for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
+        List<DeviceInfo> dis = e.getValue().dis;
+        if (dis != null) {
+          for (DeviceInfo di : dis) {
+            // Note: ignore almost full cache device here
+            if (di.isOffline || di.free < 1024 * 1024) {
+              continue;
+            }
+            if (di.prop == MetaStoreConst.MDeviceProp.BACKUP || di.prop == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
+              dev.add(di.dev);
+              node.add(e.getKey());
+            }
+          }
+        }
+      }
+    }
+
     // filter offline device either
     private List<DeviceInfo> filterOfflineDevice(String node_name, List<DeviceInfo> orig) {
       List<DeviceInfo> r = new ArrayList<DeviceInfo>();
@@ -2740,8 +2804,8 @@ public class DiskManager {
       return r;
     }
 
-    // filter backup device and offline device both
-    private List<DeviceInfo> filterSharedDevice(String node_name, List<DeviceInfo> orig) {
+    // filter backup device and offline device both, and cache device either
+    private List<DeviceInfo> filterSharedOfflineCacheDevice(String node_name, List<DeviceInfo> orig) {
       List<DeviceInfo> r = new ArrayList<DeviceInfo>();
 
       if (orig != null) {
@@ -2783,7 +2847,7 @@ public class DiskManager {
 
         NodeInfo ni = entry.getValue();
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedDevice(entry.getKey(), ni.dis);
+          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(entry.getKey(), ni.dis);
           long thisfree = 0;
 
           if (dis == null) {
@@ -2804,6 +2868,59 @@ public class DiskManager {
         }
         nodes.add(m.get(key));
         i++;
+      }
+    }
+
+    class TopKeySet {
+      public LinkedList<KeySetEntry> ll;
+      private final int k;
+
+      public TopKeySet(int k) {
+        ll = new LinkedList<KeySetEntry>();
+        this.k = k;
+      }
+
+      class KeySetEntry {
+        String key;
+        Long dn;
+
+        public KeySetEntry(String key, Long dn) {
+          this.key = key;
+          this.dn = dn;
+        }
+      }
+
+      public void put(String key, Long value) {
+        boolean isInserted = false;
+        for (int i = 0; i < ll.size(); i++) {
+          if (value.longValue() > ll.get(i).dn) {
+            ll.add(i, new KeySetEntry(key,value));
+            isInserted = true;
+            break;
+          }
+        }
+        if (ll.size() < k) {
+          if (!isInserted) {
+            ll.addLast(new KeySetEntry(key,value));
+          }
+        } else if (ll.size() > k) {
+          ll.removeLast();
+        }
+      }
+    }
+
+    private void __trim_candidate(TreeMap<String, Long> cand, int nr) {
+      if (cand.size() <= nr) {
+        return;
+      }
+      TopKeySet topk = new TopKeySet(nr);
+
+      for (Map.Entry<String, Long> e : cand.entrySet()) {
+        topk.put(e.getKey(), e.getValue());
+      }
+      cand.clear();
+      for (TopKeySet.KeySetEntry kse : topk.ll) {
+        cand.put(kse.key, kse.dn);
       }
     }
 
@@ -2848,16 +2965,28 @@ public class DiskManager {
         throw new IOException("Node '" + node + "' does not exist in NDMap, are you sure node '" + node + "' belongs to this MetaStore?" + hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION) + "\n");
       }
       List<DeviceInfo> dilist = new ArrayList<DeviceInfo>();
-      if (ni.dis != null) {
-        for (DeviceInfo di : ni.dis) {
-          dilist.add(new DeviceInfo(di));
-        }
-      }
+
       if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED ||
           flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
         // this two mode only used in selecting primary replica!
         synchronized (ni) {
-          dilist = filterSharedDevice(node, ni.dis);
+          dilist = filterSharedOfflineCacheDevice(node, ni.dis);
+        }
+      } else if (flp.dev_mode == FileLocatingPolicy.USE_CACHE) {
+        if (ni.dis != null) {
+          for (DeviceInfo di : ni.dis) {
+            if (di.prop == MetaStoreConst.MDeviceProp.CACHE) {
+              dilist.add(di);
+            }
+          }
+        }
+        // find the LARGEST 3 devices, and random select one
+        __trim_dilist(dilist, 3, null);
+        Random r = new Random();
+        if (dilist.size() > 0) {
+          return dilist.get(r.nextInt(dilist.size())).dev;
+        } else {
+          return null;
         }
       } else {
         // ignore offline device
@@ -3141,6 +3270,7 @@ public class DiskManager {
 
             for (int i = r.begin_idx; i < r.file.getRep_nr(); i++, flp = flp_default) {
               if (i == r.begin_idx) {
+                // TODO: Use FLSelector here to decide whether we need replicate it to CACHE device
                 if (spec_dev.size() > 0) {
                   flp = flp_backup;
                 }
