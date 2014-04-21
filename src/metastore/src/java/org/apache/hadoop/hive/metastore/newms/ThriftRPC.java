@@ -118,7 +118,7 @@ public class ThriftRPC extends FacebookBase implements
 
   private final static ConcurrentHashMap<String, IMetaStoreClient> clients = new ConcurrentHashMap<String, IMetaStoreClient>();
   private final static String DEFAULT_USER_NAME = "_unauthed_user";
-  private final ThriftRPCInfo rpcInfo = new ThriftRPCInfo();
+  private final static ThriftRPCInfo rpcInfo = new ThriftRPCInfo();
   private final NewMSConf conf;
   private final HiveConf hiveConf = new HiveConf(this.getClass());
   private final RawStoreImp rs;
@@ -158,10 +158,6 @@ public class ThriftRPC extends FacebookBase implements
       LOG.error("can't init IMetaStoreClient", e);
     }
   }
-    static{//初始化时为ThriftRPC类中所有的方法初始一个
-
-    }
-
 
   public static void setIpAddress(String ipAddress) {
     threadLocalIpAddress.set(ipAddress);
@@ -226,7 +222,6 @@ public class ThriftRPC extends FacebookBase implements
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
       //每10秒打印一次rpcInfo信息
       schedule.scheduleAtFixedRate(new Runnable(){
-
         @Override
         public void run() {
           LOG.info(rpcInfo);
@@ -246,7 +241,6 @@ public class ThriftRPC extends FacebookBase implements
 
     public _ProxyThriftRPC(ThriftRPC rpc) {
       this.rpc = rpc;
-      schedule = Executors.newScheduledThreadPool(1);
     }
 
     public ThriftRPC getRPC() {
