@@ -205,6 +205,7 @@ public class DiskManager {
         return r;
       }
 
+      // PLEASE USE REGULAR TABLE NAME HERE
       public int updateRepnr(String table, int repnr) {
         if (!tableWatched.contains(table)) {
           return repnr;
@@ -947,13 +948,14 @@ public class DiskManager {
       public long rerepTimeout = 30 * 1000;
 
       public long offlineDelTimeout = 3600 * 1000; // 1 hour
-      public long suspectDelTimeout = 24 * 3600 * 1000; // 24 hour
+      public long suspectDelTimeout = 30 * 24 * 3600 * 1000; // 30 days
 
       private long last_repTs = System.currentTimeMillis();
       private long last_rerepTs = System.currentTimeMillis();
       private long last_unspcTs = System.currentTimeMillis();
       private long last_voidTs = System.currentTimeMillis();
       private long last_limitTs = System.currentTimeMillis();
+      private long last_limitLeakTs = System.currentTimeMillis();
 
       private long last_genRpt = System.currentTimeMillis();
 
@@ -971,6 +973,7 @@ public class DiskManager {
         delTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_DEL_TIMEOUT);
         rerepTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_REREP_TIMEOUT);
         offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
+        suspectDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_SUSPECT_DEL_TIMEOUT);
         ff_range = hiveConf.getLongVar(HiveConf.ConfVars.DM_FF_RANGE);
 
         String rawStoreClassName = hiveConf.getVar(HiveConf.ConfVars.METASTORE_RAW_STORE_IMPL);
@@ -1479,7 +1482,7 @@ public class DiskManager {
             }
           }
 
-          if (last_limitTs + 3600 * 1000 < System.currentTimeMillis()) {
+          if (last_limitTs + 1800 * 1000 < System.currentTimeMillis()) {
             if (closeRepLimit.get() < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT)) {
               closeRepLimit.incrementAndGet();
             }
@@ -1487,6 +1490,25 @@ public class DiskManager {
               fixRepLimit.incrementAndGet();
             }
             last_limitTs = System.currentTimeMillis();
+          }
+
+          if (last_limitLeakTs + 300 * 1000 < System.currentTimeMillis()) {
+            if (closeRepLimit.get() < 10) {
+              int ds_rep = 0;
+              synchronized (ndmap) {
+                for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
+                  ds_rep += e.getValue().qrep + e.getValue().hrep + e.getValue().drep;
+                }
+              }
+              // BUG-XXX: if all nodes go offline, then we get ds_rep = 0.
+              // In this situation, enlarge closeRepLimit might lead to many failed rep
+              // attampts and delete the pending reps. It is OK.
+              if (closeRepLimit.get() + ds_rep < hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT) / 2) {
+                LOG.info("Enlarge closeRepLimit on low MS " + closeRepLimit.get() + " and low DS " + ds_rep);
+                closeRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT));
+              }
+            }
+            last_limitLeakTs = System.currentTimeMillis();
           }
 
           // check any under/over/linger files
@@ -1614,7 +1636,10 @@ public class DiskManager {
                     s.add(fl);
                   }
                 }
+                // NOTE-XXX: do NOT clean SUSPECT sfl, because we hope it online again. Thus,
+                // we set the timeout to 30 days.
                 if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
+                  // if this SUSPECT sfl exist too long or we do exceed the ng'size limit
                   if (do_clean || fl.getUpdate_time() + suspectDelTimeout < System.currentTimeMillis()) {
                     s.add(fl);
                   }
@@ -1695,8 +1720,9 @@ public class DiskManager {
             // Step 1: generate the SUSPECT file list
             List<SFileLocation> sfl;
             Set<String> hitDevs = new TreeSet<String>();
+            int nr = 0;
 
-            LOG.info("Check SUSPECT SFileLocations [" + times + "]");
+            LOG.info("Check SUSPECT SFileLocations [" + times + "] begins ...");
             synchronized (trs) {
               try {
                 sfl = trs.getSFileLocations(MetaStoreConst.MFileLocationVisitStatus.SUSPECT);
@@ -1712,6 +1738,7 @@ public class DiskManager {
                       LOG.error(e, e);
                       continue;
                     }
+                    nr++;
                   }
                 }
                 if (hitDevs.size() > 0) {
@@ -1726,6 +1753,7 @@ public class DiskManager {
               }
             }
 
+            LOG.info("Check SUSPECT SFileLocations [" + times + "] " + nr + "changed.");
             last_unspcTs = System.currentTimeMillis();
           }
 
@@ -2866,8 +2894,17 @@ public class DiskManager {
         if (i >= nr) {
           break;
         }
-        nodes.add(m.get(key));
-        i++;
+        // NOTE-XXX: if this node's load1 is too large, reject to select it
+        NodeInfo ni = ndmap.get(m.get(key));
+        if (ni != null) {
+          if (ni.load1 < 100) {
+            nodes.add(m.get(key));
+            i++;
+          }
+        } else {
+          nodes.add(m.get(key));
+          i++;
+        }
       }
     }
 
@@ -3975,9 +4012,8 @@ public class DiskManager {
                     if (args.length < 3) {
                       LOG.warn("Invalid REP report: " + r.args);
                     } else {
+                      SFileLocation newsfl, toDel = null;
                       try {
-                        SFileLocation newsfl;
-
                         synchronized (rs) {
                           newsfl = rs.getSFileLocation(args[1], args[2]);
                           if (newsfl == null) {
@@ -3988,31 +4024,35 @@ public class DiskManager {
                               LOG.info("----> MIGRATE to " + args[0] + ":" + args[1] + "/" + args[2] + " DONE.");
                               break;
                             }
-                            SFileLocation t1 = new SFileLocation();
-                            t1.setNode_name(args[0]);
-                            t1.setDevid(args[1]);
-                            t1.setLocation(args[2]);
-                            asyncDelSFL(t1);
+                            toDel = new SFileLocation();
+                            toDel.setNode_name(args[0]);
+                            toDel.setDevid(args[1]);
+                            toDel.setLocation(args[2]);
                             throw new MetaException("Can not find SFileLocation " + args[0] + "," + args[1] + "," + args[2]);
                           }
                           SFile file = rs.getSFile(newsfl.getFid());
                           if (file != null) {
                             if (file.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
-                              LOG.warn("Somebody reopen the file and we do replicate on it, so ignore this replicate and delete it:(");
-                              asyncDelSFL(newsfl);
+                              LOG.warn("Somebody reopen the file " + file.getFid() + " and we do replicate on it, so ignore this replicate and delete it:(");
+                              toDel = newsfl;
                             } else {
                               toCheckRep.add(file);
                               newsfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
-                              // We should check the digest here, and compare it with file.getDigest().
+                              // BUG-XXX: We should check the digest here, and compare it with file.getDigest().
                               newsfl.setDigest(args[3]);
                               rs.updateSFileLocation(newsfl);
                             }
                           } else {
-                            LOG.warn("SFL " + newsfl.getDevid() + ":" + newsfl.getLocation() + " -> FID " + newsfl.getFid() + " nonexist.");
+                            LOG.warn("SFL " + newsfl.getDevid() + ":" + newsfl.getLocation() + " -> FID " + newsfl.getFid() + " nonexist, delete it.");
+                            toDel = newsfl;
                           }
                         }
                       } catch (MetaException e) {
                         LOG.error(e, e);
+                      } finally {
+                        if (toDel != null) {
+                          asyncDelSFL(toDel);
+                        }
                       }
                     }
                     break;

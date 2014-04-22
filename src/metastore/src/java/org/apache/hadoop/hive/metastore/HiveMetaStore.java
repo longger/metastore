@@ -4504,7 +4504,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
               if (l2keys.length == 2) {
                 node_name = DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
                     Long.parseLong(values.get(0).getValue()), Long.parseLong(l2keys[1]));
-                repnr = DiskManager.flselector.updateRepnr(table_name, repnr);
+                repnr = DiskManager.flselector.updateRepnr(db_name + "." + table_name, repnr);
                 LOG.info("FLSelector choose " + node_name +
                     " for " + db_name + "." + table_name +
                     " L1Key=" + values.get(0).getValue() +
@@ -4649,7 +4649,13 @@ public class HiveMetaStore extends ThriftHiveMetastore {
                 FOFailReason.INVALID_FILE);
         }
 
-        file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
+        // NOTE-XXX: check repnr here. If we can go at this line, we ONLY has one valid SFL here.
+        if (1 >= saved.getRep_nr()) {
+          file.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
+        } else {
+          file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
+        }
+
         // keep repnr unchanged
         file.setRep_nr(saved.getRep_nr());
         getMS().updateSFile(file);
@@ -5815,17 +5821,22 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       // reget the file now
       SFile stored_file = get_file_by_id(file.getFid());
 
-      if (stored_file.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-        throw new MetaException("online filelocation can only do on INCREATE file " + file.getFid() +
-            " STATE: " + stored_file.getStore_status());
+      try {
+        if (stored_file.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
+          throw new MetaException("online filelocation can only do on INCREATE file " + file.getFid() +
+              " STATE: " + stored_file.getStore_status());
+        }
+        if (stored_file.getLocationsSize() != 1) {
+          throw new MetaException("Invalid file location in SFile fid: " + stored_file.getFid());
+        }
+        SFileLocation sfl = stored_file.getLocations().get(0);
+        assert sfl != null;
+        sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
+        getMS().updateSFileLocation(sfl);
+      } catch (MetaException e) {
+        LOG.error(e, e);
+        throw e;
       }
-      if (stored_file.getLocationsSize() != 1) {
-        throw new MetaException("Invalid file location in SFile fid: " + stored_file.getFid());
-      }
-      SFileLocation sfl = stored_file.getLocations().get(0);
-      assert sfl != null;
-      sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
-      getMS().updateSFileLocation(sfl);
 
       return true;
     }
@@ -6937,28 +6948,33 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException {
       DMProfile.freopenR.incrementAndGet();
       startFunction("reopen_file ", "fid: " + fid);
-
-      SFile saved = getMS().getSFile(fid);
       boolean success = false;
 
-      if (saved == null) {
-        throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
-      }
-      // check if this file is in REPLICATED state, otherwise, complain about that.
-      switch (saved.getStore_status()) {
-      case MetaStoreConst.MFileStoreStatus.INCREATE:
-        throw new FileOperationException("SFile " + fid + " has already been in INCREATE state.", FOFailReason.INVALID_STATE);
-      case MetaStoreConst.MFileStoreStatus.CLOSED:
-        throw new FileOperationException("SFile " + fid + " is in CLOSE state, please wait.", FOFailReason.INVALID_STATE);
-      case MetaStoreConst.MFileStoreStatus.REPLICATED:
-        // FIXME: seq reopenSFiles
-        synchronized (file_reopen_lock) {
-          success = getMS().reopenSFile(saved);
+      try {
+        SFile saved = getMS().getSFile(fid);
+
+        if (saved == null) {
+          throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
         }
-        break;
-      case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
-      case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
-        throw new FileOperationException("SFile " + fid + " is in RM-* state, reject all reopens.", FOFailReason.INVALID_STATE);
+        // check if this file is in REPLICATED state, otherwise, complain about that.
+        switch (saved.getStore_status()) {
+        case MetaStoreConst.MFileStoreStatus.INCREATE:
+          throw new FileOperationException("SFile " + fid + " has already been in INCREATE state.", FOFailReason.INVALID_STATE);
+        case MetaStoreConst.MFileStoreStatus.CLOSED:
+          throw new FileOperationException("SFile " + fid + " is in CLOSE state, please wait.", FOFailReason.INVALID_STATE);
+        case MetaStoreConst.MFileStoreStatus.REPLICATED:
+          // FIXME: seq reopenSFiles
+          synchronized (file_reopen_lock) {
+            success = getMS().reopenSFile(saved);
+          }
+          break;
+        case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
+        case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+          throw new FileOperationException("SFile " + fid + " is in RM-* state, reject all reopens.", FOFailReason.INVALID_STATE);
+        }
+      } catch (FileOperationException e) {
+        LOG.error(e.getMessage());
+        throw e;
       }
       return success;
     }
@@ -7019,6 +7035,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     public List<SFile> get_files_by_ids(List<Long> fids) throws FileOperationException,
         MetaException, TException {
       List<SFile> lsf = new ArrayList<SFile>();
+
+      // NOTE-XXX: too many get file operations, thus just ignore logging
+      //startFunction("get_files_by_ids", ": fid list size is " + fids.size());
       if (fids.size() > 0) {
         for (Long id : fids) {
           // FIXME: ignore nonexist files.
@@ -7028,6 +7047,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           }
         }
       }
+      //endFunction("get_files_by_ids", true, null);
+
       return lsf;
     }
 
@@ -7042,6 +7063,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         if (r) {
           dm.asyncDelSFL(saved);
         }
+        endFunction("del_filelocation", r, null);
       }
       return r;
     }
