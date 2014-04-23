@@ -118,6 +118,7 @@ public class ThriftRPC extends FacebookBase implements
   private IMetaStoreClient client;
 
   private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
+  private static final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
   private DiskManager dm;
   Random rand = new Random();
   public static Long file_creation_lock = 0L;
@@ -147,6 +148,13 @@ public class ThriftRPC extends FacebookBase implements
     try {
       client = MsgProcessing.createMetaStoreClient();
       clients.put(DEFAULT_USER_NAME, client);
+      //每10秒打印一次rpcInfo基本信息
+      schedule.scheduleAtFixedRate(new Runnable(){
+        @Override
+        public void run() {
+          LOG.info(rpcInfo);
+        }
+      }, 10,10, TimeUnit.SECONDS);
     } catch (MetaException e) {
       LOG.error("can't init IMetaStoreClient", e);
     }
@@ -168,7 +176,7 @@ public class ThriftRPC extends FacebookBase implements
           "cmd=%s\t"; // command
   public static final Log auditLog = LogFactory.getLog(
       ThriftRPC.class.getName() + ".audit");
-  private final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
+
   private static ThreadLocal<Formatter> auditFormatter =
       new ThreadLocal<Formatter>() {
         @Override
@@ -208,18 +216,23 @@ public class ThriftRPC extends FacebookBase implements
     this.conf = conf;
     rs = new RawStoreImp(conf);
     try {
-      HiveConf hc = new HiveConf(DiskManager.class);
+      final HiveConf hc = new HiveConf(DiskManager.class);
       dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
-      //每10秒打印一次rpcInfo信息
-      schedule.scheduleAtFixedRate(new Runnable(){
+      //dump rpcInfo per minute
+      schedule.scheduleAtFixedRate(new Runnable() {
         @Override
         public void run() {
-          LOG.info(rpcInfo);
+          String path = hc.get("rpc.info.filename");
+          try {
+            rpcInfo.dumpToFile(path);
+          } catch (IOException e) {
+            LOG.error("error in dump rpc info to file\n",e);
+          }
         }
-      }, 10,10, TimeUnit.SECONDS);
+    }, 5, 1, TimeUnit.MINUTES);
     } catch (MetaException e) {
       LOG.error(e, e);
       throw new IOException(e.getMessage());
