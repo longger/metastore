@@ -7208,8 +7208,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
       });
 
-      if (!conf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION) && conf.get("isOldWithNew") != null 
-      		&& !conf.get("isOldWithNew").equals("true")) {
+      if (!conf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION) && !conf.getBoolVar(ConfVars.NEWMSISOLDWITHNEW)) {
         dm = new DiskManager(new HiveConf(DiskManager.class), HMSHandler.LOG);
       }
       startMetaStore(cli.port, ShimLoader.getHadoopThriftAuthBridge(), conf);

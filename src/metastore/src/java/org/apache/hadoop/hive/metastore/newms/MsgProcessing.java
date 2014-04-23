@@ -9,6 +9,7 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaHook;
 import org.apache.hadoop.hive.metastore.HiveMetaHookLoader;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
@@ -35,16 +36,13 @@ public class MsgProcessing {
 
 	private IMetaStoreClient client;
 	private static HiveConf hiveConf;
-	private final NewMSConf conf;
 	private CacheStore cs;
 	private static final Log LOG = LogFactory.getLog(MsgProcessing.class);
-	public MsgProcessing(NewMSConf conf) {
-		this.conf = conf;
+	public MsgProcessing() {
 		try {
 			client = createMetaStoreClient();
-			cs = new CacheStore(conf);
-			this.conf.setLocalDbName(hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION));
-			if(client != null && hiveConf.get("isGetAllObjects").equals("true"))
+			cs = new CacheStore();
+			if(client != null && hiveConf.getBoolVar(ConfVars.NEWMSISGETALLOBJECTS))
 			{
 				long start = System.currentTimeMillis();
 			//device
@@ -206,7 +204,7 @@ public class MsgProcessing {
 		if (hiveConf == null) {
       hiveConf = new HiveConf();
     }
-		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
+		if(!hiveConf.getBoolVar(ConfVars.NEWMSISUSEMETASTORECLIENT))
 		{
 //			LOG.debug("isUseMetaStoreClient false");
 			return null;
@@ -224,7 +222,7 @@ public class MsgProcessing {
 
 	public void handleMsg(DDLMsg msg) throws JedisConnectionException, IOException, NoSuchObjectException, TException, ClassNotFoundException {
 
-		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
+		if(hiveConf.getBoolVar(ConfVars.NEWMSISUSEMETASTORECLIENT))
 		{
 			LOG.debug("property isUseMetaStoreClient is set to false, so nothing to do here.");
 			return;

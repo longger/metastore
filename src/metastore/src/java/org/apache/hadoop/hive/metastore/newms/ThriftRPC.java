@@ -119,7 +119,6 @@ public class ThriftRPC extends FacebookBase implements
   private final static ConcurrentHashMap<String, IMetaStoreClient> clients = new ConcurrentHashMap<String, IMetaStoreClient>();
   private final static String DEFAULT_USER_NAME = "_unauthed_user";
   private final static ThriftRPCInfo rpcInfo = new ThriftRPCInfo();
-  private final NewMSConf conf;
   private final HiveConf hiveConf = new HiveConf(this.getClass());
   private final RawStoreImp rs;
   private IMetaStoreClient client;
@@ -210,10 +209,9 @@ public class ThriftRPC extends FacebookBase implements
     auditLog.info(fmt.format(AUDIT_FORMAT, user, address, cmd).toString());
   }
 
-  public ThriftRPC(NewMSConf conf) throws IOException {
+  public ThriftRPC() throws IOException {
     super("NewMS-RPC");
-    this.conf = conf;
-    rs = new RawStoreImp(conf);
+    rs = new RawStoreImp();
     try {
       HiveConf hc = new HiveConf(DiskManager.class);
       dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
@@ -301,8 +299,8 @@ public class ThriftRPC extends FacebookBase implements
 
   }
 
-  public static ThriftRPC newThriftRPC(NewMSConf conf) throws IOException {
-    return new _ProxyThriftRPC(new ThriftRPC(conf)).getRPC();
+  public static ThriftRPC newThriftRPC() throws IOException {
+    return new _ProxyThriftRPC(new ThriftRPC()).getRPC();
   }
 
   @Override
@@ -2088,7 +2086,7 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   // MetaStoreClient 初始化时会调这个rpc
   public Database get_local_attribution() throws MetaException, TException {
-    String dbname = conf.getLocalDbName();
+    String dbname = hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION);
     try {
       Database db = rs.getDatabase(dbname);
       return db;

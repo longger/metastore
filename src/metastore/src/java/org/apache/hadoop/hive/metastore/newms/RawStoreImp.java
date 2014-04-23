@@ -75,28 +75,17 @@ public class RawStoreImp implements RawStore {
 	private static final Log LOG = LogFactory.getLog(RawStoreImp.class);
 	private static final Long g_fid_syncer = new Long(0);
   private static long g_fid = 0;
-	private static NewMSConf conf;
 
 	private final CacheStore cs;
 
-	public RawStoreImp(NewMSConf conf) throws IOException {
-		RawStoreImp.conf = conf;
-		cs = new CacheStore(conf);
-	}
-
 	public RawStoreImp() throws IOException {
-		cs = new CacheStore(conf);
+		cs = new CacheStore();
 	}
 
   public CacheStore getCs()
 	{
 		return cs;
 	}
-
-  public static void setNewMSConf(NewMSConf conf)
-  {
-  	RawStoreImp.conf = conf;
-  }
 
 	private long getNextFID() {
     synchronized (g_fid_syncer) {
