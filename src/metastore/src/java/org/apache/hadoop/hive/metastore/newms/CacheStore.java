@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
@@ -40,7 +41,6 @@ import com.alibaba.fastjson.JSON;
 
 public class CacheStore {
   private final RedisFactory rf;
-  private final NewMSConf conf;
   private String findFilesCursor = "0";
   private static boolean initialized = false;
   private static String sha = null;
@@ -58,9 +58,8 @@ public class CacheStore {
   private static TimeLimitedCacheMap sFileHm = new TimeLimitedCacheMap(270, 60, 300, TimeUnit.SECONDS);
   private static TimeLimitedCacheMap sflHm = new TimeLimitedCacheMap(270, 60, 300, TimeUnit.SECONDS);
 
-  public CacheStore(NewMSConf conf) throws IOException {
-    this.conf = conf;
-    rf = new RedisFactory(conf);
+  public CacheStore() throws IOException {
+    rf = new RedisFactory();
 
     initialize();
   }
@@ -99,7 +98,7 @@ public class CacheStore {
           sha = jedis.scriptLoad(script);
 
           //每次系统启动时，从redis中读取已经持久化的对象到内存缓存中(SFile和SFileLocation除外)
-          if (new HiveConf().get("isGetAllObjects").equals("false")) {
+          if (!new HiveConf().getBoolVar(ConfVars.NEWMSISGETALLOBJECTS)) {
 	          long start = System.currentTimeMillis();
 	          readAll(ObjectType.DATABASE);
 	          readAll(ObjectType.GLOBALSCHEMA);
@@ -189,6 +188,7 @@ public class CacheStore {
 				}
       	break;
       }
+
     case SFILELOCATION: {
       Jedis jedis = refreshJedis();
 
@@ -197,8 +197,10 @@ public class CacheStore {
       // index for getSFileLocations(int status)
       SFileLocation sfl = (SFileLocation)o;
       try {
-        jedis.sadd(generateSflStatKey(sfl.getVisit_status()),
-            SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
+      	Pipeline p = jedis.pipelined();
+    		p.sadd(generateSflStatKey(sfl.getVisit_status()), field);
+    		p.sadd(generateSflDevKey(sfl.getDevid()), field);
+    		p.sync();
       } catch(JedisException e) {
         err = -1;
         throw e;
@@ -541,6 +543,7 @@ public class CacheStore {
         try {
           Pipeline p = jedis.pipelined();
           p.srem(generateSflStatKey(sfl.getVisit_status()), field);
+          p.srem(generateSflDevKey(sfl.getDevid()), field);
           p.hdel(key.getName(), field);
           p.sync();
         } catch (JedisException e) {
@@ -935,6 +938,7 @@ public class CacheStore {
 
     for (SFile m : temp) {
     	List<SFileLocation> l = m.getLocations();
+
     	if (l == null) {
     		LOG.warn("sfilelocation is null in fid " + m.getFid());
     		continue;
@@ -1003,6 +1007,50 @@ public class CacheStore {
     }
 	}
 
+	public List<SFileLocation> getSFileLocations(String devid, long curts, long timeout) throws IOException {
+		Jedis jedis = refreshJedis();
+		List<SFileLocation> sfll = new LinkedList<SFileLocation>();
+		int err = 0;
+    try{
+      jedis = rf.getDefaultInstance();
+      ScanResult<String> re = null;
+      ScanParams sp = new ScanParams();
+      sp.count(5000);
+  		String cursor = "0";
+  		do{
+  			re = jedis.sscan(generateSflDevKey(devid), cursor,sp);
+  			cursor = re.getStringCursor();
+  			for(String en : re.getResult())
+  			{
+  		     SFileLocation sfl = null;
+					try {
+						sfl = (SFileLocation)this.readObject(ObjectType.SFILELOCATION, en);
+						if(sfl == null)
+						{
+							//it means sflDevKey in redis is inconsistent, bad....
+							LOG.warn("key("+en+") read from SflDevKey("+generateSflDevKey(devid)+") refers to a non-exist SFileLocation, bad...");
+						}
+						else if(sfl.getUpdate_time() + timeout < curts)
+	  		    	 sfll.add(sfl);
+					} catch (Exception e) {
+						LOG.error(e,e);
+					}
+  		     
+  			}
+  		}while(!cursor.equals("0"));
+    }catch (JedisException e) {
+      err = -1;
+      throw e;
+    } finally {
+      if (err < 0) {
+        RedisFactory.putBrokenInstance(jedis);
+      } else {
+        RedisFactory.putInstance(jedis);
+      }
+    }
+    return sfll;
+	}
+	
   private String generateLtfKey(String tablename, String dbname) {
     String p = "sf.ltf.";
     if (tablename == null || dbname == null) {
@@ -1030,6 +1078,10 @@ public class CacheStore {
   private String generateSflStatKey(int status) {
   	return "sfl.stat." + status;
   }
+  private String generateSflDevKey(String devid)
+  {
+  	return "sfl.dev."+devid;
+  }
 
   private String generateSfStatKey(int status) {
   	if (status < 0) {
@@ -1038,6 +1090,65 @@ public class CacheStore {
   	return "sf.stat." + status;
   }
 
+  public void removeSfileStatValue(int status, String value) throws IOException, JedisException
+  {
+  	String key = this.generateSfStatKey(status);
+  	Jedis jedis = refreshJedis();
+  	int err = 0;
+
+    try {
+    	jedis.srem(key, value);
+    } catch (JedisException e) {
+      err = -1;
+      throw e;
+    } finally {
+      if (err < 0) {
+        RedisFactory.putBrokenInstance(jedis);
+      } else {
+        RedisFactory.putInstance(jedis);
+      }
+    }
+  }
+  
+  public void removeSflStatValue(int status, String value) throws IOException, JedisException
+  {
+  	String key = this.generateSflStatKey(status);
+  	Jedis jedis = refreshJedis();
+  	int err = 0;
+
+    try {
+    	jedis.srem(key, value);
+    } catch (JedisException e) {
+      err = -1;
+      throw e;
+    } finally {
+      if (err < 0) {
+        RedisFactory.putBrokenInstance(jedis);
+      } else {
+        RedisFactory.putInstance(jedis);
+      }
+    }
+  }
+  
+  public void removeLfbdValue(String digest, String value) throws IOException, JedisException
+  {
+  	String key = this.generateLfbdKey(digest);
+  	Jedis jedis = refreshJedis();
+  	int err = 0;
+
+    try {
+    	jedis.srem(key, value);
+    } catch (JedisException e) {
+      err = -1;
+      throw e;
+    } finally {
+      if (err < 0) {
+        RedisFactory.putBrokenInstance(jedis);
+      } else {
+        RedisFactory.putInstance(jedis);
+      }
+    }
+  }
   public static ConcurrentHashMap<String, Database> getDatabaseHm() {
     return databaseHm;
   }
@@ -1046,9 +1157,6 @@ public class CacheStore {
     return rf;
   }
 
-  public NewMSConf getConf() {
-    return conf;
-  }
 
   public static ConcurrentHashMap<String, PrivilegeBag> getPrivilegeBagHm() {
     return privilegeBagHm;

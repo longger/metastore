@@ -9,6 +9,7 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaHook;
 import org.apache.hadoop.hive.metastore.HiveMetaHookLoader;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
@@ -16,6 +17,7 @@ import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.RetryingMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
+import org.apache.hadoop.hive.metastore.api.FileOperationException;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
 import org.apache.hadoop.hive.metastore.api.Index;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -34,16 +36,13 @@ public class MsgProcessing {
 
 	private IMetaStoreClient client;
 	private static HiveConf hiveConf;
-	private final NewMSConf conf;
 	private CacheStore cs;
 	private static final Log LOG = LogFactory.getLog(MsgProcessing.class);
-	public MsgProcessing(NewMSConf conf) {
-		this.conf = conf;
+	public MsgProcessing() {
 		try {
 			client = createMetaStoreClient();
-			cs = new CacheStore(conf);
-			this.conf.setLocalDbName(hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION));
-			if(client != null && hiveConf.get("isGetAllObjects").equals("true"))
+			cs = new CacheStore();
+			if(client != null && hiveConf.getBoolVar(ConfVars.NEWMSISGETALLOBJECTS))
 			{
 				long start = System.currentTimeMillis();
 			//device
@@ -73,7 +72,8 @@ public class MsgProcessing {
             RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
           }
 				}
-	      long num = 10000;
+	      int clientn = 10;
+	      long num = maxid/clientn + 1;
 	      List<Thread> ths = new LinkedList<Thread>();
 	      for(long id = 0;id < maxid; id+= num)
 	      {
@@ -88,7 +88,7 @@ public class MsgProcessing {
           t.start();
         }
 	      end = System.currentTimeMillis();
-	      LOG.info("get sfile and sfilelocation in "+(end-start)+" ms");
+	      
 	      start = end;
 
 	      //table  index
@@ -138,7 +138,7 @@ public class MsgProcessing {
 					// TODO Auto-generated catch block
 					LOG.error(e,e);
 				}
-
+				LOG.info("get sfile and sfilelocation in "+(end-start)+" ms");
 				LOG.info("get all objects complete.");
 			}
 		} catch (MetaException e) {
@@ -185,7 +185,7 @@ public class MsgProcessing {
 		    		ids.add(fid);
 		    	}
 		    	List<SFile> files = cli.get_files_by_ids(ids);
-	    		LOG.info(Thread.currentThread().getId()+": in msgprocessing:"+ids.get(0)+" , "+ids.get(ids.size()-1) + ", get number:"+files.size());
+	    		LOG.info(Thread.currentThread().getId()+": get_files_by_ids: "+ids.get(0)+" , "+ids.get(ids.size()-1) + ", get number:"+files.size());
 	    		for(SFile sf : files)
 	    		{
 	    			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
@@ -204,7 +204,7 @@ public class MsgProcessing {
 		if (hiveConf == null) {
       hiveConf = new HiveConf();
     }
-		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
+		if(!hiveConf.getBoolVar(ConfVars.NEWMSISUSEMETASTORECLIENT))
 		{
 //			LOG.debug("isUseMetaStoreClient false");
 			return null;
@@ -222,7 +222,7 @@ public class MsgProcessing {
 
 	public void handleMsg(DDLMsg msg) throws JedisConnectionException, IOException, NoSuchObjectException, TException, ClassNotFoundException {
 
-		if(hiveConf.get("isUseMetaStoreClient").equals("false"))
+		if(hiveConf.getBoolVar(ConfVars.NEWMSISUSEMETASTORECLIENT))
 		{
 			LOG.debug("property isUseMetaStoreClient is set to false, so nothing to do here.");
 			return;
@@ -320,7 +320,6 @@ public class MsgProcessing {
 				break;
 			}
 
-			/*
 			case MSGType.MSG_REP_FILE_CHANGE:
 			case MSGType.MSG_STA_FILE_CHANGE:
 			case MSGType.MSG_REP_FILE_ONOFF:
@@ -364,7 +363,7 @@ public class MsgProcessing {
 				}
 				break;
 			}
-			*/
+			
 			case MSGType.MSG_NEW_INDEX:
 			case MSGType.MSG_ALT_INDEX:
 			case MSGType.MSG_ALT_INDEX_PARAM:
@@ -516,7 +515,7 @@ public class MsgProcessing {
 		    }
 			default:
 			{
-				LOG.debug("unhandled msg : "+msg.getEvent_id());
+				LOG.debug("unhandled msg from metaq: "+msg.getEvent_id());
 				break;
 			}
 		}
