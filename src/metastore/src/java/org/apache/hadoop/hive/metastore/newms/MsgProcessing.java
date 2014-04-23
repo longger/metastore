@@ -74,7 +74,8 @@ public class MsgProcessing {
             RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
           }
 				}
-	      long num = 10000;
+	      int clientn = 10;
+	      long num = maxid/clientn + 1;
 	      List<Thread> ths = new LinkedList<Thread>();
 	      for(long id = 0;id < maxid; id+= num)
 	      {
@@ -89,7 +90,7 @@ public class MsgProcessing {
           t.start();
         }
 	      end = System.currentTimeMillis();
-	      LOG.info("get sfile and sfilelocation in "+(end-start)+" ms");
+	      
 	      start = end;
 
 	      //table  index
@@ -139,7 +140,7 @@ public class MsgProcessing {
 					// TODO Auto-generated catch block
 					LOG.error(e,e);
 				}
-
+				LOG.info("get sfile and sfilelocation in "+(end-start)+" ms");
 				LOG.info("get all objects complete.");
 			}
 		} catch (MetaException e) {
@@ -186,7 +187,7 @@ public class MsgProcessing {
 		    		ids.add(fid);
 		    	}
 		    	List<SFile> files = cli.get_files_by_ids(ids);
-	    		LOG.info(Thread.currentThread().getId()+": in msgprocessing:"+ids.get(0)+" , "+ids.get(ids.size()-1) + ", get number:"+files.size());
+	    		LOG.info(Thread.currentThread().getId()+": get_files_by_ids: "+ids.get(0)+" , "+ids.get(ids.size()-1) + ", get number:"+files.size());
 	    		for(SFile sf : files)
 	    		{
 	    			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);

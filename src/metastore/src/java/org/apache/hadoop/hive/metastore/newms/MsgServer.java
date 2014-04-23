@@ -51,7 +51,11 @@ public class MsgServer {
 	{
 		MsgServer.conf = conf;
 	}
-	
+	public static boolean isQueueEmpty()
+	{
+		LOG.info("queue size "+queue.size());
+		return queue.isEmpty() && failed_queue.isEmpty() && localQueue.isEmpty();
+	}
 	public static void addMsg(DDLMsg msg) {
 		//通过发送线程发送到metaq的
 		if(initalized)		//启动了发送线程才往这个队列里加消息

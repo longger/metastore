@@ -109,7 +109,7 @@ import com.google.common.base.Strings;
 
 /*
  * 没缓存的对象，但是rpc里要得到的
- * BusiTypeColumn，Device,ColumnStatistics,Type,role,User,HiveObjectPrivilege
+ * BusiTypeColumn,ColumnStatistics,Type,role,User,HiveObjectPrivilege
  */
 
 

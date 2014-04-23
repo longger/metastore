@@ -11,6 +11,7 @@ import java.util.TimerTask;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
 import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
@@ -36,7 +37,8 @@ public class NewMS {
 	public static Log LOG = LogFactory.getLog(NewMS.class);
 	private final ZKConfig zkConfig = new ZKConfig();
 	private NewMSConf conf;
-
+	private static RPCServer rpc;
+	
 	public static class Option {
 		String flag, opt;
 
@@ -85,6 +87,15 @@ public class NewMS {
 	}
 
 	static class RPCServer {
+		private TServer server;
+		
+		public void serve(){
+			server.serve();
+		}
+		public void stop(){
+			server.stop();
+		}
+		
 		public RPCServer(NewMSConf conf) throws Throwable {
 		  HiveConf hc = new HiveConf();
 		  int port = conf.getRpcport();
@@ -105,7 +116,7 @@ public class NewMS {
 			  .minWorkerThreads(minWorkerThreads)
 			  .maxWorkerThreads(maxWorkerThreads);
 
-			  TServer server = new TThreadPoolServer(sargs);
+			  server = new TThreadPoolServer(sargs);
 
 			  LOG.info("Started the NewMS on port [" + port + "]...");
 			  LOG.info("Options.minWorkerThreads = "
@@ -337,8 +348,38 @@ public class NewMS {
         } finally {
         	RedisFactory.putInstance(jedis);
         }
+        
+        rpc.stop();
+        LOG.info("stop RPCServer.");
+        
+        while(!MsgServer.isQueueEmpty()){
+        	LOG.info("waiting for queues in MsgServer to be empty...");
+        	try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {
+						LOG.warn(e,e);
+					}
+        }
       }
     });
+    
+    HiveConf hc = new HiveConf();
+    if(hc.get("isOldWithNew") != null && hc.get("isOldWithNew").equals("true"))
+    {
+	    Thread t = new Thread(new Runnable(){
+				@Override
+				public void run() {
+					try {
+						HiveMetaStore.main(new String[]{});
+					} catch (Throwable e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}  
+				}
+	    });
+	    t.start();
+    }
+    
     Timer timer = new Timer("FidStorer",true);
     timer.schedule(new FidStoreTask(conf), 60*1000, 60*1000);
     try {
@@ -352,7 +393,8 @@ public class NewMS {
         LOG.error(e, e);
         throw new IOException("Start MsgServer failed: " + e.getMessage());
       }
-      new RPCServer(conf);
+      rpc = new RPCServer(conf);
+      rpc.serve();
     } catch (Throwable t) {
       // Catch the exception, log it and rethrow it.
       LOG.error("NewMS Thrift Server threw an exception...", t);
