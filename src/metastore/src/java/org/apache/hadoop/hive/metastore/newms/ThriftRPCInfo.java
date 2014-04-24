@@ -1,5 +1,6 @@
 package org.apache.hadoop.hive.metastore.newms;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -8,6 +9,9 @@ import java.util.Date;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+
+import com.google.common.base.Strings;
+import com.google.common.io.Files;
 
 public class ThriftRPCInfo {
   private static final AtomicLong TOTAL_COUNT = new AtomicLong();
@@ -39,6 +43,13 @@ public class ThriftRPCInfo {
   }
 
   public void dumpToFile(String path) throws IOException {
+    if(Strings.isNullOrEmpty(path)) {
+      throw new IOException("Invalid path");
+    }
+    File file = new File(path);
+    if(!file.isFile()) {
+      throw new IOException(String.format("%s is not a file", path));
+    }
     Entry<String, _Info>[] entries = (Entry<String, _Info>[]) info.entrySet().toArray();
     Arrays.sort(entries, new Comparator<Entry<String, _Info>>() {
       @Override
@@ -48,12 +59,13 @@ public class ThriftRPCInfo {
     });
     StringBuilder sb = new StringBuilder();
     sb.append(new Date());
-    sb.append(String.format("Name\t\tMax\t\tMin\t\tAvg\t\t\n"));
+    //sb.append(String.format("Name\t\tMax\t\tMin\t\tAvg\t\t\n"));
     for (Entry<String, _Info> e : info.entrySet()) {
       sb.append(String.format("%-8s\t%-4.2f\t%-4.2f\t%-8.2f\t\n", e.getKey(),
           e.getValue().getMax(), e.getValue().getMin(), e.getValue().avg()));
     }
-    //TODO append sb.toString() to file
+    // write sb to filep
+    Files.write(sb.toString().getBytes(), file);
   }
 
   @Override
