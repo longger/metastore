@@ -24,7 +24,7 @@ public class ThriftRPCInfo {
       "RPC_Min_Time:\t%s%n" +
       "RPC_Min_Method:\t%s%n";
   private static final ConcurrentHashMap<String, _Info> info = new ConcurrentHashMap<String, ThriftRPCInfo._Info>();
-  private final AtomicLong totalTime = new AtomicLong();
+  private static final AtomicLong totalTime = new AtomicLong();
 
   static {// 初始化时为ThriftRPC类中所有的公有方法初始一个_Info
     Class<ThriftRPC> clazz = ThriftRPC.class;

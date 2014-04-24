@@ -15,7 +15,6 @@ import java.util.Formatter;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -354,6 +353,7 @@ public class ThriftRPC extends FacebookBase implements
     if (rs != null) {
       rs.shutdown();
     }
+    schedule.shutdown();
     LOG.info("Metastore shutdown complete.");
   }
 
@@ -2041,7 +2041,7 @@ public class ThriftRPC extends FacebookBase implements
     }
     return index;
   }
-  
+
   @Override
   public List<String> get_index_names(String dbName, String tblName, short maxIndexes)
       throws MetaException, TException {
@@ -2189,7 +2189,7 @@ public class ThriftRPC extends FacebookBase implements
     }
     return p;
   }
-  
+
   @Override
   public ColumnStatistics get_partition_column_statistics(String dbName,
       String tableName, String partitionName, String colName)
@@ -3374,7 +3374,7 @@ public class ThriftRPC extends FacebookBase implements
       TException {
     boolean r = false;
     SFileLocation saved = rs.getSFileLocation(sfl.getDevid(), sfl.getLocation());
-    
+
     if(saved != null){
       startFunction("del_filelocation", ": FID " + saved.getFid() + " dev " + saved.getDevid() + " loc " + saved.getLocation());
       r = rs.delSFileLocation(sfl.getDevid(), sfl.getLocation());
