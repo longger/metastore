@@ -3,14 +3,16 @@ package org.apache.hadoop.hive.metastore.newms;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 
 public class ThriftRPCInfo {
@@ -50,8 +52,8 @@ public class ThriftRPCInfo {
     if(!file.isFile()) {
       throw new IOException(String.format("%s is not a file", path));
     }
-    Entry<String, _Info>[] entries = (Entry<String, _Info>[]) info.entrySet().toArray();
-    Arrays.sort(entries, new Comparator<Entry<String, _Info>>() {
+    List<Entry<String,_Info>> entries = Lists.newArrayList(info.entrySet());
+    Collections.sort(entries, new Comparator<Entry<String, _Info>>() {
       @Override
       public int compare(Entry<String, _Info> o1, Entry<String, _Info> o2) {
         return (int) (o1.getValue().avg() - o2.getValue().avg());
@@ -60,7 +62,7 @@ public class ThriftRPCInfo {
     StringBuilder sb = new StringBuilder();
     sb.append(new Date());
     //sb.append(String.format("Name\t\tMax\t\tMin\t\tAvg\t\t\n"));
-    for (Entry<String, _Info> e : info.entrySet()) {
+    for (Entry<String, _Info> e : entries) {
       sb.append(String.format("%-8s\t%-4.2f\t%-4.2f\t%-8.2f\t\n", e.getKey(),
           e.getValue().getMax(), e.getValue().getMin(), e.getValue().avg()));
     }
@@ -70,8 +72,8 @@ public class ThriftRPCInfo {
 
   @Override
   public String toString() {
-    Entry<String, _Info>[] entries = (Entry<String, _Info>[]) info.entrySet().toArray();
-    Arrays.sort(entries, new Comparator<Entry<String, _Info>>() {
+    List<Entry<String,_Info>> entries = Lists.newArrayList(info.entrySet());
+    Collections.sort(entries, new Comparator<Entry<String, _Info>>() {
       @Override
       public int compare(Entry<String, _Info> o1, Entry<String, _Info> o2) {
         return (int) (o1.getValue().avg() - o2.getValue().avg());
@@ -79,8 +81,8 @@ public class ThriftRPCInfo {
     });
     // 统计信息排除没有被调用过的方法
     int last;
-    for (last = entries.length - 1; last >= 0; last--) {
-      if (entries[last].getValue().getCount() > 0) {
+    for (last = entries.size()- 1; last >= 0; last--) {
+      if (entries.get(last).getValue().getCount() > 0) {
         break;
       }
     }
@@ -88,16 +90,16 @@ public class ThriftRPCInfo {
     sb.append(String.format(FORMAT,
         CURRENT_DATE, TOTAL_COUNT.get(),
         (double) totalTime.get() / TOTAL_COUNT.get(),
-        entries[0].getValue().avg(),// RPC_Max_Time
-        entries[0].getKey(),// RPC_Max_Method
-        entries[last].getValue(),// RPC_Min_Time
-        entries[last].getKey()// RPC_Min_Method
+        entries.get(0).getValue().avg(),// RPC_Max_Time
+        entries.get(0).getKey(),// RPC_Max_Method
+        entries.get(last).getValue(),// RPC_Min_Time
+        entries.get(last).getKey()// RPC_Min_Method
         )).append("RPC_TOP_10:\t");
     for (int i = 0; i < 10; i++) {
-      sb.append(entries[i].getKey()).append(":avg=").append(entries[i].getValue().avg())
+      sb.append(entries.get(i).getKey()).append(":avg=").append(entries.get(i).getValue().avg())
           .append("\t")
-          .append("max=").append(entries[i].getValue().getMax()).append("\t")
-          .append("min=").append(entries[i].getValue().getMin()).append("\n");
+          .append("max=").append(entries.get(i).getValue().getMax()).append("\t")
+          .append("min=").append(entries.get(i).getValue().getMin()).append("\n");
     }
     sb.append("\n");
     return sb.toString();
