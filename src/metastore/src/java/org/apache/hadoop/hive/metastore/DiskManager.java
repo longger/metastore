@@ -490,7 +490,7 @@ public class DiskManager {
         String r;
         switch (op) {
         case REPLICATE:
-          r = "REPLICATE: file fid " + file.getFid() + " from idx " + begin_idx;
+          r = "REPLICATE: file fid " + file.getFid() + " from idx " + begin_idx + ", repnr " + file.getRep_nr();
           break;
         case RM_PHYSICAL:
           r = "DELETE   : file fid " + file.getFid();
@@ -3246,6 +3246,13 @@ public class DiskManager {
             int master = 0;
             boolean master_marked = false;
 
+            // BUG-XXX: if r.file.getStore_status() is REPLICATED, do NOT replicate
+            // otherwise, closeRepLimit leaks
+            if (r.file.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED ||
+                r.begin_idx >= r.file.getRep_nr()) {
+              release_rep_limit();
+              continue;
+            }
             // find backup device
             findBackupDevice(spec_dev, spec_node);
             LOG.debug("Try to write to backup device firstly: N <" + Arrays.toString(spec_node.toArray()) +
@@ -3450,6 +3457,8 @@ public class DiskManager {
                     repQ.add(r);
                     repQ.notify();
                   }
+                } else {
+                  LOG.error("Drop REP request: fid " + r.file.getFid() + ", failed " + r.failnr);
                 }
                 try {
                   Thread.sleep(500);
