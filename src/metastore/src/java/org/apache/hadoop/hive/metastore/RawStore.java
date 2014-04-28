@@ -138,6 +138,8 @@ public interface RawStore extends Configurable {
 
   public long countNode() throws MetaException;
 
+  public long countFiles() throws MetaException;
+
   public SFile createFile(SFile file) throws InvalidObjectException, MetaException;
 
   public SFile getSFile(long fid) throws MetaException;

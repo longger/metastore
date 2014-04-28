@@ -1142,6 +1142,25 @@ public class ObjectStore implements RawStore, Configurable {
     }
   }
 
+  public long countFiles() throws MetaException {
+    boolean commited = false;
+    Long fnr = 0L;
+
+    try {
+      openTransaction();
+      Query q0 = pm.newQuery(MFile.class);
+      q0.setResult("count(fid)");
+      fnr = (Long)q0.execute();
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+
+    return fnr;
+  }
+
   public void findFiles(List<SFile> underReplicated, List<SFile> overReplicated, List<SFile> lingering,
       long from, long to) throws MetaException {
     long node_nr = countNode();

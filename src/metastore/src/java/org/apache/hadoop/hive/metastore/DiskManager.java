@@ -1525,7 +1525,7 @@ public class DiskManager {
               try {
                 trs.findFiles(under, over, linger, ff_start, ff_start + ff_range);
                 ff_start += ff_range;
-                if (ff_start > trs.getCurrentFID()) {
+                if (ff_start > trs.countFiles()) {
                   ff_start = 0;
                 }
               } catch (JDOObjectNotFoundException e) {
@@ -1753,7 +1753,7 @@ public class DiskManager {
               }
             }
 
-            LOG.info("Check SUSPECT SFileLocations [" + times + "] " + nr + "changed.");
+            LOG.info("Check SUSPECT SFileLocations [" + times + "] " + nr + " changed.");
             last_unspcTs = System.currentTimeMillis();
           }
 
