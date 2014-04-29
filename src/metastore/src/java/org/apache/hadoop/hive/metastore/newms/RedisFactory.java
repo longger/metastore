@@ -17,15 +17,11 @@ public class RedisFactory {
 	private static JedisPool jp = null;
 	private static HostAndPort ri = null;
 	private final JedisPoolConfig config;
-	
+
 	public RedisFactory(){
 		config = new JedisPoolConfig();
 		config.setBlockWhenExhausted(false);
 		config.setMaxTotal(2000);
-	}
-	
-	public RedisFactory(NewMSConf conf) {
-		this();
 	}
 
 	public void destroy() {

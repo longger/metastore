@@ -723,7 +723,7 @@ public class HiveConf extends Configuration {
     DM_FIX_REP_LIMIT("hive.diskmanager.fixrep.limit", 500L),
     DM_REPORT_DIR("hive.diskmanager.report.dir", null),
     DM_FF_RANGE("hive.diskmanager.ff.range", 1000),
-    
+
     //add by zy
     NEWMSISUSEMETASTORECLIENT("newms.isUseMetaStoreClient", true),
     NEWMSISGETALLOBJECTS("newms.isGetAllObjects", false),
@@ -1177,42 +1177,42 @@ public class HiveConf extends Configuration {
     }
 
   }
-  
-  
+
   //add by zy
   public enum RedisMode {
-		SENTINEL, STANDALONE,
-	};
-	
-  public RedisMode getRedisMode()
-  {
-  	String addr = this.getVar(ConfVars.NEWREDISADDR);
-  	if(addr.startsWith("STL://"))
-  		return RedisMode.SENTINEL;
-  	else if(addr.startsWith("STA://"))
-  		return RedisMode.STANDALONE;
-  	else 
-  		return null;
+    SENTINEL, STANDALONE,
+  };
+
+  public RedisMode getRedisMode() {
+    String addr = this.getVar(ConfVars.NEWREDISADDR);
+    if (addr.startsWith("STL://")) {
+      return RedisMode.SENTINEL;
+    } else if (addr.startsWith("STA://")) {
+      return RedisMode.STANDALONE;
+    } else {
+      return null;
+    }
   }
-  public Set<String> getSentinel()
-  {
-  	HashSet<String> sen = new HashSet<String>();
-  	String addr = this.getVar(ConfVars.NEWREDISADDR);
-  	if(addr == null)
-  		return null;
-  	for(String s : addr.substring(6).split(";"))
-  		sen.add(s);
-  	return sen;
+
+  public Set<String> getSentinel() {
+    HashSet<String> sen = new HashSet<String>();
+    String addr = this.getVar(ConfVars.NEWREDISADDR);
+    if (addr == null) {
+      return null;
+    }
+    for (String s : addr.substring(6).split(";")) {
+      sen.add(s);
+    }
+    return sen;
   }
-  public HostAndPort getRedisHP()
-  {
-  	String addr = this.getVar(ConfVars.NEWREDISADDR);
-  	List<HostAndPort> lr = new ArrayList<HostAndPort>();
-  	for(String s : addr.substring(6).split(";"))
-  	{
-  		String[] hp = s.split(":");
-  		lr.add(new HostAndPort(hp[0], Integer.parseInt(hp[1])));
-  	}
-  	return lr.get(new Random().nextInt(lr.size()));
+
+  public HostAndPort getRedisHP() {
+    String addr = this.getVar(ConfVars.NEWREDISADDR);
+    List<HostAndPort> lr = new ArrayList<HostAndPort>();
+    for(String s : addr.substring(6).split(";")) {
+      String[] hp = s.split(":");
+      lr.add(new HostAndPort(hp[0], Integer.parseInt(hp[1])));
+    }
+    return lr.get(new Random().nextInt(lr.size()));
   }
 }
