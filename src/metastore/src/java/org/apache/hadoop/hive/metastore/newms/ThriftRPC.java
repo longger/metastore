@@ -15,7 +15,6 @@ import java.util.Formatter;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -124,6 +123,7 @@ public class ThriftRPC extends FacebookBase implements
   private IMetaStoreClient client;
 
   private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
+  private static final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
   private DiskManager dm;
   Random rand = new Random();
   public static Long file_creation_lock = 0L;
@@ -153,6 +153,13 @@ public class ThriftRPC extends FacebookBase implements
     try {
       client = MsgProcessing.createMetaStoreClient();
       clients.put(DEFAULT_USER_NAME, client);
+      //每10秒打印一次rpcInfo基本信息
+      schedule.scheduleAtFixedRate(new Runnable(){
+        @Override
+        public void run() {
+          LOG.info(rpcInfo);
+        }
+      }, 10,10, TimeUnit.SECONDS);
     } catch (MetaException e) {
       LOG.error("can't init IMetaStoreClient", e);
     }
@@ -174,7 +181,7 @@ public class ThriftRPC extends FacebookBase implements
           "cmd=%s\t"; // command
   public static final Log auditLog = LogFactory.getLog(
       ThriftRPC.class.getName() + ".audit");
-  private final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
+
   private static ThreadLocal<Formatter> auditFormatter =
       new ThreadLocal<Formatter>() {
         @Override
@@ -213,18 +220,23 @@ public class ThriftRPC extends FacebookBase implements
     super("NewMS-RPC");
     rs = new RawStoreImp();
     try {
-      HiveConf hc = new HiveConf(DiskManager.class);
+      final HiveConf hc = new HiveConf(DiskManager.class);
       dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
-      //每10秒打印一次rpcInfo信息
-      schedule.scheduleAtFixedRate(new Runnable(){
+      //dump rpcInfo per minute
+      schedule.scheduleAtFixedRate(new Runnable() {
         @Override
         public void run() {
-          LOG.info(rpcInfo);
+          String path = hc.get("rpc.info.filename");
+          try {
+            rpcInfo.dumpToFile(path);
+          } catch (IOException e) {
+            LOG.error("error in dump rpc info to file\n",e);
+          }
         }
-      }, 10,10, TimeUnit.SECONDS);
+    }, 5, 1, TimeUnit.MINUTES);
     } catch (MetaException e) {
       LOG.error(e, e);
       throw new IOException(e.getMessage());
@@ -341,6 +353,7 @@ public class ThriftRPC extends FacebookBase implements
     if (rs != null) {
       rs.shutdown();
     }
+    schedule.shutdown();
     LOG.info("Metastore shutdown complete.");
   }
 
@@ -2028,7 +2041,7 @@ public class ThriftRPC extends FacebookBase implements
     }
     return index;
   }
-  
+
   @Override
   public List<String> get_index_names(String dbName, String tblName, short maxIndexes)
       throws MetaException, TException {
@@ -2176,7 +2189,7 @@ public class ThriftRPC extends FacebookBase implements
     }
     return p;
   }
-  
+
   @Override
   public ColumnStatistics get_partition_column_statistics(String dbName,
       String tableName, String partitionName, String colName)
@@ -3361,7 +3374,7 @@ public class ThriftRPC extends FacebookBase implements
       TException {
     boolean r = false;
     SFileLocation saved = rs.getSFileLocation(sfl.getDevid(), sfl.getLocation());
-    
+
     if(saved != null){
       startFunction("del_filelocation", ": FID " + saved.getFid() + " dev " + saved.getDevid() + " loc " + saved.getLocation());
       r = rs.delSFileLocation(sfl.getDevid(), sfl.getLocation());
