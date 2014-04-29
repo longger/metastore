@@ -2,8 +2,12 @@ package org.apache.hadoop.hive.metastore.newms;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.apache.commons.lang.StringUtils.join;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,6 +21,10 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -89,29 +97,38 @@ import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
+import org.apache.hadoop.hive.serde2.Deserializer;
+import org.apache.hadoop.hive.serde2.SerDeException;
+import org.apache.hadoop.hive.serde2.SerDeUtils;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TException;
 
 import com.facebook.fb303.FacebookBase;
 import com.facebook.fb303.fb_status;
+import com.google.common.base.Strings;
 
 /*
  * 没缓存的对象，但是rpc里要得到的
- * BusiTypeColumn，Device,ColumnStatistics,Type,role,User,HiveObjectPrivilege
+ * BusiTypeColumn,ColumnStatistics,Type,role,User,HiveObjectPrivilege
  */
 
 
-public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface {
+public class ThriftRPC extends FacebookBase implements
+    org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface {
 
-  private final NewMSConf conf;
+  private final static ConcurrentHashMap<String, IMetaStoreClient> clients = new ConcurrentHashMap<String, IMetaStoreClient>();
+  private final static String DEFAULT_USER_NAME = "_unauthed_user";
+  private final static ThriftRPCInfo rpcInfo = new ThriftRPCInfo();
+  private final HiveConf hiveConf = new HiveConf(this.getClass());
   private final RawStoreImp rs;
   private IMetaStoreClient client;
+
   private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
   private DiskManager dm;
   Random rand = new Random();
   public static Long file_creation_lock = 0L;
   public static Long file_reopen_lock = 0L;
   private List<MetaStoreEndFunctionListener> endFunctionListeners;
-
   private static int nextSerialNum = 0;
   private static final ThreadLocal<Integer> threadLocalId = new ThreadLocal<Integer>() {
     @Override
@@ -131,6 +148,15 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       return null;
     }
   };
+  static {
+    IMetaStoreClient client = null;
+    try {
+      client = MsgProcessing.createMetaStoreClient();
+      clients.put(DEFAULT_USER_NAME, client);
+    } catch (MetaException e) {
+      LOG.error("can't init IMetaStoreClient", e);
+    }
+  }
 
   public static void setIpAddress(String ipAddress) {
     threadLocalIpAddress.set(ipAddress);
@@ -148,13 +174,14 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
           "cmd=%s\t"; // command
   public static final Log auditLog = LogFactory.getLog(
       ThriftRPC.class.getName() + ".audit");
-  private static  ThreadLocal<Formatter> auditFormatter =
+  private final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
+  private static ThreadLocal<Formatter> auditFormatter =
       new ThreadLocal<Formatter>() {
-    @Override
-    protected Formatter initialValue() {
-      return new Formatter(new StringBuilder(AUDIT_FORMAT.length() * 4));
-    }
-  };
+        @Override
+        protected Formatter initialValue() {
+          return new Formatter(new StringBuilder(AUDIT_FORMAT.length() * 4));
+        }
+      };
 
   private final void logAuditEvent(String cmd) {
     if (cmd == null) {
@@ -162,6 +189,7 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
     }
 
     final Formatter fmt = auditFormatter.get();
+
     ((StringBuilder) fmt.out()).setLength(0);
 
     String address;
@@ -170,8 +198,9 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       address = "unknown-ip-addr";
     }
     String user = "";
-    HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler.getServerContext(msss.getSessionId());
-    if (serverContext!= null) {
+    HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler
+        .getServerContext(msss.getSessionId());
+    if (serverContext != null) {
       user += serverContext.getUserName() + "(" + serverContext.isAuthenticated() + ")";
     } else {
       user = "unknown";
@@ -180,30 +209,22 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
     auditLog.info(fmt.format(AUDIT_FORMAT, user, address, cmd).toString());
   }
 
-  public ThriftRPC(NewMSConf conf) throws IOException {
+  public ThriftRPC() throws IOException {
     super("NewMS-RPC");
-    this.conf = conf;
-    rs = new RawStoreImp(conf);
-    System.currentTimeMillis();
+    rs = new RawStoreImp();
     try {
-    	HiveConf hc = new HiveConf(DiskManager.class);
-      client = MsgProcessing.createMetaStoreClient();
-      try {
-      	if (client != null) {
-          if (client.authentication(hc.getVar(HiveConf.ConfVars.HIVE_USER),
-                hc.getVar(HiveConf.ConfVars.HIVE_USERPWD))) {
-            LOG.info("Authenticate '" + hc.getVar(HiveConf.ConfVars.HIVE_USER) + "' success.");
-          }
-        }
-			} catch (NoSuchObjectException e) {
-				LOG.error(e, e);
-			} catch (TException e) {
-			  LOG.error(e, e);
-			}
-      dm = new DiskManager(hc, LogFactory.getLog(DiskManager.class), RsStatus.NEWMS);
+      HiveConf hc = new HiveConf(DiskManager.class);
+      dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, hc,
           hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
+      //每10秒打印一次rpcInfo信息
+      schedule.scheduleAtFixedRate(new Runnable(){
+        @Override
+        public void run() {
+          LOG.info(rpcInfo);
+        }
+      }, 10,10, TimeUnit.SECONDS);
     } catch (MetaException e) {
       LOG.error(e, e);
       throw new IOException(e.getMessage());
@@ -211,6 +232,75 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       LOG.error(e, e);
       throw e;
     }
+  }
+
+  private static class _ProxyThriftRPC implements InvocationHandler {
+    private ThriftRPC rpc = null;
+
+    public _ProxyThriftRPC(ThriftRPC rpc) {
+      this.rpc = rpc;
+    }
+
+    public ThriftRPC getRPC() {
+
+      return (ThriftRPC) Proxy.newProxyInstance(rpc.getClass().getClassLoader(), rpc.getClass()
+          .getInterfaces(), this);
+    }
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+      String methodName = method.getName();
+      Object result = null;
+      long startTime = System.currentTimeMillis();
+      /*
+       * 在客户端失效重连阶段会先从clients中移除失效的client，然后重新创建并认证新client
+       * 如果移除旧client后认证新client前客户端调用rpc中使用client的方法可能会导致NullPointerException
+       * 造成严重错误，因此需要线程自旋判断client是否为中间状态
+       */
+      while (true) {
+        if (!clients.contains(rpc.getUserName())) {
+          continue;
+        }
+        try {
+          result = method.invoke(rpc, args);
+          rpcInfo.captureInfo(method.getName(), System.currentTimeMillis() - startTime);
+          return result;
+        } catch (Exception e) {
+          if (e instanceof TException) {// 发生连接异常，自动重建连接
+            LOG.info("some error occured when call method " + methodName + " try reconnect");
+            HiveMetaStoreServerContext context = rpc.getServerContext();
+            if (rpc.getServerContext().isAuthenticated()) {
+              // 如果重连之前客户端没有修改过密码，则重新验证能成功，但是还存在潜在风险
+              synchronized (this) {// 移除和认证应该保持原子操作
+                clients.remove(context.getUserName());
+                rpc.authentication(context.getUserName(), context.getPassword());
+              }
+            } else {
+              clients.put(DEFAULT_USER_NAME, MsgProcessing.createMetaStoreClient());
+            }
+            try {
+              // 用新连接重新执行客户端调用的方法一次，即重试，如果重试再次失败则抛出异常
+              result = method.invoke(rpc, args);
+              rpcInfo.captureInfo(method.getName(), System.currentTimeMillis() - startTime);
+              return result;
+            } catch (Exception t) {
+              LOG.error(
+                  "I have tried my best to retry, but still cause some exceptions,please check program",
+                  t);
+              throw t;
+            }
+          } else {// 其他异常，直接抛出
+            throw e;
+          }
+        }
+      }
+
+    }
+
+  }
+
+  public static ThriftRPC newThriftRPC() throws IOException {
+    return new _ProxyThriftRPC(new ThriftRPC()).getRPC();
   }
 
   @Override
@@ -229,19 +319,19 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
 
   @Override
   public String getCpuProfile(int profileDurationInSec) throws TException {
-    //TODO HiveMetaStore just return ""
+    // TODO HiveMetaStore just return ""
     // HiveMetaStoreClient didn't call this method
     return "";
   }
 
   @Override
   public fb_status getStatus() {
-      return fb_status.ALIVE;
+    return fb_status.ALIVE;
   }
 
   @Override
   public String getVersion() throws TException {
-    endFunction(startFunction("getVersion",""),true,null);
+    endFunction(startFunction("getVersion", ""), true, null);
     return "3.2";
   }
 
@@ -257,107 +347,121 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public boolean addEquipRoom(EquipRoom arg0) throws MetaException,
       TException {
-    return arg0 != null && client.addEquipRoom(arg0);
+    return arg0 != null && clients.get(this.getUserName()).addEquipRoom(arg0);
   }
 
   @Override
   public boolean addGeoLocation(GeoLocation arg0) throws MetaException,
       TException {
-    return arg0 != null && client.addGeoLocation(arg0);
+    return arg0 != null && clients.get(this.getUserName()).addGeoLocation(arg0);
   }
 
   @Override
   public boolean addNodeAssignment(String nodeName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
     final boolean expr = isNullOrEmpty(nodeName) || isNullOrEmpty(dbName);
-    return !expr && client.addNodeAssignment(nodeName, dbName);
+    return !expr
+        && clients.get(this.getUserName()).addNodeAssignment(nodeName, dbName);
   }
 
   @Override
   public boolean addNodeGroup(NodeGroup nodeGroup) throws AlreadyExistsException,
       MetaException, TException {
-    return nodeGroup != null && client.addNodeGroup(nodeGroup);
+    return nodeGroup != null
+        && clients.get(this.getUserName()).addNodeGroup(nodeGroup);
   }
 
   @Override
   public boolean addNodeGroupAssignment(NodeGroup nodeGroup, String dbName)
       throws MetaException, TException {
     final boolean expr = nodeGroup == null || isNullOrEmpty(dbName);
-    return !expr && client.addNodeGroupAssignment(nodeGroup, dbName);
+    return !expr
+        && clients.get(this.getUserName()).addNodeGroupAssignment(nodeGroup,
+            dbName);
   }
 
   @Override
   public boolean addRoleAssignment(String roleName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
     final boolean expr = isNullOrEmpty(roleName) || isNullOrEmpty(dbName);
-    return !expr && client.addRoleAssignment(roleName, dbName);
+    return !expr
+        && clients.get(this.getUserName()).addRoleAssignment(roleName, dbName);
   }
 
   @Override
   public boolean addTableNodeDist(String dbName, String tableName, List<String> nodeGroupList)
       throws MetaException, TException {
     final boolean expr = isNullOrEmpty(dbName) || isNullOrEmpty(tableName) || nodeGroupList == null;
-    return !expr && client.addTableNodeDist(dbName, tableName, nodeGroupList);
+    return !expr
+        && clients.get(this.getUserName()).addTableNodeDist(dbName, tableName,
+            nodeGroupList);
   }
 
   @Override
   public boolean addUserAssignment(String userName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
     final boolean expr = isNullOrEmpty(userName) || isNullOrEmpty(dbName);
-    return !expr && client.addUserAssignment(userName, dbName);
+    return !expr
+        && clients.get(this.getUserName()).addUserAssignment(userName, dbName);
   }
 
   @Override
   public boolean add_datawarehouse_sql(int dwNum, String sql)
       throws InvalidObjectException, MetaException, TException {
-    return client.addDatawareHouseSql(dwNum, sql);
+    return clients.get(this.getUserName()).addDatawareHouseSql(dwNum, sql);
   }
 
   @Override
   public Index add_index(Index index, Table indexTable)
       throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
-    client.createIndex(index, indexTable);
-    return client.getIndex(index.getDbName(), index.getOrigTableName(), index.getIndexName());
+    clients.get(this.getUserName()).createIndex(index, indexTable);
+    return clients.get(this.getUserName()).getIndex(index.getDbName(),
+        index.getOrigTableName(), index.getIndexName());
   }
 
   @Override
   public Node add_node(String nodeName, List<String> ipl) throws MetaException,
       TException {
-//    final boolean expr = isNullOrEmpty(nodeName) || ipl == null;
-//    checkArgument(expr, "nodeName and ipl shuldn't be null or empty");
-//    final Node node = client.add_node(nodeName, ipl);
-//    return node;
-  	return client.add_node(nodeName, ipl);
+    // final boolean expr = isNullOrEmpty(nodeName) || ipl == null;
+    // checkArgument(expr, "nodeName and ipl shuldn't be null or empty");
+    // final Node node = clients.get(this.getUserName()).add_node(nodeName, ipl);
+    // return node;
+    return clients.get(this.getUserName()).add_node(nodeName, ipl);
   }
 
   @Override
   public Partition add_partition(Partition partition)
       throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
-    return client.add_partition(checkNotNull(partition, "partation shuldn't be null"));
+    return clients.get(this.getUserName()).add_partition(
+        checkNotNull(partition, "partation shuldn't be null"));
   }
 
   @Override
   public int add_partition_files(Partition partition, List<SFile> sfiles)
       throws TException {
-    return client.add_partition_files(checkNotNull(partition), checkNotNull(sfiles));
+    return clients.get(this.getUserName()).add_partition_files(
+        checkNotNull(partition), checkNotNull(sfiles));
   }
 
   @Override
   public boolean add_partition_index(Index index, Partition partition)
       throws MetaException, AlreadyExistsException, TException {
-    return client.add_partition_index(checkNotNull(index), checkNotNull(partition));
+    return clients.get(this.getUserName()).add_partition_index(
+        checkNotNull(index), checkNotNull(partition));
   }
 
   @Override
   public boolean add_partition_index_files(Index index, Partition part, List<SFile> file,
       List<Long> originfid) throws MetaException, TException {
-  	return client.add_partition_index_files(index, part, file, originfid);
+    return clients.get(this.getUserName()).add_partition_index_files(index,
+        part, file, originfid);
   }
 
   @Override
-  public Partition add_partition_with_environment_context(Partition part, EnvironmentContext envContext) throws InvalidObjectException,
+  public Partition add_partition_with_environment_context(Partition part,
+      EnvironmentContext envContext) throws InvalidObjectException,
       AlreadyExistsException, MetaException, TException {
     // TODO mzy
     return null;
@@ -367,7 +471,7 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   public int add_partitions(List<Partition> partitions)
       throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
-    return client.add_partitions(partitions);
+    return clients.get(this.getUserName()).add_partitions(partitions);
   }
 
   /**
@@ -384,68 +488,73 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public int add_subpartition_files(Subpartition subpart, List<SFile> files)
       throws TException {
-    return client.add_subpartition_files(subpart, files);
+    return clients.get(this.getUserName())
+        .add_subpartition_files(subpart, files);
   }
 
   @Override
   public boolean add_subpartition_index(Index index, Subpartition subpart)
       throws MetaException, AlreadyExistsException, TException {
-    return client.add_subpartition_index(index, subpart);
+    return clients.get(this.getUserName())
+        .add_subpartition_index(index, subpart);
   }
 
   @Override
   public boolean add_subpartition_index_files(Index index, Subpartition subpart,
       List<SFile> file, List<Long> originfid) throws MetaException, TException {
-    return client.add_subpartition_index_files(index, subpart, file, originfid);
+    return clients.get(this.getUserName()).add_subpartition_index_files(index,
+        subpart, file, originfid);
   }
 
   @Override
   public boolean alterNodeGroup(NodeGroup ng)
       throws AlreadyExistsException, MetaException, TException {
-    return client.alterNodeGroup(ng);
+    return clients.get(this.getUserName()).alterNodeGroup(ng);
   }
 
   @Override
   public void alter_database(String name, Database db)
       throws MetaException, NoSuchObjectException, TException {
-    client.alterDatabase(name, db);
+    clients.get(this.getUserName()).alterDatabase(name, db);
   }
 
   @Override
   public void alter_index(String dbName, String tblName, String indexName, Index index)
       throws InvalidOperationException, MetaException, TException {
-    client.alter_index(dbName, tblName, indexName, index);
+    clients.get(this.getUserName()).alter_index(dbName, tblName, indexName,
+        index);
   }
 
   @Override
   public Node alter_node(String nodeName, List<String> ipl, int status)
       throws MetaException, TException {
-    return client.alter_node(nodeName, ipl, status);
+    return clients.get(this.getUserName()).alter_node(nodeName, ipl, status);
   }
 
   @Override
   public void alter_partition(String dbName, String tblName, Partition newPart)
       throws InvalidOperationException, MetaException, TException {
-    client.alter_partition(dbName, tblName, newPart);
+    clients.get(this.getUserName()).alter_partition(dbName, tblName, newPart);
   }
 
   @Override
   public void alter_partition_with_environment_context(String dbName,
       String name, Partition newPart, EnvironmentContext arg3)
       throws InvalidOperationException, MetaException, TException {
-    client.renamePartition(dbName, name, null, newPart);
+    clients.get(this.getUserName()).renamePartition(dbName, name, null, newPart);
   }
 
   @Override
   public void alter_partitions(String dbName, String tblName, List<Partition> newParts)
       throws InvalidOperationException, MetaException, TException {
-    client.alter_partitions(dbName, tblName, newParts);
+    clients.get(this.getUserName()).alter_partitions(dbName, tblName, newParts);
   }
 
   @Override
   public void alter_table(String defaultDatabaseName, String tblName, Table table)
       throws InvalidOperationException, MetaException, TException {
-    client.alter_table(defaultDatabaseName, tblName, table);
+    clients.get(this.getUserName()).alter_table(defaultDatabaseName, tblName,
+        table);
   }
 
   @Override
@@ -459,21 +568,24 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public void append_busi_type_datacenter(BusiTypeDatacenter busiTypeDatacenter)
       throws InvalidObjectException, MetaException, TException {
-    client.append_busi_type_datacenter(busiTypeDatacenter);
+    clients.get(this.getUserName()).append_busi_type_datacenter(
+        busiTypeDatacenter);
   }
 
   @Override
   public Partition append_partition(String tableName, String dbName,
       List<String> partVals) throws InvalidObjectException,
       AlreadyExistsException, MetaException, TException {
-    return client.appendPartition(tableName, dbName, partVals);
+    return clients.get(this.getUserName()).appendPartition(tableName, dbName,
+        partVals);
   }
 
   @Override
   public Partition append_partition_by_name(String tableName, String dbName,
       String name) throws InvalidObjectException, AlreadyExistsException,
       MetaException, TException {
-    return client.appendPartition(tableName, dbName, name);
+    return clients.get(this.getUserName()).appendPartition(tableName, dbName,
+        name);
   }
 
   @Override
@@ -481,29 +593,55 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       List<FieldSchema> fileSplitKeys, List<FieldSchema> partKeys, List<NodeGroup> ngs)
       throws InvalidObjectException, NoSuchObjectException,
       MetaException, TException {
-    return client.assiginSchematoDB(dbName, schemaName, fileSplitKeys, partKeys, ngs);
+    return clients.get(this.getUserName()).assiginSchematoDB(dbName, schemaName,
+        fileSplitKeys, partKeys, ngs);
   }
 
   @Override
   public boolean authentication(String userName, String passwd)
       throws NoSuchObjectException, MetaException, TException {
     incrementCounter("user_authentication");
-    boolean r = client.authentication(userName, passwd);
-    // save user info to thread local context
-    if (r) {
-      HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler.getServerContext(msss.getSessionId());
-      if (serverContext != null) {
-        serverContext.setUserName(userName);
-        serverContext.setAuthenticated(true);
+    IMetaStoreClient client = MsgProcessing.createMetaStoreClient();
+    if (client != null && client.authentication(userName, passwd)) {
+      if (clients.get(userName) != null) {
+        return true;
       }
+      // 避免并发环境下多次设置serverContext中的值
+      if (clients.putIfAbsent(userName, client) == null) {
+        HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler
+            .getServerContext(msss.getSessionId());
+        if (serverContext != null) {
+          serverContext.setUserName(userName);
+          serverContext.setPassword(passwd);
+          serverContext.setAuthenticated(true);
+        }
+      }
+      return true;
+    } else {
+      return false;
     }
-    return r;
+  }
+
+  private String getPassword() {
+    return this.getServerContext().getPassword();
+  }
+
+  private String getUserName() {
+    final HiveMetaStoreServerContext context = this.getServerContext();
+    if (context == null || Strings.isNullOrEmpty(context.getUserName())) {
+      return DEFAULT_USER_NAME;
+    }
+    return context.getUserName();
+  }
+
+  private HiveMetaStoreServerContext getServerContext() {
+    return HiveMetaStoreServerEventHandler.getServerContext(msss.getSessionId());
   }
 
   @Override
   public void cancel_delegation_token(String tokenStrForm) throws MetaException,
       TException {
-    client.cancelDelegationToken(tokenStrForm);
+    clients.get(this.getUserName()).cancelDelegationToken(tokenStrForm);
   }
 
   @Override
@@ -577,7 +715,7 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
       // keep repnr unchanged
       file.setRep_nr(saved.getRep_nr());
-      rs.updateSFile(file,true);
+      rs.updateSFile(file, true);
 
       if (e != null) {
         throw e;
@@ -588,7 +726,7 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
         dm.repQ.notify();
       }
     } finally {
-    	endFunction("close_file", true, e);
+      endFunction("close_file", true, e);
       DMProfile.fcloseSuccRS.incrementAndGet();
     }
     return 0;
@@ -612,6 +750,21 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
     }
     return function;
   }
+  public String startFunction(String function) {
+    return startFunction(function, "");
+  }
+  public String startMultiTableFunction(String function, String db, List<String> tbls) {
+    String tableNames = join(tbls, ",");
+    return startFunction(function, " : db=" + db + " tbls=" + tableNames);
+  }
+  public String startTableFunction(String function, String db, String tbl) {
+    return startFunction(function, " : db=" + db + " tbl=" + tbl);
+  }
+  public String startPartitionFunction(String function, String db, String tbl,
+      List<String> partVals) {
+    return startFunction(function, " : db=" + db + " tbl=" + tbl
+        + "[" + join(partVals, ",") + "]");
+  }
 
   public void endFunction(String function, boolean successful, Exception e) {
     endFunction(function, new MetaStoreEndFunctionContext(successful, e));
@@ -633,33 +786,33 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public int createBusitype(Busitype bt) throws InvalidObjectException,
       MetaException, TException {
-    return client.createBusitype(bt);
+    return clients.get(this.getUserName()).createBusitype(bt);
   }
 
   @Override
   public boolean createSchema(GlobalSchema schema)
       throws AlreadyExistsException, InvalidObjectException,
       MetaException, TException {
-    return client.createSchema(schema);
+    return clients.get(this.getUserName()).createSchema(schema);
   }
 
   @Override
   public void create_attribution(Database db)
       throws AlreadyExistsException, InvalidObjectException,
       MetaException, TException {
-    client.create_attribution(db);
+    clients.get(this.getUserName()).create_attribution(db);
   }
 
   @Override
   public void create_database(Database db) throws AlreadyExistsException,
       InvalidObjectException, MetaException, TException {
-    client.createDatabase(db);
+    clients.get(this.getUserName()).createDatabase(db);
   }
 
   @Override
   public Device create_device(String devId, int prop, String nodeName)
       throws MetaException, TException {
-    return client.createDevice(devId, prop, nodeName);
+    return clients.get(this.getUserName()).createDevice(devId, prop, nodeName);
   }
 
   @Override
@@ -753,26 +906,28 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       try {
         node_name = dm.findBestNode(flp);
         if (node_name == null) {
-          throw new IOException("Folloing the FLP(" + flp + "), we can't find any available node now.");
+          throw new IOException("Folloing the FLP(" + flp
+              + "), we can't find any available node now.");
         }
         if (db_name != null && table_name != null && values.size() == 3) {
           try {
             String l2keys[] = values.get(2).getValue().split("-");
             if (l2keys.length == 2) {
-              LOG.info("FLSelector will choose " + DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
-                  Long.parseLong(values.get(0).getValue()),
-                  Long.parseLong(l2keys[1])) + " for " + db_name + "." + table_name +
+              LOG.info("FLSelector will choose "
+                  + DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
+                      Long.parseLong(values.get(0).getValue()),
+                      Long.parseLong(l2keys[1])) + " for " + db_name + "." + table_name +
                   " L1Key=" + values.get(0).getValue() +
                   " L2Key=" + l2keys[1] + ", vs " + node_name);
             }
-          }
-          catch (NumberFormatException nfe) {
+          } catch (NumberFormatException nfe) {
             LOG.error(nfe, nfe);
           }
         }
       } catch (IOException e) {
         LOG.error(e, e);
-        throw new FileOperationException("Can not find any Best Available Node now, please retry", FOFailReason.SAFEMODE);
+        throw new FileOperationException("Can not find any Best Available Node now, please retry",
+            FOFailReason.SAFEMODE);
       }
     }
 
@@ -856,7 +1011,7 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
     Set<String> ngnodes = new HashSet<String>();
 
     startFunction("create_file_by_policy:", "CP " + policy.getOperation() +
-          " db: " + db_name + " table: " + table_name + " values: " + values);
+        " db: " + db_name + " table: " + table_name + " values: " + values);
     // Step 1: parse the policy and check arguments
     switch (policy.getOperation()) {
     case CREATE_NEW_IN_NODEGROUPS:
@@ -1140,21 +1295,21 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
 
   @Override
   public boolean create_role(Role role) throws MetaException, TException {
-    return client.create_role(role);
+    return clients.get(this.getUserName()).create_role(role);
   }
 
   @Override
   public void create_table(Table tbl) throws AlreadyExistsException,
       InvalidObjectException, MetaException, NoSuchObjectException,
       TException {
-    client.createTable(tbl);
+    clients.get(this.getUserName()).createTable(tbl);
   }
 
   @Override
   public void create_table_by_user(Table tbl, User user)
       throws AlreadyExistsException, InvalidObjectException,
       MetaException, NoSuchObjectException, TException {
-    client.createTableByUser(tbl, user);
+    clients.get(this.getUserName()).createTableByUser(tbl, user);
   }
 
   @Override
@@ -1163,7 +1318,7 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       InvalidObjectException, MetaException, NoSuchObjectException,
       TException {
     // TODO implement this method
-  	throw new MetaException("not implemented yet.");
+    throw new MetaException("not implemented yet.");
   }
 
   @Override
@@ -1175,54 +1330,60 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public boolean create_user(User user) throws InvalidObjectException,
       MetaException, TException {
-    return client.create_user(user);
+    return clients.get(this.getUserName()).create_user(user);
   }
 
   @Override
   public boolean del_device(String devId) throws MetaException, TException {
-    return client.delDevice(devId);
+    return clients.get(this.getUserName()).delDevice(devId);
   }
 
   @Override
   public int del_node(String nodeName) throws MetaException, TException {
-    return (!isNullOrEmpty(nodeName) && client.del_node(nodeName)) ? 1 : 0;
+    return (!isNullOrEmpty(nodeName) && clients.get(this.getUserName())
+        .del_node(nodeName)) ? 1 : 0;
   }
 
   @Override
   public boolean deleteEquipRoom(EquipRoom er) throws MetaException,
       TException {
-    return er != null && client.deleteEquipRoom(er);
+    return er != null && clients.get(this.getUserName()).deleteEquipRoom(er);
   }
 
   @Override
   public boolean deleteGeoLocation(GeoLocation gl) throws MetaException,
       TException {
-    return gl != null && client.deleteGeoLocation(gl);
+    return gl != null && clients.get(this.getUserName()).deleteGeoLocation(gl);
   }
 
   @Override
   public boolean deleteNodeAssignment(String nodeName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
     boolean expr = isNullOrEmpty(nodeName) || isNullOrEmpty(dbName);
-    return !expr && client.deleteNodeAssignment(nodeName, dbName);
+    return !expr
+        && clients.get(this.getUserName())
+            .deleteNodeAssignment(nodeName, dbName);
   }
 
   @Override
   public boolean deleteNodeGroup(NodeGroup nodeGroup) throws MetaException,
       TException {
-    return nodeGroup != null && client.deleteNodeGroup(nodeGroup);
+    return nodeGroup != null
+        && clients.get(this.getUserName()).deleteNodeGroup(nodeGroup);
   }
 
   @Override
   public boolean deleteNodeGroupAssignment(NodeGroup nodeGroup, String dbName)
       throws MetaException, TException {
-    return client.deleteNodeGroupAssignment(nodeGroup, dbName);
+    return clients.get(this.getUserName()).deleteNodeGroupAssignment(nodeGroup,
+        dbName);
   }
 
   @Override
   public boolean deleteRoleAssignment(String roleName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
-    return client.deleteRoleAssignment(roleName, dbName);
+    return clients.get(this.getUserName())
+        .deleteRoleAssignment(roleName, dbName);
   }
 
   /**
@@ -1237,7 +1398,8 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
    */
   @Override
   public boolean deleteSchema(String arg0) throws MetaException, TException {
-    return !isNullOrEmpty(arg0) && client.deleteSchema(arg0);
+    return !isNullOrEmpty(arg0)
+        && clients.get(this.getUserName()).deleteSchema(arg0);
   }
 
   /**
@@ -1259,7 +1421,8 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   public boolean deleteTableNodeDist(String arg0, String arg1,
       List<String> arg2) throws MetaException, TException {
     final boolean expr = isNullOrEmpty(arg0) || isNullOrEmpty(arg1) || arg2 == null;
-    return !expr && client.deleteTableNodeDist(arg0, arg1, arg2);
+    return !expr
+        && clients.get(this.getUserName()).deleteTableNodeDist(arg0, arg1, arg2);
   }
 
   /**
@@ -1277,144 +1440,159 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   public boolean deleteUserAssignment(String userName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
     final boolean expr = isNullOrEmpty(userName) || isNullOrEmpty(dbName);
-    return !expr && client.deleteUserAssignment(userName, dbName);
+    return !expr
+        && clients.get(this.getUserName())
+            .deleteUserAssignment(userName, dbName);
   }
+
   // FIXME kandaozhe
   @Override
   public boolean delete_partition_column_statistics(String dbName, String tableName,
       String partName, String colName) throws NoSuchObjectException,
       MetaException, InvalidObjectException, InvalidInputException,
       TException {
-    return client.deletePartitionColumnStatistics(dbName, tableName, partName, colName);
+    return clients.get(this.getUserName()).deletePartitionColumnStatistics(
+        dbName, tableName, partName, colName);
   }
 
   @Override
   public boolean delete_table_column_statistics(String dbName, String tableName,
       String colName) throws NoSuchObjectException, MetaException,
       InvalidObjectException, InvalidInputException, TException {
-    return client.deleteTableColumnStatistics(dbName, tableName, colName);
+    return clients.get(this.getUserName()).deleteTableColumnStatistics(dbName,
+        tableName, colName);
   }
 
   @Override
   public void drop_attribution(String name, boolean deleteData, boolean ignoreUnknownDb)
       throws NoSuchObjectException, InvalidOperationException,
       MetaException, TException {
-    client.dropDatabase(name, deleteData, ignoreUnknownDb);
+    clients.get(this.getUserName()).dropDatabase(name, deleteData,
+        ignoreUnknownDb);
   }
 
   @Override
   public void drop_database(String name, boolean ifDeleteData, boolean ifIgnoreUnknownDb)
       throws NoSuchObjectException, InvalidOperationException,
       MetaException, TException {
-    client.dropDatabase(name, ifDeleteData, ifIgnoreUnknownDb);
+    clients.get(this.getUserName()).dropDatabase(name, ifDeleteData,
+        ifIgnoreUnknownDb);
   }
 
   @Override
   public boolean drop_index_by_name(String dbName, String tableName, String indexName,
       boolean ifDeleteData) throws NoSuchObjectException, MetaException,
       TException {
-    return client.dropIndex(dbName, tableName, indexName, ifDeleteData);
+    return clients.get(this.getUserName()).dropIndex(dbName, tableName,
+        indexName, ifDeleteData);
   }
 
   @Override
   public boolean drop_partition(String dbName, String tableName, List<String> partValues,
       boolean ifDeleteData) throws NoSuchObjectException, MetaException,
       TException {
-    return client.dropPartition(dbName, tableName, partValues, ifDeleteData);
+    return clients.get(this.getUserName()).dropPartition(dbName, tableName,
+        partValues, ifDeleteData);
   }
 
   @Override
   public boolean drop_partition_by_name(String dbName, String tableName,
       String partName, boolean ifDelData) throws NoSuchObjectException,
       MetaException, TException {
-    return client.dropPartition(dbName, tableName, partName, ifDelData);
+    return clients.get(this.getUserName()).dropPartition(dbName, tableName,
+        partName, ifDelData);
   }
 
   @Override
   public int drop_partition_files(Partition part, List<SFile> files)
       throws TException {
     // TODO zy
-    return client.drop_partition_files(part, files);
+    return clients.get(this.getUserName()).drop_partition_files(part, files);
   }
 
   @Override
   public boolean drop_partition_index(Index index, Partition part)
       throws MetaException, AlreadyExistsException, TException {
-    return client.drop_partition_index(index, part);
+    return clients.get(this.getUserName()).drop_partition_index(index, part);
   }
 
   @Override
   public boolean drop_partition_index_files(Index index, Partition part,
       List<SFile> file) throws MetaException, TException {
     // TODO zy
-    return client.drop_partition_index_files(index, part, file);
+    return clients.get(this.getUserName()).drop_partition_index_files(index,
+        part, file);
   }
 
   @Override
   public boolean drop_role(String roleName) throws MetaException, TException {
-    return client.drop_role(roleName);
+    return clients.get(this.getUserName()).drop_role(roleName);
   }
 
   @Override
   public int drop_subpartition_files(Subpartition subpart, List<SFile> files)
       throws TException {
-    return client.drop_subpartition_files(subpart, files);
+    return clients.get(this.getUserName()).drop_subpartition_files(subpart,
+        files);
   }
 
   @Override
   public boolean drop_subpartition_index(Index index, Subpartition subpart)
       throws MetaException, AlreadyExistsException, TException {
-    return client.drop_subpartition_index(index, subpart);
+    return clients.get(this.getUserName()).drop_subpartition_index(index,
+        subpart);
   }
 
   @Override
   public boolean drop_subpartition_index_files(Index index, Subpartition subpart,
       List<SFile> file) throws MetaException, TException {
     // TODO zy
-    return client.drop_subpartition_index_files(index, subpart, file);
+    return clients.get(this.getUserName()).drop_subpartition_index_files(index,
+        subpart, file);
   }
 
   @Override
   public void drop_table(String dbName, String tableName, boolean ifDelData)
       throws NoSuchObjectException, MetaException, TException {
-    client.dropTable(dbName, tableName, ifDelData, true);
+    clients.get(this.getUserName())
+        .dropTable(dbName, tableName, ifDelData, true);
   }
 
   @Override
   public boolean drop_type(String name) throws MetaException,
       NoSuchObjectException, TException {
-  	/*
-    startFunction("drop_type", ": " + name);
-
-    boolean success = false;
-    Exception ex = null;
-    try {
-      // TODO:pc validate that there are no types that refer to this
-      success = rs.dropType(name);
-    } catch (Exception e) {
-      ex = e;
-      if (e instanceof MetaException) {
-        throw (MetaException) e;
-      } else if (e instanceof NoSuchObjectException) {
-        throw (NoSuchObjectException) e;
-      } else {
-        MetaException me = new MetaException(e.toString());
-        me.initCause(e);
-        throw me;
-      }
-    } finally {
-      endFunction("drop_type", success, ex);
-    }
-    return success;
-    */
-  	// FIXME can not be sent to old metastore
-  	return false;
+    /*
+     * startFunction("drop_type", ": " + name);
+     *
+     * boolean success = false;
+     * Exception ex = null;
+     * try {
+     * // TODO:pc validate that there are no types that refer to this
+     * success = rs.dropType(name);
+     * } catch (Exception e) {
+     * ex = e;
+     * if (e instanceof MetaException) {
+     * throw (MetaException) e;
+     * } else if (e instanceof NoSuchObjectException) {
+     * throw (NoSuchObjectException) e;
+     * } else {
+     * MetaException me = new MetaException(e.toString());
+     * me.initCause(e);
+     * throw me;
+     * }
+     * } finally {
+     * endFunction("drop_type", success, ex);
+     * }
+     * return success;
+     */
+    // FIXME can not be sent to old metastore
+    return false;
   }
 
   @Override
   public boolean drop_user(String userName) throws NoSuchObjectException,
       MetaException, TException {
-    return client.drop_user(userName);
+    return clients.get(this.getUserName()).drop_user(userName);
   }
 
   @Override
@@ -1488,15 +1666,15 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public GeoLocation getGeoLocationByName(String geoLocName) throws MetaException,
       NoSuchObjectException, TException {
-//    return rs.getGeoLocationByName(geoLocName);
-  	return client.getGeoLocationByName(geoLocName);
+    // return rs.getGeoLocationByName(geoLocName);
+    return clients.get(this.getUserName()).getGeoLocationByName(geoLocName);
   }
 
   @Override
   public List<GeoLocation> getGeoLocationByNames(List<String> geoLocNames)
       throws MetaException, TException {
-//    return rs.getGeoLocationByNames(geoLocNames);
-  	return client.getGeoLocationByNames(geoLocNames);
+    // return rs.getGeoLocationByNames(geoLocNames);
+    return clients.get(this.getUserName()).getGeoLocationByNames(geoLocNames);
   }
 
   @Override
@@ -1556,22 +1734,38 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public List<BusiTypeColumn> get_all_busi_type_cols() throws MetaException,
       TException {
-//    return rs.getAllBusiTypeCols();
-  	return client.get_all_busi_type_cols();
+    // return rs.getAllBusiTypeCols();
+    return clients.get(this.getUserName()).get_all_busi_type_cols();
   }
 
   @Override
   public List<BusiTypeDatacenter> get_all_busi_type_datacenters()
       throws MetaException, TException {
-//    return rs.get_all_busi_type_datacenters();
-  	return client.get_all_busi_type_datacenters();
+    // return rs.get_all_busi_type_datacenters();
+    return clients.get(this.getUserName()).get_all_busi_type_datacenters();
   }
 
   @Override
   public List<String> get_all_databases() throws MetaException, TException {
-    List<String> dbNames = new ArrayList<String>();
-    dbNames.addAll(CacheStore.getDatabaseHm().keySet());
-    return dbNames;
+  	startFunction("get_all_databases");
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getAllDatabases();
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_all_databases", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
@@ -1584,7 +1778,25 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public List<String> get_all_tables(String dbName) throws MetaException,
       TException {
-    return rs.getAllTables(dbName);
+  	startFunction("get_all_tables", ": db=" + dbName);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getAllTables(dbName);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_all_tables", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
@@ -1598,27 +1810,60 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   public String get_config_value(String name, String defaultValue)
       throws ConfigValSecurityException, TException {
     // TODO rs doesn't implement this method need HiveConf
-    return client.getConfigValue(name, defaultValue);
+    return clients.get(this.getUserName()).getConfigValue(name, defaultValue);
   }
 
   @Override
   public Database get_database(String dbName) throws NoSuchObjectException,
       MetaException, TException {
-    Database db = rs.getDatabase(dbName);
+  	startFunction("get_database", ": " + dbName);
+    Database db = null;
+    Exception ex = null;
+    try {
+      db = rs.getDatabase(dbName);
+    } catch (NoSuchObjectException e) {
+      ex = e;
+      throw e;
+    } catch (Exception e) {
+      ex = e;
+      assert (e instanceof RuntimeException);
+      throw (RuntimeException) e;
+    } finally {
+      endFunction("get_database", db != null, ex);
+    }
     return db;
   }
 
   @Override
   public List<String> get_databases(String pattern) throws MetaException,
       TException {
-    return rs.getDatabases(pattern);
+  	startFunction("get_databases", ": " + pattern);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getDatabases(pattern);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_databases", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
   public String get_delegation_token(String owner, String renewerKerberosPrincipalName)
       throws MetaException, TException {
     // TODO rs doesn't impelement this method need HiveConf
-    return client.getDelegationToken(owner, renewerKerberosPrincipalName);
+    return clients.get(this.getUserName()).getDelegationToken(owner,
+        renewerKerberosPrincipalName);
   }
 
   @Override
@@ -1627,17 +1872,57 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   }
 
   @Override
-  public List<FieldSchema> get_fields(String dbname, String tablename)
+  public List<FieldSchema> get_fields(String db, String tableName)
       throws MetaException, UnknownTableException, UnknownDBException, TException {
-    Table t = rs.getTable(dbname, tablename);
-    if (t == null) {
-      throw new UnknownTableException("Table not found by name:" + dbname + "." + tablename);
+  	startFunction("get_fields", ": db=" + db + "tbl=" + tableName);
+    String[] names = tableName.split("\\.");
+    String base_table_name = names[0];
+
+    Table tbl;
+    List<FieldSchema> ret = null;
+    Exception ex = null;
+    try {
+      try {
+        tbl = get_table(db, base_table_name);
+      } catch (NoSuchObjectException e) {
+        throw new UnknownTableException(e.getMessage());
+      }
+      boolean getColsFromSerDe = SerDeUtils.shouldGetColsFromSerDe(
+          tbl.getSd().getSerdeInfo().getSerializationLib());
+      if (!getColsFromSerDe) {
+        ret = tbl.getSd().getCols();
+      } else {
+        try {
+          Deserializer s = MetaStoreUtils.getDeserializer(hiveConf, tbl);
+          ret = MetaStoreUtils.getFieldsFromDeserializer(tableName, s);
+        } catch (SerDeException e) {
+          StringUtils.stringifyException(e);
+          throw new MetaException(e.getMessage());
+        }
+      }
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof UnknownDBException) {
+        throw (UnknownDBException) e;
+      } else if (e instanceof UnknownTableException) {
+        throw (UnknownTableException) e;
+      } else if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_fields", ret != null, ex);
     }
-    return t.getSd().getCols();
+
+    return ret;
   }
 
   // for each file, lookup cached device firstly
-  private void identifySharedDevice(List<SFileLocation> lsfl) throws MetaException, NoSuchObjectException {
+  private void identifySharedDevice(List<SFileLocation> lsfl) throws MetaException,
+      NoSuchObjectException {
     if (lsfl == null) {
       return;
     }
@@ -1670,9 +1955,10 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
-      r.getLocations().clear();
+    	r.getLocations().clear();
       break;
     default:
+//    	r.setLocations(rs.getSFileLocations(fid));
     }
     identifySharedDevice(r.getLocations());
 
@@ -1682,7 +1968,7 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public SFile get_file_by_name(String node, String devid, String location)
       throws FileOperationException, MetaException, TException {
-    DMProfile.fgetR.incrementAndGet();
+  	DMProfile.fgetR.incrementAndGet();
     SFile r = rs.getSFile(devid, location);
     if (r == null) {
       throw new FileOperationException("Can not find SFile by name: " + node + ":" + devid + ":"
@@ -1692,9 +1978,10 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
-      r.getLocations().clear();
+    	r.getLocations().clear();
       break;
     default:
+//    	r.setLocations(rs.getSFileLocations(r.getFid()));
     }
     identifySharedDevice(r.getLocations());
 
@@ -1702,47 +1989,104 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   }
 
   @Override
-  public Index get_index_by_name(String dbName, String tableName, String indexName)
+  public Index get_index_by_name(String dbName, String tblName, String indexName)
       throws MetaException, NoSuchObjectException, TException {
-    String key = dbName + "." + tableName + "." + indexName;
-    Index ind = rs.getIndex(dbName, tableName, indexName);
+  	startFunction("get_index_by_name", ": db=" + dbName + " tbl="
+        + tblName + " index=" + indexName);
 
-    if (ind == null) {
-      throw new NoSuchObjectException("Index not found by name:" + key);
+    Index ret = null;
+    Exception ex = null;
+    try {
+      ret = get_index_by_name_core(rs, dbName, tblName, indexName);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("drop_index_by_name", ret != null, ex);
     }
-    return ind;
+    return ret;
   }
 
+  private Index get_index_by_name_core(final RawStore ms, final String db_name,
+      final String tbl_name, final String index_name)
+      throws MetaException, NoSuchObjectException, TException {
+    Index index = ms.getIndex(db_name, tbl_name, index_name);
+
+    if (index == null) {
+      throw new NoSuchObjectException(db_name + "." + tbl_name
+          + " index=" + index_name + " not found");
+    }
+    return index;
+  }
+  
   @Override
-  public List<String> get_index_names(String dbName, String tblName, short arg2)
+  public List<String> get_index_names(String dbName, String tblName, short maxIndexes)
       throws MetaException, TException {
-    List<String> indNames = new ArrayList<String>();
-    for (String key : CacheStore.getIndexHm().keySet()) {
-      String[] keys = key.split("\\.");
-      if (dbName.equalsIgnoreCase(keys[0]) && tblName.equalsIgnoreCase(keys[1])) {
-        indNames.add(keys[2]);
+  	startTableFunction("get_index_names", dbName, tblName);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.listIndexNames(dbName, tblName, maxIndexes);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
       }
+    } finally {
+      endFunction("get_index_names", ret != null, ex);
     }
-    return indNames;
+    return ret;
   }
 
   @Override
-  public List<Index> get_indexes(String dbName, String tblName, short arg2)
+  public List<Index> get_indexes(String dbName, String tblName, short maxIndexes)
       throws NoSuchObjectException, MetaException, TException {
-    List<Index> inds = new ArrayList<Index>();
-    for (String key : CacheStore.getIndexHm().keySet()) {
-      String[] keys = key.split("\\.");
-      if (dbName.equalsIgnoreCase(keys[0]) && tblName.equalsIgnoreCase(keys[1])) {
-        inds.add(CacheStore.getIndexHm().get(key));
+  	startTableFunction("get_indexes", dbName, tblName);
+
+    List<Index> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getIndexes(dbName, tblName, maxIndexes);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
       }
+    } finally {
+      endFunction("get_indexes", ret != null, ex);
     }
-    return inds;
+    return ret;
   }
 
   @Override
   // MetaStoreClient 初始化时会调这个rpc
   public Database get_local_attribution() throws MetaException, TException {
-    String dbname = conf.getLocalDbName();
+    String dbname = hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION);
     try {
       Database db = rs.getDatabase(dbname);
       return db;
@@ -1754,8 +2098,9 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   }
 
   @Override
-  public List<String> get_lucene_index_names(String db_name, String tbl_name, short max_indexes) throws MetaException, TException {
-  	throw new MetaException("Not implemented yet!");
+  public List<String> get_lucene_index_names(String db_name, String tbl_name, short max_indexes)
+      throws MetaException, TException {
+    throw new MetaException("Not implemented yet!");
   }
 
   @Override
@@ -1764,121 +2109,389 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   }
 
   @Override
-  public Partition get_partition(final String dbName, final String tableName,
-      final List<String> partVals)
+  public Partition get_partition(final String db_name, final String tbl_name,
+      final List<String> part_vals)
       throws MetaException, NoSuchObjectException, TException {
-    return rs.getPartition(dbName, tableName, partVals);
+  	startPartitionFunction("get_partition", db_name, tbl_name, part_vals);
+
+    Partition ret = null;
+    Exception ex = null;
+    try {
+      // TODO: fix it
+      ret = rs.getPartition(db_name, tbl_name, part_vals);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partition", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
-  public Partition get_partition_by_name(String dbName, String tableName, String partName)
+  public Partition get_partition_by_name(String db_name, String tbl_name, String part_name)
       throws MetaException, NoSuchObjectException, TException {
-    return rs.getPartition(dbName, tableName, partName);
+  	startFunction("get_partition_by_name", ": db=" + db_name + " tbl="
+        + tbl_name + " part=" + part_name);
+
+    Partition ret = null;
+    Exception ex = null;
+    try {
+      ret = get_partition_by_name_core(rs, db_name, tbl_name, part_name);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partition_by_name", ret != null, ex);
+    }
+    return ret;
   }
 
+  private Partition get_partition_by_name_core(final RawStore ms, final String db_name,
+      final String tbl_name, final String part_name)
+      throws MetaException, NoSuchObjectException, TException {
+    Partition p = ms.getPartition(db_name, tbl_name, part_name);
+
+    if (p == null) {
+      throw new NoSuchObjectException(db_name + "." + tbl_name
+          + " partition (" + part_name + ") not found");
+    }
+    return p;
+  }
+  
   @Override
   public ColumnStatistics get_partition_column_statistics(String dbName,
       String tableName, String partitionName, String colName)
       throws NoSuchObjectException, MetaException, InvalidInputException,
       InvalidObjectException, TException {
     // TODO copy from HiveMetaStore
-//    return rs.getPartitionColumnStatistics(dbName, tableName, partitionName, null, colName);
-  	return client.getPartitionColumnStatistics(dbName, tableName, partitionName, colName);
+    // return rs.getPartitionColumnStatistics(dbName, tableName, partitionName, null, colName);
+    return clients.get(this.getUserName()).getPartitionColumnStatistics(dbName,
+        tableName, partitionName, colName);
   }
 
   @Override
   public List<SFileRef> get_partition_index_files(Index index, Partition part)
       throws MetaException, TException {
-//    return rs.getPartitionIndexFiles(index, part);
-  	return client.get_partition_index_files(index, part);
+    // return rs.getPartitionIndexFiles(index, part);
+    return clients.get(this.getUserName())
+        .get_partition_index_files(index, part);
   }
 
   @Override
-  public List<String> get_partition_names(String dbName, String tableName, short maxPart)
+  public List<String> get_partition_names(String db_name, String tbl_name, short max_parts)
       throws MetaException, TException {
-    return rs.listPartitionNames(dbName, tableName, maxPart);
+  	startTableFunction("get_partition_names", db_name, tbl_name);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.listPartitionNames(db_name, tbl_name, max_parts);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partition_names", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
-  public List<String> get_partition_names_ps(String dbName, String tableName,
-      List<String> partVals, short maxParts) throws MetaException,
+  public List<String> get_partition_names_ps(final String db_name,
+      final String tbl_name, final List<String> part_vals, final short max_parts) throws MetaException,
       NoSuchObjectException, TException {
-    return rs.listPartitionNamesPs(dbName, tableName, partVals, maxParts);
+  	startPartitionFunction("get_partitions_names_ps", db_name, tbl_name, part_vals);
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.listPartitionNamesPs(db_name, tbl_name, part_vals, max_parts);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_names_ps", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
-  public Partition get_partition_with_auth(String dbName, String tableName,
-      List<String> pvals, String userName, List<String> groupNames)
+  public Partition get_partition_with_auth(final String db_name,
+      final String tbl_name, final List<String> part_vals,
+      final String user_name, final List<String> group_names)
       throws MetaException, NoSuchObjectException, TException {
-    return rs.getPartitionWithAuth(dbName, tableName, pvals, userName, groupNames);
+  	startPartitionFunction("get_partition_with_auth", db_name, tbl_name,
+        part_vals);
+
+    Partition ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getPartitionWithAuth(db_name, tbl_name, part_vals,
+          user_name, group_names);
+    } catch (InvalidObjectException e) {
+      ex = e;
+      throw new NoSuchObjectException(e.getMessage());
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partition_with_auth", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
-  public List<Partition> get_partitions(String dbName, String tableName, short maxParts)
+  public List<Partition> get_partitions(String db_name, String tbl_name, short max_parts)
       throws NoSuchObjectException, MetaException, TException {
-    return rs.getPartitions(dbName, tableName, maxParts);
+  	startTableFunction("get_partitions", db_name, tbl_name);
+
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getPartitions(db_name, tbl_name, max_parts);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
   public List<Partition> get_partitions_by_filter(String dbName, String tblName,
       String filter, short maxParts) throws MetaException,
       NoSuchObjectException, TException {
-    return rs.getPartitionsByFilter(dbName, tblName, filter, maxParts);
+  	startTableFunction("get_partitions_by_filter", dbName, tblName);
+
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getPartitionsByFilter(dbName, tblName, filter, maxParts);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_by_filter", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
   public List<Partition> get_partitions_by_names(String tblName, String dbName,
-      List<String> partVals) throws MetaException, NoSuchObjectException,
+      List<String> partNames) throws MetaException, NoSuchObjectException,
       TException {
-    return rs.getPartitionsByNames(dbName, tblName, partVals);
+  	 startTableFunction("get_partitions_by_names", dbName, tblName);
+
+     List<Partition> ret = null;
+     Exception ex = null;
+     try {
+       ret = rs.getPartitionsByNames(dbName, tblName, partNames);
+     } catch (Exception e) {
+       ex = e;
+       if (e instanceof MetaException) {
+         throw (MetaException) e;
+       } else if (e instanceof NoSuchObjectException) {
+         throw (NoSuchObjectException) e;
+       } else if (e instanceof TException) {
+         throw (TException) e;
+       } else {
+         MetaException me = new MetaException(e.toString());
+         me.initCause(e);
+         throw me;
+       }
+     } finally {
+       endFunction("get_partitions_by_names", ret != null, ex);
+     }
+     return ret;
   }
 
   @Override
-  public List<Partition> get_partitions_ps(String dbName, String tableName,
-      List<String> partVals, short maxParts) throws MetaException,
+  public List<Partition> get_partitions_ps(final String db_name,
+      final String tbl_name, final List<String> part_vals,
+      final short max_parts) throws MetaException,
       NoSuchObjectException, TException {
-    return rs.listPartitionsPsWithAuth(dbName, tableName, partVals, maxParts, null, null);
+  	startPartitionFunction("get_partitions_ps", db_name, tbl_name, part_vals);
+
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = get_partitions_ps_with_auth(db_name, tbl_name, part_vals,
+          max_parts, null, null);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_ps", ret != null, ex);
+    }
+
+    return ret;
   }
 
   @Override
-  public List<Partition> get_partitions_ps_with_auth(String dbName,
-      String tblName, List<String> partVals, short maxParts, String userName,
-      List<String> groupNames) throws NoSuchObjectException, MetaException,
+  public List<Partition> get_partitions_ps_with_auth(final String db_name,
+      final String tbl_name, final List<String> part_vals,
+      final short max_parts, final String userName,
+      final List<String> groupNames) throws NoSuchObjectException, MetaException,
       TException {
-    return rs.listPartitionsPsWithAuth(dbName, tblName, partVals, maxParts, userName, groupNames);
+  	startPartitionFunction("get_partitions_ps_with_auth", db_name, tbl_name,
+        part_vals);
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.listPartitionsPsWithAuth(db_name, tbl_name, part_vals, max_parts,
+          userName, groupNames);
+    } catch (InvalidObjectException e) {
+      ex = e;
+      throw new MetaException(e.getMessage());
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_ps_with_auth", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
   public List<Partition> get_partitions_with_auth(String dbName, String tblName,
       short maxParts, String userName, List<String> groupNames)
       throws NoSuchObjectException, MetaException, TException {
-    return rs.getPartitionsWithAuth(dbName, tblName, maxParts, userName, groupNames);
+  	startTableFunction("get_partitions_with_auth", dbName, tblName);
+
+    List<Partition> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getPartitionsWithAuth(dbName, tblName, maxParts,
+          userName, groupNames);
+    } catch (InvalidObjectException e) {
+      ex = e;
+      throw new NoSuchObjectException(e.getMessage());
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else if (e instanceof TException) {
+        throw (TException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_partitions_with_auth", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
   public PrincipalPrivilegeSet get_privilege_set(HiveObjectRef hiveObject,
       String userName, List<String> groupNames) throws MetaException, TException {
-  	/*
-    if (hiveObject.getObjectType() == HiveObjectType.COLUMN) {
-      String partName = getPartName(hiveObject);
-      return rs.getColumnPrivilegeSet(hiveObject.getDbName(), hiveObject
-          .getObjectName(), partName, hiveObject.getColumnName(), userName,
-          groupNames);
-    } else if (hiveObject.getObjectType() == HiveObjectType.PARTITION) {
-      String partName = getPartName(hiveObject);
-      return rs.getPartitionPrivilegeSet(hiveObject.getDbName(),
-          hiveObject.getObjectName(), partName, userName, groupNames);
-    } else if (hiveObject.getObjectType() == HiveObjectType.DATABASE) {
-      return rs.getDBPrivilegeSet(hiveObject.getDbName(), userName,
-          groupNames);
-    } else if (hiveObject.getObjectType() == HiveObjectType.TABLE) {
-      return rs.getTablePrivilegeSet(hiveObject.getDbName(), hiveObject
-          .getObjectName(), userName, groupNames);
-    } else if (hiveObject.getObjectType() == HiveObjectType.GLOBAL) {
-      return rs.getUserPrivilegeSet(userName, groupNames);
-    }
-    */
-    return client.get_privilege_set(hiveObject, userName, groupNames);
+    /*
+     * if (hiveObject.getObjectType() == HiveObjectType.COLUMN) {
+     * String partName = getPartName(hiveObject);
+     * return rs.getColumnPrivilegeSet(hiveObject.getDbName(), hiveObject
+     * .getObjectName(), partName, hiveObject.getColumnName(), userName,
+     * groupNames);
+     * } else if (hiveObject.getObjectType() == HiveObjectType.PARTITION) {
+     * String partName = getPartName(hiveObject);
+     * return rs.getPartitionPrivilegeSet(hiveObject.getDbName(),
+     * hiveObject.getObjectName(), partName, userName, groupNames);
+     * } else if (hiveObject.getObjectType() == HiveObjectType.DATABASE) {
+     * return rs.getDBPrivilegeSet(hiveObject.getDbName(), userName,
+     * groupNames);
+     * } else if (hiveObject.getObjectType() == HiveObjectType.TABLE) {
+     * return rs.getTablePrivilegeSet(hiveObject.getDbName(), hiveObject
+     * .getObjectName(), userName, groupNames);
+     * } else if (hiveObject.getObjectType() == HiveObjectType.GLOBAL) {
+     * return rs.getUserPrivilegeSet(userName, groupNames);
+     * }
+     */
+    return clients.get(this.getUserName()).get_privilege_set(hiveObject,
+        userName, groupNames);
   }
 
   private String getPartName(HiveObjectRef hiveObject) throws MetaException {
@@ -1895,37 +2508,64 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
 
   @Override
   public List<String> get_role_names() throws MetaException, TException {
-//    return rs.listRoleNames();
-  	return client.listRoleNames();
+    // return rs.listRoleNames();
+    return clients.get(this.getUserName()).listRoleNames();
   }
 
   @Override
   // 模仿HiveMetaStore中的方法写的
-  public List<FieldSchema> get_schema(String dbname, String tablename)
+  public List<FieldSchema> get_schema(String db, String tableName)
       throws MetaException, UnknownTableException, UnknownDBException, TException {
+  	startFunction("get_schema", ": db=" + db + "tbl=" + tableName);
+    boolean success = false;
+    Exception ex = null;
     try {
-      String baseTableName = tablename.split("\\.")[0];
-      // Table baseTable = (Table) ms.readObject(ObjectType.TABLE, dbname+"."+baseTableName);
-      Table baseTable = rs.getTable(dbname, baseTableName);
-      if (baseTable == null) {
-        throw new UnknownTableException("Table not found by name:" + baseTableName);
+      String[] names = tableName.split("\\.");
+      String base_table_name = names[0];
+
+      Table tbl;
+      try {
+        tbl = get_table(db, base_table_name);
+      } catch (NoSuchObjectException e) {
+        throw new UnknownTableException(e.getMessage());
       }
-      List<FieldSchema> fss = baseTable.getSd().getCols();
-      if (baseTable.getPartitionKeys() != null) {
-        fss.addAll(baseTable.getPartitionKeys());
+      List<FieldSchema> fieldSchemas = get_fields(db, base_table_name);
+
+      if (tbl == null || fieldSchemas == null) {
+        throw new UnknownTableException(tableName + " doesn't exist");
       }
 
-      return fss;
+      if (tbl.getPartitionKeys() != null) {
+        // Combine the column field schemas and the partition keys to create the
+        // whole schema
+        fieldSchemas.addAll(tbl.getPartitionKeys());
+      }
+      success = true;
+      return fieldSchemas;
     } catch (Exception e) {
-      throw new MetaException(e.getMessage());
+      ex = e;
+      if (e instanceof UnknownDBException) {
+        throw (UnknownDBException) e;
+      } else if (e instanceof UnknownTableException) {
+        throw (UnknownTableException) e;
+      } else if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_schema", success, ex);
     }
   }
 
   @Override
   public List<SFileRef> get_subpartition_index_files(Index index,
       Subpartition subpart) throws MetaException, TException {
-//    return rs.getSubpartitionIndexFiles(index, subpart);
-  	return client.get_subpartition_index_files(index, subpart);
+    // return rs.getSubpartitionIndexFiles(index, subpart);
+    return clients.get(this.getUserName()).get_subpartition_index_files(index,
+        subpart);
   }
 
   @Override
@@ -1935,12 +2575,30 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   }
 
   @Override
-  public Table get_table(String dbname, String tablename) throws MetaException,
+  public Table get_table(String dbname, String name) throws MetaException,
       NoSuchObjectException, TException {
-    Table t = rs.getTable(dbname, tablename);
-    if(t == null)
-    {
-    	throw new NoSuchObjectException(dbname + "." + tablename + " table not found");
+  	Table t = null;
+    startTableFunction("get_table", dbname, name);
+    Exception ex = null;
+    try {
+      t = rs.getTable(dbname, name);
+      if (t == null) {
+        throw new NoSuchObjectException(dbname + "." + name
+            + " table not found");
+      }
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof NoSuchObjectException) {
+        throw (NoSuchObjectException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_table", t != null, ex);
     }
     return t;
   }
@@ -1950,63 +2608,136 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       String tableName, String colName) throws NoSuchObjectException,
       MetaException, InvalidInputException, InvalidObjectException,
       TException {
-//    return rs.getTableColumnStatistics(dbName, tableName, colName);
-  	return client.getTableColumnStatistics(dbName, tableName, colName);
+    // return rs.getTableColumnStatistics(dbName, tableName, colName);
+    return clients.get(this.getUserName()).getTableColumnStatistics(dbName,
+        tableName, colName);
   }
 
   @Override
   public List<String> get_table_names_by_filter(String dbName, String filter, short maxTables)
       throws MetaException, InvalidOperationException, UnknownDBException, TException {
-    return rs.listTableNamesByFilter(dbName, filter, maxTables);
+  	List<String> tables = null;
+    startFunction("get_table_names_by_filter", ": db = " + dbName + ", filter = " + filter);
+    Exception ex = null;
+    try {
+      if (dbName == null || dbName.isEmpty()) {
+        throw new UnknownDBException("DB name is null or empty");
+      }
+      if (filter == null) {
+        throw new InvalidOperationException(filter + " cannot apply null filter");
+      }
+      tables = rs.listTableNamesByFilter(dbName, filter, maxTables);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof InvalidOperationException) {
+        throw (InvalidOperationException) e;
+      } else if (e instanceof UnknownDBException) {
+        throw (UnknownDBException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_table_names_by_filter", tables != null, ex);
+    }
+    return tables;
   }
 
   @Override
   public List<Table> get_table_objects_by_name(String dbname, List<String> names)
       throws MetaException, InvalidOperationException, UnknownDBException,
       TException {
-    if (dbname == null || dbname.isEmpty()) {
-      throw new UnknownDBException("DB name is null or empty");
+  	List<Table> tables = null;
+    startMultiTableFunction("get_multi_table", dbname, names);
+    Exception ex = null;
+    try {
+
+      if (dbname == null || dbname.isEmpty()) {
+        throw new UnknownDBException("DB name is null or empty");
+      }
+      if (names == null)
+      {
+        throw new InvalidOperationException(dbname + " cannot find null tables");
+      }
+      tables = rs.getTableObjectsByName(dbname, names);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else if (e instanceof InvalidOperationException) {
+        throw (InvalidOperationException) e;
+      } else if (e instanceof UnknownDBException) {
+        throw (UnknownDBException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_multi_table", tables != null, ex);
     }
-    if (names == null) {
-      throw new InvalidOperationException("table names are null");
-    }
-    return rs.getTableObjectsByName(dbname, names);
+    return tables;
   }
 
   @Override
-  public List<String> get_tables(String dbName, String tablePattern)
+  public List<String> get_tables(String dbname, String pattern)
       throws MetaException, TException {
-    return rs.getTables(dbName, tablePattern);
+  	startFunction("get_tables", ": db=" + dbname + " pat=" + pattern);
+
+    List<String> ret = null;
+    Exception ex = null;
+    try {
+      ret = rs.getTables(dbname, pattern);
+    } catch (Exception e) {
+      ex = e;
+      if (e instanceof MetaException) {
+        throw (MetaException) e;
+      } else {
+        MetaException me = new MetaException(e.toString());
+        me.initCause(e);
+        throw me;
+      }
+    } finally {
+      endFunction("get_tables", ret != null, ex);
+    }
+    return ret;
   }
 
   @Override
   public Type get_type(String typeName) throws MetaException,
       NoSuchObjectException, TException {
-//    return rs.getType(typeName);
-  	// FIXME can not be sent to old metastore
-  	return null;
+    // return rs.getType(typeName);
+    // FIXME can not be sent to old metastore
+    return null;
   }
 
   @Override
-  public Map<String, Type> get_type_all(String arg0) throws MetaException,
+  public Map<String, Type> get_type_all(String name) throws MetaException,
       TException {
     // FIXME HiveMetaStore just do this
+  	 startFunction("get_type_all", ": " + name);
+     endFunction("get_type_all", false, null);
     throw new MetaException("not yet implemented");
   }
 
   @Override
   public boolean grant_privileges(PrivilegeBag privileges) throws MetaException,
       TException {
-//    return rs.grantPrivileges(privileges);
-  	return client.grant_privileges(privileges);
+    // return rs.grantPrivileges(privileges);
+    return clients.get(this.getUserName()).grant_privileges(privileges);
   }
 
   @Override
   public boolean grant_role(String role, String userName, PrincipalType principalType,
       String grantor, PrincipalType grantorType, boolean grantOption)
       throws MetaException, TException {
-//    return rs.grantRole(rs.getRole(role), userName, principalType, grantor, grantorType,grantOption);
-  	return client.grant_role(role, userName, principalType, grantor, grantorType, grantOption);
+    // return rs.grantRole(rs.getRole(role), userName, principalType, grantor,
+    // grantorType,grantOption);
+    return clients.get(this.getUserName()).grant_role(role, userName,
+        principalType, grantor, grantorType, grantOption);
   }
 
   @Override
@@ -2015,35 +2746,36 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       throws MetaException, NoSuchObjectException, UnknownDBException,
       UnknownTableException, UnknownPartitionException,
       InvalidPartitionException, TException {
-//    return rs.isPartitionMarkedForEvent(dbName, tblName, partName, evtType);
-  	return client.isPartitionMarkedForEvent(dbName, tblName, partName, evtType);
+    // return rs.isPartitionMarkedForEvent(dbName, tblName, partName, evtType);
+    return clients.get(this.getUserName()).isPartitionMarkedForEvent(dbName,
+        tblName, partName, evtType);
   }
 
   @Override
   public List<NodeGroup> listDBNodeGroups(String dbName) throws MetaException,
       TException {
-//    return rs.listDBNodeGroups(dbName);
-  	//缓存的database对象中没有nodegroup的信息
-  	return client.listDBNodeGroups(dbName);
+    // return rs.listDBNodeGroups(dbName);
+    // 缓存的database对象中没有nodegroup的信息
+    return clients.get(this.getUserName()).listDBNodeGroups(dbName);
   }
 
   @Override
   public List<EquipRoom> listEquipRoom() throws MetaException, TException {
-//    return rs.listEquipRoom();
-  	return client.listEquipRoom();
+    // return rs.listEquipRoom();
+    return clients.get(this.getUserName()).listEquipRoom();
   }
 
   @Override
   public List<Long> listFilesByDigest(String digest) throws MetaException,
       TException {
-
+  	startFunction("listFilesByDigest:", "digest: " + digest);
     return rs.findSpecificDigestFiles(digest);
   }
 
   @Override
   public List<GeoLocation> listGeoLocation() throws MetaException, TException {
-//    return rs.listGeoLocation();
-  	return client.listGeoLocation();
+    // return rs.listGeoLocation();
+    return clients.get(this.getUserName()).listGeoLocation();
   }
 
   @Override
@@ -2068,8 +2800,8 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
 
   @Override
   public List<Role> listRoles() throws MetaException, TException {
-//    return rs.listRoles();
-  	return client.listRoles();
+    // return rs.listRoles();
+    return clients.get(this.getUserName()).listRoles();
   }
 
   @Override
@@ -2118,8 +2850,8 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
 
   @Override
   public List<User> listUsers() throws MetaException, TException {
-//    return rs.listUsers();
-  	return client.listUsers();
+    // return rs.listUsers();
+    return clients.get(this.getUserName()).listUsers();
   }
 
   @Override
@@ -2131,27 +2863,29 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   public List<HiveObjectPrivilege> list_privileges(String principalName,
       PrincipalType principalType, HiveObjectRef hiveObject) throws MetaException,
       TException {
-    return client.list_privileges(principalName, principalType, hiveObject);
+    return clients.get(this.getUserName()).list_privileges(principalName,
+        principalType, hiveObject);
   }
 
   @Override
   public List<Role> list_roles(String principalName, PrincipalType principalType)
       throws MetaException, TException {
-//    return rs.listRoles();
-  	return client.list_roles(principalName, principalType);
+    // return rs.listRoles();
+    return clients.get(this.getUserName()).list_roles(principalName,
+        principalType);
   }
 
   @Override
   public List<String> list_users(Database dbName) throws MetaException,
       TException {
-//    return rs.listUsersNames(dbName.getName());
-  	return client.list_users(dbName);
+    // return rs.listUsersNames(dbName.getName());
+    return clients.get(this.getUserName()).list_users(dbName);
   }
 
   @Override
   public List<String> list_users_names() throws MetaException, TException {
-//    return rs.listUsersNames();
-  	return client.list_users_names();
+    // return rs.listUsersNames();
+    return clients.get(this.getUserName()).list_users_names();
   }
 
   @Override
@@ -2160,41 +2894,47 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       throws MetaException, NoSuchObjectException, UnknownDBException,
       UnknownTableException, UnknownPartitionException,
       InvalidPartitionException, TException {
-//    rs.markPartitionForEvent(dbName, tblName, partVals, evtType);
-  	client.markPartitionForEvent(dbName, tblName, partVals, evtType);
+    // rs.markPartitionForEvent(dbName, tblName, partVals, evtType);
+    clients.get(this.getUserName()).markPartitionForEvent(dbName, tblName,
+        partVals, evtType);
   }
 
   @Override
   public boolean migrate2_in(Table tbl, List<Partition> parts,
       List<Index> idxs, String from_dc, String to_nas_devid,
       Map<Long, SFileLocation> fileMap) throws MetaException, TException {
-    return client.migrate2_in(tbl, parts, idxs, from_dc, to_nas_devid, fileMap);
+    return clients.get(this.getUserName()).migrate2_in(tbl, parts, idxs,
+        from_dc, to_nas_devid, fileMap);
   }
 
   @Override
   public List<SFileLocation> migrate2_stage1(String dbName, String tableName,
       List<String> partNames, String to_dc) throws MetaException, TException {
-    return client.migrate2_stage1(dbName, tableName, partNames, to_dc);
+    return clients.get(this.getUserName()).migrate2_stage1(dbName, tableName,
+        partNames, to_dc);
   }
 
   @Override
   public boolean migrate2_stage2(String dbName, String tableName, List<String> partNames,
       String to_dc, String to_db, String to_nas_devid) throws MetaException,
       TException {
-    return client.migrate2_stage2(dbName, tableName, partNames, to_dc, to_db, to_nas_devid);
+    return clients.get(this.getUserName()).migrate2_stage2(dbName, tableName,
+        partNames, to_dc, to_db, to_nas_devid);
   }
 
   @Override
   public boolean migrate_in(Table tbl, Map<Long, SFile> files,
       List<Index> idxs, String from_db, String to_devid,
       Map<Long, SFileLocation> fileMap) throws MetaException, TException {
-    return client.migrate_in(tbl, files, idxs, from_db, to_devid, fileMap);
+    return clients.get(this.getUserName()).migrate_in(tbl, files, idxs, from_db,
+        to_devid, fileMap);
   }
 
   @Override
   public List<SFileLocation> migrate_stage1(String dbName, String tableName,
       List<Long> partNames, String to_dc) throws MetaException, TException {
-    return client.migrate_stage1(dbName, tableName, partNames, to_dc);
+    return clients.get(this.getUserName()).migrate_stage1(dbName, tableName,
+        partNames, to_dc);
   }
 
   @Override
@@ -2208,43 +2948,43 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public boolean modifyEquipRoom(EquipRoom er) throws MetaException,
       TException {
-//    return rs.modifyEquipRoom(er);
-  	return client.modifyEquipRoom(er);
+    // return rs.modifyEquipRoom(er);
+    return clients.get(this.getUserName()).modifyEquipRoom(er);
   }
 
   @Override
   public boolean modifyGeoLocation(GeoLocation gl) throws MetaException,
       TException {
-//    return rs.modifyGeoLocation(gl);
-  	return client.modifyGeoLocation(gl);
+    // return rs.modifyGeoLocation(gl);
+    return clients.get(this.getUserName()).modifyGeoLocation(gl);
   }
 
   @Override
   public boolean modifyNodeGroup(String schemaName, NodeGroup ng)
       throws MetaException, TException {
-//    return rs.modifyNodeGroup(schemaName, ng);
-  	return client.modifyNodeGroup(schemaName, ng);
+    // return rs.modifyNodeGroup(schemaName, ng);
+    return clients.get(this.getUserName()).modifyNodeGroup(schemaName, ng);
   }
 
   @Override
   public boolean modifySchema(String schemaName, GlobalSchema schema)
       throws MetaException, TException {
-//    return rs.modifySchema(schemaName, schema);
-  	return client.modifySchema(schemaName, schema);
+    // return rs.modifySchema(schemaName, schema);
+    return clients.get(this.getUserName()).modifySchema(schemaName, schema);
   }
 
   @Override
   public Device modify_device(Device dev, Node node) throws MetaException,
       TException {
-//    return rs.modifyDevice(dev, node);
-  	return client.changeDeviceLocation(dev, node);
+    // return rs.modifyDevice(dev, node);
+    return clients.get(this.getUserName()).changeDeviceLocation(dev, node);
   }
 
   @Override
   public boolean modify_user(User user) throws NoSuchObjectException,
       MetaException, TException {
-//    return rs.modifyUser(user);
-  	return client.modify_user(user);
+    // return rs.modifyUser(user);
+    return clients.get(this.getUserName()).modify_user(user);
   }
 
   @Override
@@ -2282,24 +3022,24 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public Map<String, String> partition_name_to_spec(String part_name)
       throws MetaException, TException {
-//    if (part_name.length() == 0) {
-//      return new HashMap<String, String>();
-//    }
-//    return Warehouse.makeSpecFromName(part_name);
-    return client.partitionNameToSpec(part_name);
+    // if (part_name.length() == 0) {
+    // return new HashMap<String, String>();
+    // }
+    // return Warehouse.makeSpecFromName(part_name);
+    return clients.get(this.getUserName()).partitionNameToSpec(part_name);
   }
 
   @Override
   public List<String> partition_name_to_vals(String part_name)
       throws MetaException, TException {
-//    if (part_name.length() == 0) {
-//      return new ArrayList<String>();
-//    }
-//    LinkedHashMap<String, String> map = Warehouse.makeSpecFromName(part_name);
-//    List<String> part_vals = new ArrayList<String>();
-//    part_vals.addAll(map.values());
-//    return part_vals;
-  	return client.partitionNameToVals(part_name);
+    // if (part_name.length() == 0) {
+    // return new ArrayList<String>();
+    // }
+    // LinkedHashMap<String, String> map = Warehouse.makeSpecFromName(part_name);
+    // List<String> part_vals = new ArrayList<String>();
+    // part_vals.addAll(map.values());
+    // return part_vals;
+    return clients.get(this.getUserName()).partitionNameToVals(part_name);
   }
 
   @Override
@@ -2312,13 +3052,14 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
       Partition newPart) throws InvalidOperationException, MetaException,
       TException {
     // FIXME just use client
-    client.renamePartition(dbname, name, part_vals, newPart);
+    clients.get(this.getUserName()).renamePartition(dbname, name, part_vals,
+        newPart);
   }
 
   @Override
   public long renew_delegation_token(String tokenStrForm) throws MetaException,
       TException {
-    return client.renewDelegationToken(tokenStrForm);
+    return clients.get(this.getUserName()).renewDelegationToken(tokenStrForm);
   }
 
   @Override
@@ -2376,15 +3117,16 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public boolean revoke_privileges(PrivilegeBag privileges) throws MetaException,
       TException {
-//    return rs.revokePrivileges(privileges);
-  	return client.revoke_privileges(privileges);
+    // return rs.revokePrivileges(privileges);
+    return clients.get(this.getUserName()).revoke_privileges(privileges);
   }
 
   @Override
   public boolean revoke_role(String role, String userName, PrincipalType principalType)
       throws MetaException, TException {
-//    return rs.revokeRole(rs.getRole(role), userName, principalType);
-  	return client.revoke_role(role, userName, principalType);
+    // return rs.revokeRole(rs.getRole(role), userName, principalType);
+    return clients.get(this.getUserName()).revoke_role(role, userName,
+        principalType);
   }
 
   @Override
@@ -2468,16 +3210,16 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   @Override
   public List<Busitype> showBusitypes() throws InvalidObjectException,
       MetaException, TException {
-//    return rs.showBusitypes();
-  	return client.showBusitypes();
+    // return rs.showBusitypes();
+    return clients.get(this.getUserName()).showBusitypes();
   }
 
   @Override
   public statfs statFileSystem(long from, long to) throws MetaException,
       TException {
     // TODO zy
-//    return rs.statFileSystem(from, to);
-  	return client.statFileSystem(from, to);
+    // return rs.statFileSystem(from, to);
+    return clients.get(this.getUserName()).statFileSystem(from, to);
   }
 
   @Override
@@ -2492,67 +3234,68 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
 
   @Override
   public void truncTableFiles(String dbName, String tabName) throws MetaException, TException {
-    // startFunction("truncTableFiles", "DB: " + dbName + " Table: " + tabName);
-    // try {
-    rs.truncTableFiles(dbName, tabName);
-    // } finally {
-    // endFunction("truncTableFiles", true, null);
-    // }
+     startFunction("truncTableFiles", "DB: " + dbName + " Table: " + tabName);
+     try {
+    	 rs.truncTableFiles(dbName, tabName);
+     } finally {
+    	 endFunction("truncTableFiles", true, null);
+     }
   }
 
   @Override
   public void update_attribution(Database db) throws NoSuchObjectException,
       InvalidOperationException, MetaException, TException {
-//    rs.alterDatabase(db.getName(), db);
-  	client.update_attribution(db);
+    // rs.alterDatabase(db.getName(), db);
+    clients.get(this.getUserName()).update_attribution(db);
   }
 
   @Override
   public boolean update_partition_column_statistics(ColumnStatistics colStats)
       throws NoSuchObjectException, InvalidObjectException,
       MetaException, InvalidInputException, TException {
-  	return client.updatePartitionColumnStatistics(colStats);
-  	/*
-    String dbName = null;
-    String tableName = null;
-    String partName = null;
-    String colName = null;
-
-    ColumnStatisticsDesc statsDesc = colStats.getStatsDesc();
-    dbName = statsDesc.getDbName().toLowerCase();
-    tableName = statsDesc.getTableName().toLowerCase();
-    partName = lowerCaseConvertPartName(statsDesc.getPartName());
-
-    statsDesc.setDbName(dbName);
-    statsDesc.setTableName(tableName);
-    statsDesc.setPartName(partName);
-
-    long time = System.currentTimeMillis() / 1000;
-    statsDesc.setLastAnalyzed(time);
-
-    List<ColumnStatisticsObj> statsObjs = colStats.getStatsObj();
-
-    for (ColumnStatisticsObj statsObj : statsObjs) {
-      colName = statsObj.getColName().toLowerCase();
-      statsObj.setColName(colName);
-      startFunction("write_partition_column_statistics:  db=" + dbName + " table=" + tableName +
-          " part=" + partName + "column=" + colName, "");
-    }
-
-    colStats.setStatsDesc(statsDesc);
-    colStats.setStatsObj(statsObjs);
-
-    boolean ret = false;
-
-    try {
-      List<String> partVals = getPartValsFromName(rs, dbName,
-          tableName, partName);
-      ret = rs.updatePartitionColumnStatistics(colStats, partVals);
-      return ret;
-    } finally {
-      endFunction("write_partition_column_statistics: ", ret != false, null);
-    }
-    */
+    return clients.get(this.getUserName()).updatePartitionColumnStatistics(
+        colStats);
+    /*
+     * String dbName = null;
+     * String tableName = null;
+     * String partName = null;
+     * String colName = null;
+     *
+     * ColumnStatisticsDesc statsDesc = colStats.getStatsDesc();
+     * dbName = statsDesc.getDbName().toLowerCase();
+     * tableName = statsDesc.getTableName().toLowerCase();
+     * partName = lowerCaseConvertPartName(statsDesc.getPartName());
+     *
+     * statsDesc.setDbName(dbName);
+     * statsDesc.setTableName(tableName);
+     * statsDesc.setPartName(partName);
+     *
+     * long time = System.currentTimeMillis() / 1000;
+     * statsDesc.setLastAnalyzed(time);
+     *
+     * List<ColumnStatisticsObj> statsObjs = colStats.getStatsObj();
+     *
+     * for (ColumnStatisticsObj statsObj : statsObjs) {
+     * colName = statsObj.getColName().toLowerCase();
+     * statsObj.setColName(colName);
+     * startFunction("write_partition_column_statistics:  db=" + dbName + " table=" + tableName +
+     * " part=" + partName + "column=" + colName, "");
+     * }
+     *
+     * colStats.setStatsDesc(statsDesc);
+     * colStats.setStatsObj(statsObjs);
+     *
+     * boolean ret = false;
+     *
+     * try {
+     * List<String> partVals = getPartValsFromName(rs, dbName,
+     * tableName, partName);
+     * ret = rs.updatePartitionColumnStatistics(colStats, partVals);
+     * return ret;
+     * } finally {
+     * endFunction("write_partition_column_statistics: ", ret != false, null);
+     * }
+     */
   }
 
   private String lowerCaseConvertPartName(String partName) throws MetaException {
@@ -2603,14 +3346,14 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
   public boolean update_table_column_statistics(ColumnStatistics colStats)
       throws NoSuchObjectException, InvalidObjectException,
       MetaException, InvalidInputException, TException {
-//    return rs.updateTableColumnStatistics(colStats);
-  	return client.updateTableColumnStatistics(colStats);
+    // return rs.updateTableColumnStatistics(colStats);
+    return clients.get(this.getUserName()).updateTableColumnStatistics(colStats);
   }
 
   @Override
   public boolean user_authority_check(User user, Table tbl,
       List<MSOperation> ops) throws MetaException, TException {
-    return client.user_authority_check(user, tbl, ops);
+    return clients.get(this.getUserName()).user_authority_check(user, tbl, ops);
   }
 
   @Override
@@ -2638,8 +3381,8 @@ public class ThriftRPC extends FacebookBase implements org.apache.hadoop.hive.me
         try {
           SFile sf = get_file_by_id(fid);
           fl.add(sf);
-        } catch(FileOperationException e){
-          //ignore
+        } catch (FileOperationException e) {
+          // ignore
         }
       }
     }

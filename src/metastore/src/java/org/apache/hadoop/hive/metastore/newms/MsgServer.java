@@ -13,8 +13,10 @@ import javax.jdo.PersistenceManager;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.Node;
 import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory;
@@ -35,10 +37,10 @@ import com.taobao.metamorphosis.utils.ZkUtils.ZKConfig;
 
 public class MsgServer {
 	private static final Log LOG = LogFactory.getLog(MsgServer.class);
-	private static NewMSConf conf;
 	static Producer producer = null;
 	static int times = 3;
 	private static boolean initalized = false;
+	private static HiveConf conf = new HiveConf();
 	private static SendThread send = new SendThread();
 	private static boolean zkfailed = false;
 	private static long max_msg_id = 0;
@@ -46,11 +48,12 @@ public class MsgServer {
 	private static ConcurrentLinkedQueue<DDLMsg> failed_queue = new ConcurrentLinkedQueue<DDLMsg>();
 	private static ConcurrentLinkedQueue<DDLMsg> localQueue = new ConcurrentLinkedQueue<DDLMsg>();
 	private static LocalConsumer lc = new LocalConsumer();
-	public static void setConf(NewMSConf conf)
+
+	public static boolean isQueueEmpty()
 	{
-		MsgServer.conf = conf;
+		LOG.info("queue size "+queue.size());
+		return queue.isEmpty() && failed_queue.isEmpty() && localQueue.isEmpty();
 	}
-	
 	public static void addMsg(DDLMsg msg) {
 		//通过发送线程发送到metaq的
 		if(initalized)		//启动了发送线程才往这个队列里加消息
@@ -68,6 +71,8 @@ public class MsgServer {
 		case MSGType.MSG_STA_FILE_CHANGE:
 		case MSGType.MSG_CREATE_FILE:
 		case MSGType.MSG_DEL_FILE:
+		case MSGType.MSG_FAIL_NODE:
+    case MSGType.MSG_BACK_NODE:
 			localQueue.add(msg);
 			lc.release();
 		}
@@ -209,12 +214,7 @@ public class MsgServer {
     private MessageProducer producer = null;
     // publish topic
     private static String topic = "meta-test";
-    private static String  zkAddr = conf.getZkaddr();
-
-    //获取实例之前要先调这个方法
-//    public static void config(String addr){
-//      zkAddr = addr;
-//    }
+    private static String  zkAddr = conf.getVar(ConfVars.ZOOKEEPERADDRESS);
 
     private Producer() {
     	
@@ -288,7 +288,7 @@ public class MsgServer {
 				// TODO Auto-generated catch block
 				LOG.error(e,e);
 			}
-			mp = new MsgProcessing(conf);
+			mp = new MsgProcessing();
 		}
 
 		public void consume() throws MetaClientException {
@@ -302,7 +302,7 @@ public class MsgServer {
 			// 生成处理线程
 			ConsumerConfig cc = new ConsumerConfig(group);
 			HiveConf hc = new HiveConf();
-			if(hc.get("isGetAllObjects").equals("true"))
+			if(hc.getBoolVar(ConfVars.NEWMSISGETALLOBJECTS))
 				cc.setConsumeFromMaxOffset();
 			MessageConsumer consumer = sessionFactory.createConsumer(cc);
 			
@@ -478,6 +478,19 @@ public class MsgServer {
 							}
 	          	break;
 						}
+	          
+	          
+	          case MSGType.MSG_FAIL_NODE:
+	          case MSGType.MSG_BACK_NODE:
+	          {
+	          	Node n = (Node) msg.getEventObject();
+	          	try {
+								ob.updateNode(n);
+							} catch (MetaException e) {
+								LOG.error(e,e);
+								LOG.info("handle msg failed:"+msg.toJson());
+							}
+	          }
 	        }//end of switch
 			}
 			

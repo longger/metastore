@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.GlobalSchema;
@@ -40,7 +41,6 @@ import com.alibaba.fastjson.JSON;
 
 public class CacheStore {
   private final RedisFactory rf;
-  private final NewMSConf conf;
   private String findFilesCursor = "0";
   private static boolean initialized = false;
   private static String sha = null;
@@ -58,9 +58,8 @@ public class CacheStore {
   private static TimeLimitedCacheMap sFileHm = new TimeLimitedCacheMap(270, 60, 300, TimeUnit.SECONDS);
   private static TimeLimitedCacheMap sflHm = new TimeLimitedCacheMap(270, 60, 300, TimeUnit.SECONDS);
 
-  public CacheStore(NewMSConf conf) throws IOException {
-    this.conf = conf;
-    rf = new RedisFactory(conf);
+  public CacheStore() throws IOException {
+    rf = new RedisFactory();
 
     initialize();
   }
@@ -99,7 +98,7 @@ public class CacheStore {
           sha = jedis.scriptLoad(script);
 
           //每次系统启动时，从redis中读取已经持久化的对象到内存缓存中(SFile和SFileLocation除外)
-          if (new HiveConf().get("isGetAllObjects").equals("false")) {
+          if (!new HiveConf().getBoolVar(ConfVars.NEWMSISGETALLOBJECTS)) {
 	          long start = System.currentTimeMillis();
 	          readAll(ObjectType.DATABASE);
 	          readAll(ObjectType.GLOBALSCHEMA);
@@ -1158,9 +1157,6 @@ public class CacheStore {
     return rf;
   }
 
-  public NewMSConf getConf() {
-    return conf;
-  }
 
   public static ConcurrentHashMap<String, PrivilegeBag> getPrivilegeBagHm() {
     return privilegeBagHm;
