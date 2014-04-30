@@ -28,7 +28,8 @@ public class ThriftRPCInfo {
   private static final ConcurrentHashMap<String, _Info> info = new ConcurrentHashMap<String, ThriftRPCInfo._Info>();
   private static final AtomicLong totalTime = new AtomicLong();
 
-  static {// 初始化时为ThriftRPC类中所有的公有方法初始一个_Info
+  // 初始化时为ThriftRPC类中所有的公有方法初始一个_Info
+  static {
     Class<ThriftRPC> clazz = ThriftRPC.class;
     Method[] methods = clazz.getMethods();
     for (Method m : methods) {
@@ -45,12 +46,12 @@ public class ThriftRPCInfo {
   }
 
   public void dumpToFile(String path) throws IOException {
-    if(Strings.isNullOrEmpty(path)) {
+    if (Strings.isNullOrEmpty(path)) {
       throw new IOException("Invalid path");
     }
     File file = new File(path);
-    if(!file.isFile()) {
-      throw new IOException(String.format("%s is not a file", path));
+    if (!file.isFile()) {
+      throw new IOException(String.format("'%s' is not a file", path));
     }
     List<Entry<String,_Info>> entries = Lists.newArrayList(info.entrySet());
     Collections.sort(entries, new Comparator<Entry<String, _Info>>() {

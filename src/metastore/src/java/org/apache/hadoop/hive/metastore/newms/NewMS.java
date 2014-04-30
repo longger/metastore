@@ -14,7 +14,6 @@ import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
 import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
-import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -33,7 +32,7 @@ public class NewMS {
 	public static Log LOG = LogFactory.getLog(NewMS.class);
 	private static HiveConf conf = new HiveConf();
 	private static RPCServer rpc;
-	
+
 	public static class Option {
 		String flag, opt;
 
@@ -83,20 +82,19 @@ public class NewMS {
 
 	static class RPCServer {
 		private TServer server;
-		
+
 		public void serve(){
 			server.serve();
 		}
 		public void stop(){
 			server.stop();
 		}
-		
+
 		public RPCServer() throws Throwable {
-		  HiveConf hc = new HiveConf();
-		  int port = hc.getIntVar(ConfVars.NEWRPCPORT);
-			int minWorkerThreads = hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
-      int maxWorkerThreads = hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
-      boolean tcpKeepAlive = hc.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);
+		  int port = conf.getIntVar(ConfVars.NEWMS_RPC_PORT);
+			int minWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
+      int maxWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
+      boolean tcpKeepAlive = conf.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);
 
       try {
         TServerTransport serverTransport = tcpKeepAlive ?
@@ -131,175 +129,38 @@ public class NewMS {
 		}
 	}
 
-	static class FidStoreTask extends TimerTask
-	{
-		private RedisFactory rf;
-		public FidStoreTask()
-		{
-			rf = new RedisFactory();
-		}
-		
-		@Override
-		public void run() {
-			Jedis jedis = null;
-			int err = 0;
-			try{
-				jedis = rf.getDefaultInstance();
-				String fid = RawStoreImp.getFid()+"";
-				jedis.set("g_fid", fid);
-				LOG.info("store g_fid "+ fid + " into redis.");
-			}catch(JedisException e){
-				LOG.warn(e, e);
-				err = -1;
-			}finally{
-				if (err < 0) {
+	static class FidStoreTask extends TimerTask {
+	  private final RedisFactory rf;
+
+	  public FidStoreTask() {
+	    rf = new RedisFactory();
+	  }
+
+	  @Override
+	  public void run() {
+	    Jedis jedis = null;
+	    int err = 0;
+
+	    try {
+	      jedis = rf.getDefaultInstance();
+	      String fid = RawStoreImp.getFid() + "";
+	      jedis.set("g_fid", fid);
+	      LOG.info("Store current g_fid " + fid + " into redis.");
+	    } catch(JedisException e) {
+	      LOG.warn(e, e);
+	      err = -1;
+	    } finally{
+	      if (err < 0) {
 	        RedisFactory.putBrokenInstance(jedis);
 	      } else {
 	        RedisFactory.putInstance(jedis);
 	      }
-			}
-		}
-		
+	    }
+	  }
+
 	}
-	
+
 	public static void main(String[] args) throws Throwable {
-		/*
-		NewMSConf conf = null;
-		int rpcp = 0;
-		int fcs = 1000;
-		if (args.length >= 1) {
-			List<Option> ops = parseArgs(args);
-			Set<String> sentinel = null;
-			List<RedisInstance> ri = null;
-			RedisMode rm = null;
-			String zkaddr = null;
-			String ra = null;
-			String mh = null, mp = null;
-
-			for (Option o : ops) {
-				if (o.flag.equals("-h")) {
-					// print help message
-					System.out.println("-h    : print this help.");
-					System.out.println("-mh   : metastore server ip.");
-					System.out.println("-mp   : metastore server port.");
-					System.out.println("-rm   : redis mode, <STA for stand alone or STL for sentinel>.");
-					System.out.println("-ra   : redis or sentinel addr. <host:port;host:port> ");
-					System.out.println("-zka  : zkaddr <host:port>.");
-					System.out.println("-rpcp : rpcp service port.");
-					System.out.println("-fcs  : file cache size.");
-
-					System.exit(0);
-				}
-				if (o.flag.equals("-mh")) {
-					// set old metastore serverName
-					if (o.opt == null) {
-						System.out.println("-mh metastore server name. ");
-						System.exit(0);
-					}
-					mh = o.opt;
-				}
-				if (o.flag.equals("-mp")) {
-					// set old metastore serverPort
-					if (o.opt == null) {
-						System.out.println("-mp metastore server port. ");
-						System.exit(0);
-					}
-					mp = o.opt;
-				}
-				if (o.flag.equals("-rm")) {
-				  // set redis mode
-					if (o.opt == null) {
-						System.out.println("-rm redismode");
-						System.exit(0);
-					}
-					if (o.opt.equals("STA")) {
-            rm = RedisMode.STANDALONE;
-          } else if (o.opt.equals("STL")) {
-            rm = RedisMode.SENTINEL;
-          } else {
-						System.out.println("Invalid redis mode:" + o.opt + ", should be STA or STL.");
-						System.exit(0);
-					}
-				}
-				if (o.flag.equals("-ra")) {
-					// set redis or sentinel address
-					if (o.opt == null) {
-						System.out.println("-ra redis or sentinel addr. <host:port;host:port>.");
-						System.exit(0);
-					}
-					ra = o.opt;
-				}
-				if (o.flag.equals("-zka")) {
-					// set zookeeper address
-				  if (o.opt == null) {
-				    System.out.println("-zka zkaddr <host:port>.");
-				    System.exit(0);
-				  }
-					zkaddr = o.opt;
-				}
-				if (o.flag.equals("-rpcp")) {
-					// set rpc service port
-					if (o.opt == null) {
-						System.out.println("-rpcp rpc service port.");
-						System.exit(0);
-					}
-					rpcp = Integer.parseInt(o.opt);
-				}
-				if (o.flag.equals("-fcs")) {
-				  // set file cache size
-				  if (o.opt == null) {
-				    System.out.println("-fcs file cache size.");
-				    System.exit(0);
-				  }
-				  fcs = Integer.parseInt(o.opt);
-				}
-			}
-
-			if (mh == null || mp == null) {
-			  System.out.println("please provide old metastore host and port");
-			  System.exit(0);
-			}
-
-			if (rm == null || ra == null || zkaddr == null) {
-				System.out.println("please provide redis mode, address, zkaddr args.");
-				System.exit(0);
-			} else {
-				switch (rm) {
-				case SENTINEL:
-					sentinel = new HashSet<String>();
-					for (String s : ra.split(";")) {
-            sentinel.add(s);
-          }
-					conf = new NewMSConf(sentinel, rm, zkaddr, mh,
-							Integer.parseInt(mp), rpcp);
-					break;
-				case STANDALONE:
-					ri = new ArrayList<RedisInstance>();
-					for (String rp : ra.split(";")) {
-//						System.out.println(rp);
-						String[] s = rp.split(":");
-						ri.add(new RedisInstance(s[0], Integer.parseInt(s[1])));
-					}
-					conf = new NewMSConf(ri, rm, zkaddr, mh, Integer.parseInt(mp), rpcp);
-					break;
-				}
-				conf.setFcs(fcs);
-			}
-		} else {
-			String zkaddr = "192.168.1.13:3181";
-			// System.out.println("please provide arguments, use -h for help");
-			List<RedisInstance> lr = new ArrayList<RedisInstance>();
-			lr.add(new RedisInstance("localhost", 6379));
-			conf = new NewMSConf(lr, RedisMode.STANDALONE, zkaddr, "node13", 10101,8111);
-
-			// Set<String> s = new HashSet<String>();
-			// s.add("localhost:26379");
-			// conf = new DatabakConf(s,RedisMode.SENTINEL,zkaddr,"node13",10101,8111);
-			conf.setFcs(40000);
-			// System.exit(0);
-		}
-		 */
-		
 		// get g_fid from redis
 		Jedis jedis = null;
     try {
@@ -342,10 +203,10 @@ public class NewMS {
         } finally {
         	RedisFactory.putInstance(jedis);
         }
-        
+
         rpc.stop();
         LOG.info("stop RPCServer.");
-        
+
         while(!MsgServer.isQueueEmpty()){
         	LOG.info("waiting for queues in MsgServer to be empty...");
         	try {
@@ -356,25 +217,23 @@ public class NewMS {
         }
       }
     });
-    
-    HiveConf hc = new HiveConf();
-    if(hc.getBoolVar(ConfVars.NEWMSISOLDWITHNEW))
-    {
+
+    if (conf.getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
 	    Thread t = new Thread(new Runnable(){
 				@Override
 				public void run() {
 					try {
 						HiveMetaStore.main(new String[]{});
 					} catch (Throwable e) {
-						e.printStackTrace();
-					}  
+						LOG.error(e, e);
+					}
 				}
 	    });
 	    t.start();
     }
-    
+
     Timer timer = new Timer("FidStorer",true);
-    timer.schedule(new FidStoreTask(), 60*1000, 60*1000);
+    timer.schedule(new FidStoreTask(), 60 * 1000, 60 * 1000);
     try {
       try {
         MsgServer.startConsumer(conf.getVar(ConfVars.ZOOKEEPERADDRESS), "meta-test", "newms");
