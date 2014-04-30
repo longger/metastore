@@ -62,9 +62,7 @@ import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
 import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
 import org.apache.hadoop.hive.metastore.model.MUser;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
-import org.apache.hadoop.hive.metastore.msg.MSGFactory;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
-import org.apache.hadoop.hive.metastore.msg.MetaMsgServer;
 import org.apache.thrift.TException;
 
 import redis.clients.jedis.exceptions.JedisConnectionException;
@@ -82,8 +80,7 @@ public class RawStoreImp implements RawStore {
 		cs = new CacheStore();
 	}
 
-  public CacheStore getCs()
-	{
+  public CacheStore getCs() {
 		return cs;
 	}
 
@@ -292,7 +289,7 @@ public class RawStoreImp implements RawStore {
         n.setStatus(node.getStatus());
         n.setIps(node.getIps());
         cs.writeObject(ObjectType.NODE, n.getNode_name(), n);
-        
+
         //不抛异常就说明更新操作成功了，可以发消息了
         if (changed) {
           HashMap<String, Object> old_params = new HashMap<String, Object>();
@@ -316,8 +313,8 @@ public class RawStoreImp implements RawStore {
       LOG.error(e,e);
       throw new MetaException(e.getMessage());
     }
-	  
-	  
+
+
 	}
 
 	@Override
@@ -455,10 +452,12 @@ public class RawStoreImp implements RawStore {
 		try {
 //			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
 			//update index here
-			if(!sf.getDigest().equals(newfile.getDigest()))
-				cs.removeLfbdValue(sf.getDigest(), sf.getFid()+"");
-			if(stat_changed)
-				cs.removeSfileStatValue(sf.getStore_status(), sf.getFid()+"");
+			if(!sf.getDigest().equals(newfile.getDigest())) {
+        cs.removeLfbdValue(sf.getDigest(), sf.getFid()+"");
+      }
+			if(stat_changed) {
+        cs.removeSfileStatValue(sf.getStore_status(), sf.getFid()+"");
+      }
 			sf.setRep_nr(newfile.getRep_nr());
       sf.setDigest(newfile.getDigest());
       sf.setRecord_nr(newfile.getRecord_nr());
@@ -595,8 +594,9 @@ public class RawStoreImp implements RawStore {
         changed = true;
       }
 			//update index
-			if(changed)
-				cs.removeSflStatValue(sfl.getVisit_status(), SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
+			if(changed) {
+        cs.removeSflStatValue(sfl.getVisit_status(), SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
+      }
 			sfl.setVisit_status(newsfl.getVisit_status());
 			sfl.setRep_id(newsfl.getRep_id());
 			sfl.setDigest(newsfl.getDigest());
@@ -1862,7 +1862,6 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public long countDevice() throws MetaException {
-
 		return CacheStore.getDeviceHm().size();
 	}
 
@@ -1878,8 +1877,9 @@ public class RawStoreImp implements RawStore {
 		Iterator<Device> iter = CacheStore.getDeviceHm().values().iterator();
 		while(iter.hasNext()){
 			Device dev = iter.next();
-			if(dev.getNode_name().equals(nodeName))
-				ls.add(dev.getDevid());
+			if(dev.getNode_name().equals(nodeName)) {
+        ls.add(dev.getDevid());
+      }
 		}
 		return ls;
 	}
@@ -1899,5 +1899,16 @@ public class RawStoreImp implements RawStore {
 		return ids;
 	}
 
-
+  @Override
+  public long countFiles() throws MetaException {
+    try {
+      return cs.getCounts(ObjectType.SFILE);
+    } catch (JedisException e) {
+      LOG.error(e, e);
+      throw new MetaException(e.getMessage());
+    } catch (IOException e) {
+      LOG.error(e, e);
+      throw new MetaException(e.getMessage());
+    }
+  }
 }
