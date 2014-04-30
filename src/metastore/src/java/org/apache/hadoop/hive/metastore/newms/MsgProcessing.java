@@ -88,7 +88,7 @@ public class MsgProcessing {
           t.start();
         }
 	      end = System.currentTimeMillis();
-	      
+
 	      start = end;
 
 	      //table  index
@@ -199,14 +199,11 @@ public class MsgProcessing {
 		}
 
 	}
-	public static IMetaStoreClient createMetaStoreClient() throws MetaException
-	{
+	public static IMetaStoreClient createMetaStoreClient() throws MetaException {
 		if (hiveConf == null) {
       hiveConf = new HiveConf();
     }
-		if(!hiveConf.getBoolVar(ConfVars.NEWMS_IS_USE_METASTORE_CLIENT))
-		{
-//			LOG.debug("isUseMetaStoreClient false");
+		if (!hiveConf.getBoolVar(ConfVars.NEWMS_IS_USE_METASTORE_CLIENT)) {
 			return null;
 		}
 		HiveMetaHookLoader hookLoader = new HiveMetaHookLoader() {
@@ -338,8 +335,9 @@ public class MsgProcessing {
 				{
 					//Can not find SFile by FID ...
 					LOG.error(e,e);
-					if(sf == null)
-						break;
+					if(sf == null) {
+            break;
+          }
 				}
 				cs.writeObject(ObjectType.SFILE, fid+"", sf);
 //				SFileImage sfi = SFileImage.generateSFileImage(sf);
@@ -363,7 +361,7 @@ public class MsgProcessing {
 				}
 				break;
 			}
-			
+
 			case MSGType.MSG_NEW_INDEX:
 			case MSGType.MSG_ALT_INDEX:
 			case MSGType.MSG_ALT_INDEX_PARAM:

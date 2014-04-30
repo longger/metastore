@@ -183,6 +183,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
   public static final Log LOG = LogFactory.getLog(
       HiveMetaStore.class);
 
+  public static Object isStarted = -1L;
+
   /**
    * default port on which to start the Hive server
    */
@@ -7414,6 +7416,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       HiveMetaStoreServerEventHandler eventHandler = new HiveMetaStoreServerEventHandler();
       tServer.setServerEventHandler(eventHandler);
 
+      synchronized (HiveMetaStore.isStarted) {
+        HiveMetaStore.isStarted.notifyAll();
+      }
+      LOG.info("OldMS will serve request right now.");
       tServer.serve();
     } catch (Throwable x) {
       x.printStackTrace();

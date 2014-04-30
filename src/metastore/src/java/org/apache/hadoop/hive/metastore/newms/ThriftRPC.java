@@ -121,10 +121,11 @@ public class ThriftRPC extends FacebookBase implements
   private final HiveConf hiveConf = new HiveConf(this.getClass());
   private final RawStoreImp rs;
   private IMetaStoreClient client;
+  private static boolean initialized = false;
 
   private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
   private static final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
-  private DiskManager dm;
+  private static DiskManager dm;
   Random rand = new Random();
   public static Long file_creation_lock = 0L;
   public static Long file_reopen_lock = 0L;
@@ -157,20 +158,38 @@ public class ThriftRPC extends FacebookBase implements
   };
 
   private void init() throws IOException {
-    IMetaStoreClient client = null;
-    try {
-      client = MsgProcessing.createMetaStoreClient();
-      clients.put(DEFAULT_USER_NAME, client);
-      //每20秒打印一次rpcInfo基本信息
-      schedule.scheduleAtFixedRate(new Runnable(){
-        @Override
-        public void run() {
-          LOG.info(rpcInfo);
-        }
-      }, 20, 20, TimeUnit.SECONDS);
-    } catch (MetaException e) {
-      LOG.error("Can't init IMetaStoreClient", e);
-      throw new IOException(e.getMessage());
+    if (!initialized) {
+      IMetaStoreClient client = null;
+      try {
+        client = MsgProcessing.createMetaStoreClient();
+        clients.put(DEFAULT_USER_NAME, client);
+        //每20秒打印一次rpcInfo基本信息
+        schedule.scheduleAtFixedRate(new Runnable(){
+          @Override
+          public void run() {
+            LOG.info(rpcInfo);
+          }
+        }, 20, 20, TimeUnit.SECONDS);
+
+        dm = new DiskManager(hiveConf, LOG, RsStatus.NEWMS);
+
+        //dump rpcInfo per minute
+        schedule.scheduleAtFixedRate(new Runnable() {
+          @Override
+          public void run() {
+            String path = hiveConf.getVar(HiveConf.ConfVars.NEWMS_RPC_INFO_FILENAME);
+            try {
+              rpcInfo.dumpToFile(path);
+            } catch (IOException e) {
+              LOG.error("error in dump rpc info to file\n",e);
+            }
+          }
+        }, 1, 1, TimeUnit.MINUTES);
+      } catch (MetaException e) {
+        LOG.error("Can't init IMetaStoreClient", e);
+        throw new IOException(e.getMessage());
+      }
+      initialized = true;
     }
   }
 
@@ -230,29 +249,12 @@ public class ThriftRPC extends FacebookBase implements
     init();
     rs = new RawStoreImp();
     try {
-      final HiveConf hc = new HiveConf(DiskManager.class);
-      dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
-          MetaStoreEndFunctionListener.class, hc,
-          hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
-      //dump rpcInfo per minute
-      schedule.scheduleAtFixedRate(new Runnable() {
-        @Override
-        public void run() {
-          String path = hc.getVar(HiveConf.ConfVars.NEWMS_RPC_INFO_FILENAME);
-          try {
-            rpcInfo.dumpToFile(path);
-          } catch (IOException e) {
-            LOG.error("error in dump rpc info to file\n",e);
-          }
-        }
-    }, 1, 1, TimeUnit.MINUTES);
+          MetaStoreEndFunctionListener.class, hiveConf,
+          hiveConf.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
     } catch (MetaException e) {
       LOG.error(e, e);
       throw new IOException(e.getMessage());
-    } catch (IOException e) {
-      LOG.error(e, e);
-      throw e;
     }
   }
 
@@ -302,8 +304,8 @@ public class ThriftRPC extends FacebookBase implements
     }
 
     public ThriftRPC getRPC() {
-      return (ThriftRPC) Proxy.newProxyInstance(rpc.getClass().getClassLoader(), rpc.getClass()
-          .getInterfaces(), this);
+      return (ThriftRPC) Proxy.newProxyInstance(ThriftRPC.class.getClassLoader(),
+          ThriftRPC.class.getInterfaces(), this);
     }
 
     @Override
@@ -358,8 +360,8 @@ public class ThriftRPC extends FacebookBase implements
     }
   }
 
-  public ThriftRPC newThriftRPC() throws IOException {
-    return new _ProxyThriftRPC(new ThriftRPC()).getRPC();
+  public ThriftRPC newProxy() throws IOException {
+    return new _ProxyThriftRPC(this).getRPC();
   }
 
   @Override
