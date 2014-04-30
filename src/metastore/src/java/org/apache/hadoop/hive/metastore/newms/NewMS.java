@@ -100,7 +100,7 @@ public class NewMS {
         TServerTransport serverTransport = tcpKeepAlive ?
             new TServerSocketKeepAlive(port) : new TServerSocket(port);
 			  //TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
-			  TProcessor tprocessor = new TSetIpAddressProcessor<ThriftRPC>(new ThriftRPC());
+			  TProcessor tprocessor = new TSetIpAddressProcessor<ThriftRPC>(new ThriftRPC().newProxy());
 
 			  TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(serverTransport)
 			  .transportFactory(new TTransportFactory())
@@ -176,6 +176,7 @@ public class NewMS {
             RawStoreImp.setFID(Long.parseLong(fid));
           }
 				}
+    		LOG.info("NewMS restore FID to " + id);
     	}
     } catch (JedisException e) {
     	LOG.warn(e,e);
@@ -230,6 +231,14 @@ public class NewMS {
 				}
 	    });
 	    t.start();
+	    LOG.info("Waiting for OldMS starting ...");
+	    synchronized (HiveMetaStore.isStarted) {
+	      try {
+	        HiveMetaStore.isStarted.wait();
+	      } catch (InterruptedException e) {
+	      }
+	    }
+	    LOG.info("OldMS service is started, starting NewMS ...");
     }
 
     Timer timer = new Timer("FidStorer",true);
