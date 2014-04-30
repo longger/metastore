@@ -98,7 +98,7 @@ public class CacheStore {
           sha = jedis.scriptLoad(script);
 
           //每次系统启动时，从redis中读取已经持久化的对象到内存缓存中(SFile和SFileLocation除外)
-          if (!new HiveConf().getBoolVar(ConfVars.NEWMSISGETALLOBJECTS)) {
+          if (!new HiveConf().getBoolVar(ConfVars.NEWMS_IS_GET_ALL_OBJECTS)) {
 	          long start = System.currentTimeMillis();
 	          readAll(ObjectType.DATABASE);
 	          readAll(ObjectType.GLOBALSCHEMA);

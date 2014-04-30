@@ -91,11 +91,10 @@ public class NewMS {
 		}
 
 		public RPCServer() throws Throwable {
-		  HiveConf hc = new HiveConf();
-		  int port = hc.getIntVar(ConfVars.NEWRPCPORT);
-			int minWorkerThreads = hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
-      int maxWorkerThreads = hc.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
-      boolean tcpKeepAlive = hc.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);
+		  int port = conf.getIntVar(ConfVars.NEWMS_RPC_PORT);
+			int minWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMINTHREADS);
+      int maxWorkerThreads = conf.getIntVar(HiveConf.ConfVars.METASTORESERVERMAXTHREADS);
+      boolean tcpKeepAlive = conf.getBoolVar(HiveConf.ConfVars.METASTORE_TCP_KEEP_ALIVE);
 
       try {
         TServerTransport serverTransport = tcpKeepAlive ?
@@ -219,7 +218,7 @@ public class NewMS {
       }
     });
 
-    if (conf.getBoolVar(ConfVars.NEWMSISOLDWITHNEW)) {
+    if (conf.getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
 	    Thread t = new Thread(new Runnable(){
 				@Override
 				public void run() {

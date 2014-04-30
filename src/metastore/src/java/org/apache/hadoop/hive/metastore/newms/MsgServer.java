@@ -302,7 +302,7 @@ public class MsgServer {
 			// 生成处理线程
 			ConsumerConfig cc = new ConsumerConfig(group);
 			HiveConf hc = new HiveConf();
-			if(hc.getBoolVar(ConfVars.NEWMSISGETALLOBJECTS))
+			if(hc.getBoolVar(ConfVars.NEWMS_IS_GET_ALL_OBJECTS))
 				cc.setConsumeFromMaxOffset();
 			MessageConsumer consumer = sessionFactory.createConsumer(cc);
 			

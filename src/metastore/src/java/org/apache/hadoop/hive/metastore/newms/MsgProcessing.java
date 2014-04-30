@@ -42,7 +42,7 @@ public class MsgProcessing {
 		try {
 			client = createMetaStoreClient();
 			cs = new CacheStore();
-			if(client != null && hiveConf.getBoolVar(ConfVars.NEWMSISGETALLOBJECTS))
+			if(client != null && hiveConf.getBoolVar(ConfVars.NEWMS_IS_GET_ALL_OBJECTS))
 			{
 				long start = System.currentTimeMillis();
 			//device
@@ -204,7 +204,7 @@ public class MsgProcessing {
 		if (hiveConf == null) {
       hiveConf = new HiveConf();
     }
-		if(!hiveConf.getBoolVar(ConfVars.NEWMSISUSEMETASTORECLIENT))
+		if(!hiveConf.getBoolVar(ConfVars.NEWMS_IS_USE_METASTORE_CLIENT))
 		{
 //			LOG.debug("isUseMetaStoreClient false");
 			return null;
@@ -222,7 +222,7 @@ public class MsgProcessing {
 
 	public void handleMsg(DDLMsg msg) throws JedisConnectionException, IOException, NoSuchObjectException, TException, ClassNotFoundException {
 
-		if(hiveConf.getBoolVar(ConfVars.NEWMSISUSEMETASTORECLIENT))
+		if(hiveConf.getBoolVar(ConfVars.NEWMS_IS_USE_METASTORE_CLIENT))
 		{
 			LOG.debug("property isUseMetaStoreClient is set to false, so nothing to do here.");
 			return;

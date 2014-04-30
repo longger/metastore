@@ -725,11 +725,12 @@ public class HiveConf extends Configuration {
     DM_FF_RANGE("hive.diskmanager.ff.range", 1000),
 
     //add by zy
-    NEWMSISUSEMETASTORECLIENT("newms.isUseMetaStoreClient", true),
-    NEWMSISGETALLOBJECTS("newms.isGetAllObjects", false),
-    NEWMSISOLDWITHNEW("newms.isOldWithNew", false),
-    NEWREDISADDR("newms.redis.addr", null),
-    NEWRPCPORT("newms.rpc.port",8111),
+    NEWMS_IS_USE_METASTORE_CLIENT("newms.isUseMetaStoreClient", true),
+    NEWMS_IS_GET_ALL_OBJECTS("newms.isGetAllObjects", false),
+    NEWMS_IS_OLD_WITH_NEW("newms.isOldWithNew", false),
+    NEWMS_REDIS_ADDR("newms.redis.addr", null),
+    NEWMS_RPC_PORT("newms.rpc.port", 10101),
+    NEWMS_RPC_INFO_FILENAME("rpc.info.filename", "rpc.info"),
     ZOOKEEPERADDRESS("jdo.mq.zookeeper.address", null)
     ;
 
@@ -1184,7 +1185,7 @@ public class HiveConf extends Configuration {
   };
 
   public RedisMode getRedisMode() {
-    String addr = this.getVar(ConfVars.NEWREDISADDR);
+    String addr = this.getVar(ConfVars.NEWMS_REDIS_ADDR);
     if (addr.startsWith("STL://")) {
       return RedisMode.SENTINEL;
     } else if (addr.startsWith("STA://")) {
@@ -1196,7 +1197,7 @@ public class HiveConf extends Configuration {
 
   public Set<String> getSentinel() {
     HashSet<String> sen = new HashSet<String>();
-    String addr = this.getVar(ConfVars.NEWREDISADDR);
+    String addr = this.getVar(ConfVars.NEWMS_REDIS_ADDR);
     if (addr == null) {
       return null;
     }
@@ -1207,7 +1208,7 @@ public class HiveConf extends Configuration {
   }
 
   public HostAndPort getRedisHP() {
-    String addr = this.getVar(ConfVars.NEWREDISADDR);
+    String addr = this.getVar(ConfVars.NEWMS_REDIS_ADDR);
     List<HostAndPort> lr = new ArrayList<HostAndPort>();
     for(String s : addr.substring(6).split(";")) {
       String[] hp = s.split(":");
