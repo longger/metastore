@@ -819,24 +819,18 @@ public class MSGFactory {
           break;
       case MSGType.MSG_FAIL_NODE :
             //节点故障
-          MNode fail_node = (MNode)msg.getEventObject();
           if (msg.getOld_object_params().containsKey("node_name")) {
             params.put("node_name", msg.getOld_object_params().get("node_name"));
-          } else {
-            params.put("node_name",fail_node.getNode_name());
-          }
+          } 
           if (msg.getOld_object_params().containsKey("status")) {
             params.put("status", msg.getOld_object_params().get("status"));
           }
           break;
       case MSGType.MSG_BACK_NODE :
             //节点恢复
-          MNode back_node = (MNode)msg.getEventObject();
           if (msg.getOld_object_params().containsKey("node_name")) {
             params.put("node_name", msg.getOld_object_params().get("node_name"));
-          } else {
-            params.put("node_name", back_node.getNode_name());
-          }
+          } 
           if (msg.getOld_object_params().containsKey("status")) {
             params.put("status", msg.getOld_object_params().get("status"));
           }

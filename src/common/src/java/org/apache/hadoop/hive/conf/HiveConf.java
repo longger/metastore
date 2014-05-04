@@ -23,11 +23,16 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
+import java.util.Random;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,6 +46,8 @@ import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.Shell;
+
+import redis.clients.jedis.HostAndPort;
 
 /**
  * Hive Configuration.
@@ -716,6 +723,15 @@ public class HiveConf extends Configuration {
     DM_FIX_REP_LIMIT("hive.diskmanager.fixrep.limit", 500L),
     DM_REPORT_DIR("hive.diskmanager.report.dir", null),
     DM_FF_RANGE("hive.diskmanager.ff.range", 1000),
+
+    //add by zy
+    NEWMS_IS_USE_METASTORE_CLIENT("newms.isUseMetaStoreClient", true),
+    NEWMS_IS_GET_ALL_OBJECTS("newms.isGetAllObjects", false),
+    NEWMS_IS_OLD_WITH_NEW("newms.isOldWithNew", false),
+    NEWMS_REDIS_ADDR("newms.redis.addr", null),
+    NEWMS_RPC_PORT("newms.rpc.port", 10101),
+    NEWMS_RPC_INFO_FILENAME("rpc.info.filename", "rpc.info"),
+    ZOOKEEPERADDRESS("jdo.mq.zookeeper.address", null)
     ;
 
     public final String varname;
@@ -1161,5 +1177,43 @@ public class HiveConf extends Configuration {
       return Integer.parseInt(m.group(1));
     }
 
+  }
+
+  //add by zy
+  public enum RedisMode {
+    SENTINEL, STANDALONE,
+  };
+
+  public RedisMode getRedisMode() {
+    String addr = this.getVar(ConfVars.NEWMS_REDIS_ADDR);
+    if (addr.startsWith("STL://")) {
+      return RedisMode.SENTINEL;
+    } else if (addr.startsWith("STA://")) {
+      return RedisMode.STANDALONE;
+    } else {
+      return null;
+    }
+  }
+
+  public Set<String> getSentinel() {
+    HashSet<String> sen = new HashSet<String>();
+    String addr = this.getVar(ConfVars.NEWMS_REDIS_ADDR);
+    if (addr == null) {
+      return null;
+    }
+    for (String s : addr.substring(6).split(";")) {
+      sen.add(s);
+    }
+    return sen;
+  }
+
+  public HostAndPort getRedisHP() {
+    String addr = this.getVar(ConfVars.NEWMS_REDIS_ADDR);
+    List<HostAndPort> lr = new ArrayList<HostAndPort>();
+    for(String s : addr.substring(6).split(";")) {
+      String[] hp = s.split(":");
+      lr.add(new HostAndPort(hp[0], Integer.parseInt(hp[1])));
+    }
+    return lr.get(new Random().nextInt(lr.size()));
   }
 }
