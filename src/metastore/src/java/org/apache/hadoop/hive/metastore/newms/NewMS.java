@@ -14,6 +14,7 @@ import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
 import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
+import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -100,7 +101,7 @@ public class NewMS {
         TServerTransport serverTransport = tcpKeepAlive ?
             new TServerSocketKeepAlive(port) : new TServerSocket(port);
 			  //TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
-			  TProcessor tprocessor = new TSetIpAddressProcessor<ThriftRPC>(new ThriftRPC().newProxy());
+			  TProcessor tprocessor = new TSetIpAddressProcessor<Iface>(new ThriftRPC().newProxy());
 
 			  TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(serverTransport)
 			  .transportFactory(new TTransportFactory())
@@ -224,7 +225,9 @@ public class NewMS {
 				@Override
 				public void run() {
 					try {
-						HiveMetaStore.main(new String[]{});
+						String uri = conf.getVar(ConfVars.METASTOREURIS);
+						uri = uri.substring(uri.lastIndexOf(":") + 1);
+						HiveMetaStore.main(new String[]{uri});
 					} catch (Throwable e) {
 						LOG.error(e, e);
 					}

@@ -87,6 +87,7 @@ import org.apache.hadoop.hive.metastore.api.SFileRef;
 import org.apache.hadoop.hive.metastore.api.SplitValue;
 import org.apache.hadoop.hive.metastore.api.Subpartition;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface;
 import org.apache.hadoop.hive.metastore.api.Type;
 import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
@@ -303,8 +304,8 @@ public class ThriftRPC extends FacebookBase implements
       this.rpc = rpc;
     }
 
-    public ThriftRPC getRPC() {
-      return (ThriftRPC) Proxy.newProxyInstance(ThriftRPC.class.getClassLoader(),
+    public Iface getRPC() {
+      return (Iface) Proxy.newProxyInstance(ThriftRPC.class.getClassLoader(),
           ThriftRPC.class.getInterfaces(), this);
     }
 
@@ -360,7 +361,7 @@ public class ThriftRPC extends FacebookBase implements
     }
   }
 
-  public ThriftRPC newProxy() throws IOException {
+  public Iface newProxy() throws IOException {
     return new _ProxyThriftRPC(this).getRPC();
   }
 

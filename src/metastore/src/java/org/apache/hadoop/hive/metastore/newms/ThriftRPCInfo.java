@@ -32,10 +32,11 @@ public class ThriftRPCInfo {
   static {
     Class<ThriftRPC> clazz = ThriftRPC.class;
     Method[] methods = clazz.getMethods();
+    //重载的多个方法有相同的方法名
     for (Method m : methods) {
-      if (m.isAccessible()) {
+//      if (m.isAccessible()) {
         info.put(m.getName(), new _Info());
-      }
+//      }
     }
   }
 
@@ -108,7 +109,7 @@ public class ThriftRPCInfo {
 
   private static class _Info implements Comparable<_Info> {
     private final AtomicLong count = new AtomicLong();
-    private Double avg;
+    private Double avg = new Double(0.0);
     private Long max = Long.MIN_VALUE;
     private Long min = Long.MAX_VALUE;
 
