@@ -183,7 +183,7 @@ public class MSGFactory {
       msg.node_id = Long.parseLong(json.getString("node_id"));
       msg.event_time = Long.parseLong(json.getString("event_time"));
       msg.event_handler = json.getString("event_handler");
-      msg.localhost_name = json.getString("localhost_name");
+//      msg.localhost_name = json.getString("localhost_name");
 
       return msg;
 
