@@ -1752,6 +1752,16 @@ public class ObjectStore implements RawStore, Configurable {
       MFile mfile = convertToMFile(file);
       pm.makePersistent(mfile);
       commited = commitTransaction();
+      
+      HashMap<String, Object> old_params = new HashMap<String, Object>();
+      old_params.put("f_id", mfile.getFid());
+      old_params.put("db_name", file.getDbName());
+      old_params.put("table_name", file.getTableName());
+//      long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mfile.getTable().getDatabase()).toString()));
+
+      if(commited) {
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_FILE, -1l, -1l, pm, mfile, old_params));
+      }
     } finally {
       if (!commited) {
         rollbackTransaction();

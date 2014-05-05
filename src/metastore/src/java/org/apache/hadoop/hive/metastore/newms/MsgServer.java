@@ -319,14 +319,14 @@ public class MsgServer {
 				@Override
 				public void recieveMessages(final Message message) {
 					String data = new String(message.getData());
-					LOG.debug("consume msg from metaq: "+data);
+					LOG.info("consume msg from metaq: "+data);
 					int time = 0;
 //					 if(data != null)
 //					 return;
 					DDLMsg msg = DDLMsg.fromJson(data);
 					if(msg.getLocalhost_name().equals(localhost_name))
 					{
-						LOG.debug("ignore msg sent by myself:"+msg.toJson());
+						LOG.info("ignore msg sent by myself:"+msg.toJson());
 						return;
 					}
 					while (time <= 3) {

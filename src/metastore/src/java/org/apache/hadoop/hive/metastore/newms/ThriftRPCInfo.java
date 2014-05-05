@@ -1,6 +1,7 @@
 package org.apache.hadoop.hive.metastore.newms;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Collections;
@@ -58,7 +59,6 @@ public class ThriftRPCInfo {
       throw new IOException("Invalid path");
     }
     File file = new File(path);
-   	file.createNewFile();
     if (!file.isFile()) {
       throw new IOException(String.format("'%s' is not a file", path));
     }
@@ -72,7 +72,10 @@ public class ThriftRPCInfo {
           e.getValue().getMax(), e.getValue().getMin(), e.getValue().avg()));
     }
     // write sb to filep
-    Files.write(sb.toString().getBytes(), file);
+    FileOutputStream fos = new FileOutputStream(file, true);
+    fos.write(sb.toString().getBytes());
+    fos.close();
+//    Files.write(sb.toString().getBytes(), file);
   }
 
   @Override
