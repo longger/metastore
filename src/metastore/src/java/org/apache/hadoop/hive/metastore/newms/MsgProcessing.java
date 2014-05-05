@@ -69,7 +69,8 @@ public class MsgProcessing {
 	      synchronized (RawStoreImp.class) {
 	      	if(RawStoreImp.getFid() < maxid)
            {
-            RawStoreImp.setFID(maxid+1000); 			//如果这个时候有人创建文件。。。
+	      	  //如果这个时候有人创建文件。。。
+            RawStoreImp.setFID(maxid+1000);
           }
 				}
 	      int clientn = 10;
@@ -219,7 +220,7 @@ public class MsgProcessing {
 
 	public void handleMsg(DDLMsg msg) throws JedisConnectionException, IOException, NoSuchObjectException, TException, ClassNotFoundException {
 
-		if(hiveConf.getBoolVar(ConfVars.NEWMS_IS_USE_METASTORE_CLIENT))
+		if(!hiveConf.getBoolVar(ConfVars.NEWMS_IS_USE_METASTORE_CLIENT))
 		{
 			LOG.debug("property isUseMetaStoreClient is set to false, so nothing to do here.");
 			return;

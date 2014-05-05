@@ -364,8 +364,8 @@ public class ThriftRPC extends FacebookBase implements
           } else {
             throw e.getCause();
           }
-        } 
-        
+        }
+
       }
     }
   }
@@ -2032,10 +2032,12 @@ public class ThriftRPC extends FacebookBase implements
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
-    	r.getLocations().clear();
+      if (r.getLocations() != null) {
+        r.getLocations().clear();
+      }
       break;
     default:
-//    	r.setLocations(rs.getSFileLocations(fid));
+      //r.setLocations(rs.getSFileLocations(fid));
     }
     identifySharedDevice(r.getLocations());
 

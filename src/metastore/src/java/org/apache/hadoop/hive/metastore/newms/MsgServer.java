@@ -61,7 +61,7 @@ public class MsgServer {
 			queue.add(msg);
 			send.release();
 		}
-		
+
 		//用来给本地消费
 		int eventid = (int) msg.getEvent_id();
 		switch(eventid){
@@ -84,12 +84,12 @@ public class MsgServer {
 			new Thread(send).start();
 		}
 	}
-	
+
 	public static void startConsumer(String zkaddr, String topic, String group) throws MetaClientException
 	{
 		new Consumer(zkaddr, topic, group).consume();
 	}
-	
+
 	public static void startLocalConsumer()
 	{
 		new Thread(lc).start();
@@ -142,12 +142,12 @@ public class MsgServer {
     }
     return success;
   }
-	
+
 	static class SendThread implements Runnable{
 		Semaphore sem  = new Semaphore(0);
 		public SendThread() {
 		}
-		
+
 		public void release(){
       sem.release();
     }
@@ -201,9 +201,9 @@ public class MsgServer {
 	      }
 
 		}
-		
+
 	}
-	
+
 	public static class Producer
 	{
 		private static Producer instance= null;
@@ -217,7 +217,7 @@ public class MsgServer {
     private static String  zkAddr = conf.getVar(ConfVars.ZOOKEEPERADDRESS);
 
     private Producer() {
-    	
+
         //设置zookeeper地址
         zkConfig.zkConnect = zkAddr;
         metaClientConfig.setZkConfig(zkConfig);
@@ -267,17 +267,17 @@ public class MsgServer {
         return success;
     }
 	}
-	
+
 
 	public static class Consumer {
 		final MetaClientConfig metaClientConfig = new MetaClientConfig();
 		final ZKConfig zkConfig = new ZKConfig();
 		private String localhost_name;
-		private String zkaddr;
-		private String topic;
-		private String group;
-		private ConcurrentLinkedQueue<DDLMsg> failedq = new ConcurrentLinkedQueue<DDLMsg>();
-		private MsgProcessing mp;
+		private final String zkaddr;
+		private final String topic;
+		private final String group;
+		private final ConcurrentLinkedQueue<DDLMsg> failedq = new ConcurrentLinkedQueue<DDLMsg>();
+		private final MsgProcessing mp;
 		public Consumer(String zkaddr, String topic, String group) {
 			this.zkaddr = zkaddr;
 			this.topic = topic;
@@ -302,10 +302,11 @@ public class MsgServer {
 			// 生成处理线程
 			ConsumerConfig cc = new ConsumerConfig(group);
 			HiveConf hc = new HiveConf();
-			if(hc.getBoolVar(ConfVars.NEWMS_IS_GET_ALL_OBJECTS))
-				cc.setConsumeFromMaxOffset();
+			if(hc.getBoolVar(ConfVars.NEWMS_IS_GET_ALL_OBJECTS)) {
+        cc.setConsumeFromMaxOffset();
+      }
 			MessageConsumer consumer = sessionFactory.createConsumer(cc);
-			
+
 			// 订阅事件，MessageListener是事件处理接口
 			consumer.subscribe(topic, 1024, new MessageListener() {
 
@@ -340,9 +341,10 @@ public class MsgServer {
 								msg = failedq.poll();
 								LOG.info("handle msg in failed queue: "+ msg.getMsg_id());
 								time = 0;
-							} else
-								// 能到else一定是handlemsg没抛异常成功返回，而failedq是空的
+							} else {
+                // 能到else一定是handlemsg没抛异常成功返回，而failedq是空的
 								break;
+              }
 						} catch (Exception e) {
 							time++;
 							try {
@@ -357,7 +359,7 @@ public class MsgServer {
 			});
 			consumer.completeSubscribe();
 		}
-		
+
 	}
 
 	public static DDLMsg generateDDLMsg(long event_id,long db_id,long node_id ,PersistenceManager pm , Object eventObject,HashMap<String,Object> old_object_params){
@@ -365,12 +367,12 @@ public class MsgServer {
     long now = new Date().getTime()/1000;
     return new MSGFactory.DDLMsg(event_id, id, old_object_params, eventObject, max_msg_id++, db_id, node_id, now, null,old_object_params);
   }
-	
+
 	public static class LocalConsumer implements Runnable
 	{
-		private Semaphore lcsem  = new Semaphore(0);
+		private final Semaphore lcsem  = new Semaphore(0);
 		private ObjectStore ob;
-		
+
 		public LocalConsumer()
 		{
 			ob = new ObjectStore();
@@ -382,20 +384,19 @@ public class MsgServer {
 		}
 		@Override
 		public void run() {
-			while(true)
-			{
+			while (true) {
+			  try {
           try {
 						lcsem.acquire();
 					} catch (InterruptedException e1) {
 						e1.printStackTrace();
 					}
           DDLMsg msg = localQueue.poll();
-          if(msg == null){
+          if (msg == null) {
               continue;
           }
           LOG.debug("LocalConsumer, consume msg:"+msg.toJson());
-          if(msg.getEventObject() == null)
-          {
+          if (msg.getEventObject() == null) {
           	LOG.warn("eventObject is null, event id is "+msg.getEvent_id());
           	continue;
           }
@@ -405,22 +406,20 @@ public class MsgServer {
 	          {
 	          	String op = msg.getMsg_data().get("op").toString();
 	          	SFileLocation sfl = (SFileLocation) msg.getEventObject();
-	          	if(op.equals("add"))
-	          	{
+	          	if (op.equals("add")) {
 	          		try {
 									ob.createFileLocation(sfl);
 								} catch (Exception e) {
 									LOG.error(e,e);
-									LOG.info("handle msg failed:"+msg.toJson());
+									LOG.info("handle msg failed: " + msg.toJson());
 								}
 	          	}
-	          	if(op.equals("del"))
-	          	{
+	          	if (op.equals("del")) {
 	          		try {
 									ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
 								} catch (MetaException e) {
 									LOG.error(e,e);
-									LOG.info("handle msg failed:"+msg.toJson());
+									LOG.info("handle msg failed: " + msg.toJson());
 								}
 	          	}
 	          	break;
@@ -433,9 +432,9 @@ public class MsgServer {
 								ob.updateSFile(sf);
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.info("handle msg failed:"+msg.toJson());
+								LOG.info("handle msg failed: " + msg.toJson());
 							}
-	          	
+
 	          	break;
 	          }
 	          case MSGType.MSG_REP_FILE_ONOFF:
@@ -445,7 +444,7 @@ public class MsgServer {
 								ob.updateSFileLocation(sfl);
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.info("handle msg failed:"+msg.toJson());
+								LOG.info("handle msg failed: " + msg.toJson());
 							}
 	          	break;
 	          }
@@ -454,23 +453,27 @@ public class MsgServer {
 	          	try {
 								SFile sf = (SFile) msg.getEventObject();
 								ob.persistFile(sf);
-								if(sf.getLocations() != null)
-	          			for(SFileLocation sfl : sf.getLocations())
-	          				ob.createFileLocation(sfl);
+								if(sf.getLocations() != null) {
+                  for(SFileLocation sfl : sf.getLocations()) {
+                    ob.createFileLocation(sfl);
+                  }
+                }
 							} catch (Exception e) {
 								LOG.error(e,e);
 								LOG.info("handle msg failed:"+msg.toJson());
 							}
-	          	
+
 	          	break;
 	          }
 	          case MSGType.MSG_DEL_FILE:
 	          {
 	          	try {
 	          		SFile sf = (SFile) msg.getEventObject();
-	          		if(sf.getLocations() != null)
-	          			for(SFileLocation sfl : sf.getLocations())
-	          				ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+	          		if(sf.getLocations() != null) {
+                  for(SFileLocation sfl : sf.getLocations()) {
+                    ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+                  }
+                }
 								ob.delSFile(sf.getFid());
 							} catch (MetaException e) {
 								LOG.error(e,e);
@@ -478,8 +481,6 @@ public class MsgServer {
 							}
 	          	break;
 						}
-	          
-	          
 	          case MSGType.MSG_FAIL_NODE:
 	          case MSGType.MSG_BACK_NODE:
 	          {
@@ -492,12 +493,15 @@ public class MsgServer {
 							}
 	          }
 	        }//end of switch
+			  }  catch (Exception e) {
+			    ob = new ObjectStore();
+			    ob.setConf(new HiveConf());
+			  }
 			}
-			
 		}
-		
+
 	}
-	
+
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 	}
