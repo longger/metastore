@@ -18,20 +18,21 @@ import com.google.common.io.Files;
 public class ThriftRPCInfo {
   private static final AtomicLong TOTAL_COUNT = new AtomicLong();
   private static final Date CURRENT_DATE = new Date();
-  private static final String FORMAT = "Report_Form_Date:\t%s%n" +
+  private static final String FORMAT = "Report_For_Date:\t%s%n" +
       "RPC_Count:\t%s%n" +
       "RPC_Average_Time:\t%.2f%n" +
-      "RPC_Max_Time:\t%s%n" +
       "RPC_Max_Method:\t%s%n" +
-      "RPC_Min_Time:\t%s%n" +
-      "RPC_Min_Method:\t%s%n";
+      "RPC_Max_Time:\t%.2f%n" +
+      "RPC_Min_Method:\t%s%n" +
+      "RPC_Min_Time:\t%.2f%n";
+
   private static final ConcurrentHashMap<String, _Info> info = new ConcurrentHashMap<String, ThriftRPCInfo._Info>();
   private static final AtomicLong totalTime = new AtomicLong();
 
-  private Comparator<Entry<String, _Info>> comp = new Comparator<Entry<String, _Info>>() {
+  private final Comparator<Entry<String, _Info>> comp = new Comparator<Entry<String, _Info>>() {
     @Override
     public int compare(Entry<String, _Info> o1, Entry<String, _Info> o2) {
-      return (o2.getValue().avg() - o1.getValue().avg()) > 0?1:-1;
+      return (o2.getValue().avg() - o1.getValue().avg()) > 0 ? 1 : -1;
     }
   };
   // 初始化时为ThriftRPC类中所有的公有方法初始一个_Info
@@ -85,22 +86,25 @@ public class ThriftRPCInfo {
         break;
       }
     }
-    if(last < 0)
-    	return "no rpc called";
+    if(last < 0) {
+      return "no rpc called";
+    }
     StringBuilder sb = new StringBuilder();
     sb.append(String.format(FORMAT,
         CURRENT_DATE, TOTAL_COUNT.get(),
-        (double) totalTime.get() / TOTAL_COUNT.get(),
-        entries.get(0).getValue().avg(),// RPC_Max_Time
+        (double) totalTime.get() / TOTAL_COUNT.get() / 1000,
         entries.get(0).getKey(),// RPC_Max_Method
-        entries.get(last).getValue(),// RPC_Min_Time
-        entries.get(last).getKey()// RPC_Min_Method
-        )).append("RPC_TOP_10:\t");
+        entries.get(0).getValue().avg() / 1000,// RPC_Max_Time
+        entries.get(last).getKey(),// RPC_Min_Method
+        entries.get(last).getValue().avg() / 1000// RPC_Min_Time
+        )).append("RPC_TOP_10:\t\n");
+
     for (int i = 0; i < 10; i++) {
-      sb.append(entries.get(i).getKey()).append(":avg=").append(entries.get(i).getValue().avg())
-          .append("\t")
-          .append("max=").append(entries.get(i).getValue().getMax()).append("\t")
-          .append("min=").append(entries.get(i).getValue().getMin()).append("\n");
+      sb.append(String.format("%s:\tavg=%.2f\tmax=%s\tmin=%s\n",
+          entries.get(i).getKey(),
+          entries.get(i).getValue().avg() / 1000.0,
+          (entries.get(i).getValue().getMax() == Long.MIN_VALUE ? "MIN" : String.format("%.2f", (entries.get(i).getValue().getMax() / 1000.0))),
+          (entries.get(i).getValue().getMin() == Long.MAX_VALUE ? "MAX" : String.format("%.2f", (entries.get(i).getValue().getMin() / 1000.0)))));
     }
     sb.append("\n");
     return sb.toString();
