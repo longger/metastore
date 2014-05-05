@@ -6,8 +6,10 @@ import static org.apache.commons.lang.StringUtils.join;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -101,7 +103,10 @@ import org.apache.hadoop.hive.serde2.Deserializer;
 import org.apache.hadoop.hive.serde2.SerDeException;
 import org.apache.hadoop.hive.serde2.SerDeUtils;
 import org.apache.hadoop.util.StringUtils;
+import org.apache.thrift.TApplicationException;
 import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TProtocolException;
+import org.apache.thrift.transport.TTransportException;
 
 import com.facebook.fb303.FacebookBase;
 import com.facebook.fb303.fb_status;
@@ -313,7 +318,7 @@ public class ThriftRPC extends FacebookBase implements
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
       String methodName = method.getName();
       Object result = null;
-      long startTime = System.currentTimeMillis();
+      long startTime = System.nanoTime();
       /*
        * 在客户端失效重连阶段会先从clients中移除失效的client，然后重新创建并认证新client
        * 如果移除旧client后认证新client前客户端调用rpc中使用client的方法可能会导致NullPointerException
@@ -330,33 +335,37 @@ public class ThriftRPC extends FacebookBase implements
           } else {
             rpc.shutdown();
           }
-          rpcInfo.captureInfo(method.getName(), System.currentTimeMillis() - startTime);
+          rpcInfo.captureInfo(method.getName(), System.nanoTime() - startTime);
           return result;
-        } catch (Exception e) {
-          if (e instanceof TException) {
-            // 发生连接异常，自动重建连接
+        }catch (UndeclaredThrowableException e) {
+          throw e.getCause();
+        } catch (InvocationTargetException e) {
+          if ((e.getCause() instanceof TApplicationException) ||
+              (e.getCause() instanceof TProtocolException) ||
+              (e.getCause() instanceof TTransportException)) {
+         // 发生连接异常，自动重建连接
             LOG.info("Some error occured when call method " + methodName + ", try reconnect");
 
             if (__do_reconnect()) {
               try {
                 // 用新连接重新执行客户端调用的方法一次，即重试，如果重试再次失败则抛出异常
                 result = method.invoke(rpc, args);
-                rpcInfo.captureInfo(method.getName(), System.currentTimeMillis() - startTime);
+                rpcInfo.captureInfo(method.getName(), System.nanoTime() - startTime);
                 return result;
               } catch (Exception t) {
                 LOG.error(
                     "I have tried my best to retry, but still cause some exceptions, please check program",
                     t);
-                throw t;
+                throw t.getCause();
               }
             } else {
-              throw e;
+              throw e.getCause();
             }
           } else {
-            // 其他异常，直接抛出
-            throw e;
+            throw e.getCause();
           }
-        }
+        } 
+        
       }
     }
   }

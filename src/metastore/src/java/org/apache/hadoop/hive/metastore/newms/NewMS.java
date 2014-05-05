@@ -122,7 +122,6 @@ public class NewMS {
 			  HiveMetaStoreServerEventHandler eventHandler = new HiveMetaStoreServerEventHandler();
 			  server.setServerEventHandler(eventHandler);
 
-			  server.serve();
 			} catch (Throwable x) {
 			  x.printStackTrace();
 			  LOG.error(StringUtils.stringifyException(x));

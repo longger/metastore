@@ -699,7 +699,7 @@ public class CacheStore {
           SFile f = null;
           try {
             f = (SFile) readObject(ObjectType.SFILE, id);
-            if (f != null) {
+            if (f != null && f.getTableName().equals(tabName) && f.getDbName().equals(dbName) && f.getValues().equals(values)) {
               rls.add(f);
             }
           } catch (Exception e) {
