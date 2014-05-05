@@ -36,6 +36,7 @@ import net.sf.json.JSONObject;
 
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.DiskManager.DMThread.DMReport;
 import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
@@ -57,7 +58,7 @@ import org.apache.thrift.TException;
 
 public class DiskManager {
     public static long startupTs = System.currentTimeMillis();
-    public RawStore rs;
+    public RawStore rs, rs_s1;
     public Log LOG;
     private final HiveConf hiveConf;
     public final int bsize = 64 * 1024;
@@ -74,6 +75,7 @@ public class DiskManager {
     public final Queue<DMRequest> cleanQ = new ConcurrentLinkedQueue<DMRequest>();
     public final Queue<DMRequest> repQ = new ConcurrentLinkedQueue<DMRequest>();
     public final Queue<BackupEntry> backupQ = new ConcurrentLinkedQueue<BackupEntry>();
+    public final ConcurrentLinkedQueue<DMReport> reportQueue = new ConcurrentLinkedQueue<DMReport>();
     public final Map<String, Long> toReRep = new ConcurrentHashMap<String, Long>();
     public final Map<String, Long> toUnspc = new ConcurrentHashMap<String, Long>();
     public final Map<String, MigrateEntry> rrmap = new ConcurrentHashMap<String, MigrateEntry>();
@@ -1840,6 +1842,7 @@ public class DiskManager {
       Class<? extends RawStore> rawStoreClass = (Class<? extends RawStore>) MetaStoreUtils.getClass(
         rawStoreClassName);
       this.rs = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
+      this.rs_s1 = (RawStore) ReflectionUtils.newInstance(rawStoreClass, conf);
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
       closeRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT));
@@ -2181,9 +2184,16 @@ public class DiskManager {
       if (ndi != null) {
         for (DeviceInfo di : ndi) {
           try {
-            synchronized (rs) {
-              rs.createOrUpdateDevice(di, node, null);
-              Device d = rs.getDevice(di.dev);
+            synchronized (rs_s1) {
+              // automatically create device here!
+              // NOTE-XXX: Every 30+ seconds, we have to get up to 280 devices.
+              Device d = rs_s1.getDevice(di.dev);
+              if (d == null ||
+                  (d.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT && di.mp != null) ||
+                  (!d.getNode_name().equals(node.getNode_name()) && d.getProp() == MetaStoreConst.MDeviceProp.ALONE)) {
+                rs_s1.createOrUpdateDevice(di, node, null);
+                d = rs_s1.getDevice(di.dev);
+              }
               di.prop = d.getProp();
               if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE) {
                 di.isOffline = true;
@@ -2273,8 +2283,8 @@ public class DiskManager {
       if (safeMode) {
         try {
           long cn;
-          synchronized (rs) {
-            cn = rs.countNode();
+          synchronized (rs_s1) {
+            cn = rs_s1.countNode();
           }
           if (safeMode && ((double) ndmap.size() / (double) cn > 0)) {
 
@@ -3668,9 +3678,185 @@ public class DiskManager {
 
     public class DMThread implements Runnable {
       Thread runner;
+      DMHandleReportThread dmhrt = null;
+
       public DMThread(String threadName) {
+        dmhrt = new DMHandleReportThread("DiskManagerHandleReportThread");
         runner = new Thread(this, threadName);
         runner.start();
+      }
+
+      public class DMHandleReportThread implements Runnable {
+        Thread runner;
+
+        public DMHandleReportThread(String threadName) {
+          runner = new Thread(this, threadName);
+          runner.start();
+        }
+
+        @Override
+        public void run() {
+          while (true) {
+            try {
+              byte[] recvBuf = new byte[bsize];
+              DatagramPacket recvPacket = new DatagramPacket(recvBuf , recvBuf.length);
+              try {
+                server.receive(recvPacket);
+              } catch (IOException e) {
+                e.printStackTrace();
+                continue;
+              }
+              String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
+              //LOG.debug("RECV: " + recvStr);
+
+              DMReport report = parseReport(recvStr);
+
+              if (report == null) {
+                LOG.error("Invalid report from address: " + recvPacket.getAddress().getHostAddress());
+                continue;
+              }
+              report.recvPacket = recvPacket;
+
+              Node reportNode = null;
+
+              if (report.node == null) {
+                try {
+                  synchronized (rs_s1) {
+                    reportNode = rs_s1.findNode(recvPacket.getAddress().getHostAddress());
+                  }
+                } catch (MetaException e) {
+                  LOG.error(e, e);
+                }
+              } else {
+                try {
+                  synchronized (rs_s1) {
+                    reportNode = rs_s1.getNode(report.node);
+                  }
+                } catch (MetaException e) {
+                  LOG.error(e, e);
+                }
+              }
+              report.reportNode = reportNode;
+
+              if (reportNode == null) {
+                String errStr = "Failed to find Node: " + report.node + ", IP=" + recvPacket.getAddress().getHostAddress();
+                LOG.warn(errStr);
+                // try to use "+NODE:node_name" to find
+                report.sendStr = "+FAIL\n";
+                report.sendStr += "+COMMENT:" + errStr;
+              } else {
+                // 0. update NodeInfo
+                NodeInfo oni = null;
+
+                oni = ndmap.get(reportNode.getNode_name());
+                if (oni != null) {
+                  oni.address = recvPacket.getAddress();
+                  oni.port = recvPacket.getPort();
+                  oni.totalReportNr++;
+                  if (report.replies != null && report.replies.size() > 0) {
+                    for (DMReply r : report.replies) {
+                      String[] args = r.args.split(",");
+                      switch (r.type) {
+                      case INFO:
+                        try {
+                          oni.qrep = Long.parseLong(args[0]);
+                          oni.hrep = Long.parseLong(args[1]);
+                          oni.drep = Long.parseLong(args[2]);
+                          oni.qdel = Long.parseLong(args[3]);
+                          oni.hdel = Long.parseLong(args[4]);
+                          oni.ddel = Long.parseLong(args[5]);
+                          oni.tver = Long.parseLong(args[6]);
+                          oni.tvyr = Long.parseLong(args[7]);
+                          oni.uptime = Long.parseLong(args[8]);
+                          oni.load1 = Double.parseDouble(args[9]);
+                        } catch (NumberFormatException e1) {
+                          LOG.error(e1, e1);
+                        } catch (IndexOutOfBoundsException e1) {
+                          LOG.error(e1, e1);
+                        }
+                        break;
+                      case VERIFY:
+                        oni.totalVerify++;
+                        break;
+                      case REPLICATED:
+                        oni.totalFileRep++;
+                        break;
+                      case DELETED:
+                        oni.totalFileDel++;
+                        break;
+                      case FAILED_DEL:
+                        oni.totalFailDel++;
+                        // it is ok ignore any del failure
+                        break;
+                      case FAILED_REP:
+                        oni.totalFailRep++;
+                        // ok, we know that the SFL will be invalid parma...ly
+                        SFileLocation sfl;
+
+                        try {
+                          synchronized (rs_s1) {
+                            sfl = rs_s1.getSFileLocation(args[1], args[2]);
+                            if (sfl != null) {
+                              // delete this SFL right now
+                              if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
+                                LOG.info("Failed Replication for file " + sfl.getFid() + " dev " + sfl.getDevid() + " loc " + sfl.getLocation() + ", delete it now.");
+                                rs_s1.delSFileLocation(args[1], args[2]);
+                                // BUG-XXX: shall we trigger a DELETE request to dservice?
+                                synchronized (oni.toDelete) {
+                                  oni.toDelete.add(sfl);
+                                  LOG.info("----> Add toDelete " + sfl.getLocation() + ", qs " + cleanQ.size() + ", dev " + sfl.getDevid());
+                                }
+                              }
+                            }
+                          }
+                        } catch (MetaException e) {
+                          LOG.error(e, e);
+                        }
+                        break;
+                      }
+                    }
+                  }
+                  oni.lastReportStr = report.toString();
+                }
+                report.oni = oni;
+
+                // 1. update Node status
+                switch (reportNode.getStatus()) {
+                default:
+                case MetaStoreConst.MNodeStatus.ONLINE:
+                  break;
+                case MetaStoreConst.MNodeStatus.SUSPECT:
+                  try {
+                    reportNode.setStatus(MetaStoreConst.MNodeStatus.ONLINE);
+                    synchronized (rs_s1) {
+                      rs_s1.updateNode(reportNode);
+                    }
+                  } catch (MetaException e) {
+                    LOG.error(e, e);
+                  }
+                  break;
+                case MetaStoreConst.MNodeStatus.OFFLINE:
+                  LOG.warn("OFFLINE node '" + reportNode.getNode_name() + "' do report?!");
+                  break;
+                }
+
+                // 2. update NDMap
+                synchronized (ndmap) {
+                  addToNDMap(System.currentTimeMillis(), reportNode, report.dil);
+                }
+
+                // 3. finally, add this report entry to queue
+                synchronized (reportQueue) {
+                  reportQueue.add(report);
+                  reportQueue.notifyAll();
+                }
+              }
+            } catch (Exception e) {
+              LOG.error(e, e);
+            }
+          }
+        }
+
       }
 
       public class DMReport {
@@ -3687,6 +3873,12 @@ public class DiskManager {
         public String node = null;
         public List<DeviceInfo> dil = null;
         public List<DMReply> replies = null;
+        public String sendStr = "+OK\n";
+
+        // region for reply use
+        DatagramPacket recvPacket = null;
+        Node reportNode = null;
+        NodeInfo oni = null;
 
         @Override
         public String toString() {
@@ -3851,151 +4043,22 @@ public class DiskManager {
       public void run() {
         while (true) {
           try {
-            byte[] recvBuf = new byte[bsize];
-            DatagramPacket recvPacket = new DatagramPacket(recvBuf , recvBuf.length);
-            try {
-              server.receive(recvPacket);
-            } catch (IOException e) {
-              e.printStackTrace();
-              continue;
-            }
-            String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
-            //LOG.debug("RECV: " + recvStr);
-
-            DMReport report = parseReport(recvStr);
-
+            // dequeue reports from the report queue
+            DMReport report = reportQueue.poll();
             if (report == null) {
-              LOG.error("Invalid report from address: " + recvPacket.getAddress().getHostAddress());
+              try {
+                synchronized (reportQueue) {
+                  reportQueue.wait();
+                }
+              } catch (InterruptedException e) {
+                LOG.debug(e, e);
+              }
               continue;
             }
-            Node reportNode = null;
 
-            if (report.node == null) {
-              try {
-                synchronized (rs) {
-                  reportNode = rs.findNode(recvPacket.getAddress().getHostAddress());
-                }
-              } catch (MetaException e) {
-                LOG.error(e, e);
-              }
+            if (report.reportNode == null || report.oni == null) {
+              // ok, we just return the error message now
             } else {
-              try {
-                synchronized (rs) {
-                  reportNode = rs.getNode(report.node);
-                }
-              } catch (MetaException e) {
-                LOG.error(e, e);
-              }
-            }
-
-            String sendStr = "+OK\n";
-
-            if (reportNode == null) {
-              String errStr = "Failed to find Node: " + report.node + ", IP=" + recvPacket.getAddress().getHostAddress();
-              LOG.warn(errStr);
-              // try to use "+NODE:node_name" to find
-              sendStr = "+FAIL\n";
-              sendStr += "+COMMENT:" + errStr;
-            } else {
-              // 0. update NodeInfo
-              NodeInfo oni = null;
-
-              oni = ndmap.get(reportNode.getNode_name());
-              if (oni != null) {
-                oni.address = recvPacket.getAddress();
-                oni.port = recvPacket.getPort();
-                oni.totalReportNr++;
-                if (report.replies != null && report.replies.size() > 0) {
-                  for (DMReply r : report.replies) {
-                    String[] args = r.args.split(",");
-                    switch (r.type) {
-                    case INFO:
-                      try {
-                        oni.qrep = Long.parseLong(args[0]);
-                        oni.hrep = Long.parseLong(args[1]);
-                        oni.drep = Long.parseLong(args[2]);
-                        oni.qdel = Long.parseLong(args[3]);
-                        oni.hdel = Long.parseLong(args[4]);
-                        oni.ddel = Long.parseLong(args[5]);
-                        oni.tver = Long.parseLong(args[6]);
-                        oni.tvyr = Long.parseLong(args[7]);
-                        oni.uptime = Long.parseLong(args[8]);
-                        oni.load1 = Double.parseDouble(args[9]);
-                      } catch (NumberFormatException e1) {
-                        LOG.error(e1, e1);
-                      } catch (IndexOutOfBoundsException e1) {
-                        LOG.error(e1, e1);
-                      }
-                      break;
-                    case VERIFY:
-                      oni.totalVerify++;
-                      break;
-                    case REPLICATED:
-                      oni.totalFileRep++;
-                      break;
-                    case DELETED:
-                      oni.totalFileDel++;
-                      break;
-                    case FAILED_DEL:
-                      oni.totalFailDel++;
-                      // it is ok ignore any del failure
-                      break;
-                    case FAILED_REP:
-                      oni.totalFailRep++;
-                      // ok, we know that the SFL will be invalid parma...ly
-                      SFileLocation sfl;
-
-                      try {
-                        synchronized (rs) {
-                          sfl = rs.getSFileLocation(args[1], args[2]);
-                          if (sfl != null) {
-                            // delete this SFL right now
-                            if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
-                              LOG.info("Failed Replication for file " + sfl.getFid() + " dev " + sfl.getDevid() + " loc " + sfl.getLocation() + ", delete it now.");
-                              rs.delSFileLocation(args[1], args[2]);
-                              // BUG-XXX: shall we trigger a DELETE request to dservice?
-                              synchronized (oni.toDelete) {
-                                oni.toDelete.add(sfl);
-                                LOG.info("----> Add toDelete " + sfl.getLocation() + ", qs " + cleanQ.size() + ", dev " + sfl.getDevid());
-                              }
-                            }
-                          }
-                        }
-                      } catch (MetaException e) {
-                        LOG.error(e, e);
-                      }
-                      break;
-                    }
-                  }
-                }
-                oni.lastReportStr = report.toString();
-              }
-
-              // 1. update Node status
-              switch (reportNode.getStatus()) {
-              default:
-              case MetaStoreConst.MNodeStatus.ONLINE:
-                break;
-              case MetaStoreConst.MNodeStatus.SUSPECT:
-                try {
-                  reportNode.setStatus(MetaStoreConst.MNodeStatus.ONLINE);
-                  synchronized (rs) {
-                    rs.updateNode(reportNode);
-                  }
-                } catch (MetaException e) {
-                  LOG.error(e, e);
-                }
-                break;
-              case MetaStoreConst.MNodeStatus.OFFLINE:
-                LOG.warn("OFFLINE node '" + reportNode.getNode_name() + "' do report?!");
-                break;
-              }
-
-              // 2. update NDMap
-              synchronized (ndmap) {
-                addToNDMap(System.currentTimeMillis(), reportNode, report.dil);
-              }
-
               // 2.NA update metadata
               Set<SFile> toCheckRep = new HashSet<SFile>();
               Set<SFile> toCheckDel = new HashSet<SFile>();
@@ -4096,10 +4159,10 @@ public class DiskManager {
                           // is no metadata for this 'SFL'. Thus, we notify dservice to
                           // delete this 'SFL' if needed. (Dservice delete it if these files
                           // hadn't been touched for specified seconds.)
-                          synchronized (oni.toVerify) {
-                            oni.toVerify.add(args[1] + ":" + oni.getMP(args[1]) + ":" + args[2]);
-                            LOG.info("----> Add toVerify " + args[0] + " " + args[1] + "," + args[2] + ", qs " + oni.toVerify.size());
-                            oni.totalVYR++;
+                          synchronized (report.oni.toVerify) {
+                            report.oni.toVerify.add(args[1] + ":" + report.oni.getMP(args[1]) + ":" + args[2]);
+                            LOG.info("----> Add toVerify " + args[0] + " " + args[1] + "," + args[2] + ", qs " + report.oni.toVerify.size());
+                            report.oni.totalVYR++;
                           }
                         } else {
                           if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
@@ -4254,7 +4317,7 @@ public class DiskManager {
               int nr = 0;
               int nr_max = hiveConf.getIntVar(HiveConf.ConfVars.DM_APPEND_CMD_MAX);
               synchronized (ndmap) {
-                NodeInfo ni = ndmap.get(reportNode.getNode_name());
+                NodeInfo ni = ndmap.get(report.reportNode.getNode_name());
                 int nr_del_max = (ni.toRep.size() > 0 ? nr_max - 1 : nr_max);
 
                 if (ni != null && ni.toDelete.size() > 0) {
@@ -4264,7 +4327,7 @@ public class DiskManager {
                       if (nr >= nr_del_max) {
                         break;
                       }
-                      sendStr += "+DEL:" + loc.getNode_name() + ":" + loc.getDevid() + ":" +
+                      report.sendStr += "+DEL:" + loc.getNode_name() + ":" + loc.getDevid() + ":" +
                           ndmap.get(loc.getNode_name()).getMP(loc.getDevid()) + ":" +
                           loc.getLocation() + "\n";
                       ls.add(loc);
@@ -4283,7 +4346,7 @@ public class DiskManager {
                       if (nr >= nr_max) {
                         break;
                       }
-                      sendStr += "+REP:" + jo.toString() + "\n";
+                      report.sendStr += "+REP:" + jo.toString() + "\n";
                       jos.add(jo);
                       nr++;
                     }
@@ -4300,7 +4363,7 @@ public class DiskManager {
                       if (nr >= nr_max) {
                         break;
                       }
-                      sendStr += "+VYR:" + v + "\n";
+                      report.sendStr += "+VYR:" + v + "\n";
                       vs.add(v);
                       nr++;
                     }
@@ -4313,11 +4376,11 @@ public class DiskManager {
             }
 
             // send back the reply
-            int port = recvPacket.getPort();
+            int port = report.recvPacket.getPort();
             byte[] sendBuf;
-            sendBuf = sendStr.getBytes();
+            sendBuf = report.sendStr.getBytes();
             DatagramPacket sendPacket = new DatagramPacket(sendBuf , sendBuf.length ,
-                recvPacket.getAddress() , port );
+                report.recvPacket.getAddress() , port );
             try {
               server.send(sendPacket);
             } catch (IOException e) {
