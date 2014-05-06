@@ -49,9 +49,9 @@ public class MsgServer {
 	private static ConcurrentLinkedQueue<DDLMsg> localQueue = new ConcurrentLinkedQueue<DDLMsg>();
 	private static LocalConsumer lc = new LocalConsumer();
 
-	public static boolean isQueueEmpty()
-	{
-		LOG.info("queue size "+queue.size());
+	public static boolean isQueueEmpty() {
+		LOG.info("Queue size " + queue.size() + ", failed_queue " + failed_queue.size() +
+		    ", localQueue " + localQueue.size());
 		return queue.isEmpty() && failed_queue.isEmpty() && localQueue.isEmpty();
 	}
 	public static void addMsg(DDLMsg msg) {
@@ -278,6 +278,7 @@ public class MsgServer {
 		private final String group;
 		private final ConcurrentLinkedQueue<DDLMsg> failedq = new ConcurrentLinkedQueue<DDLMsg>();
 		private final MsgProcessing mp;
+
 		public Consumer(String zkaddr, String topic, String group) {
 			this.zkaddr = zkaddr;
 			this.topic = topic;
@@ -285,7 +286,6 @@ public class MsgServer {
 			try {
 				localhost_name = InetAddress.getLocalHost().getHostName();
 			} catch (UnknownHostException e) {
-				// TODO Auto-generated catch block
 				LOG.error(e,e);
 			}
 			mp = new MsgProcessing();
@@ -312,27 +312,30 @@ public class MsgServer {
 
 				@Override
 				public Executor getExecutor() {
-					// TODO Auto-generated method stub
 					return null;
 				}
 
 				@Override
 				public void recieveMessages(final Message message) {
 					String data = new String(message.getData());
-					LOG.info("consume msg from metaq: "+data);
+					LOG.info("Consume msg from metaq: " + data);
 					int time = 0;
-//					 if(data != null)
-//					 return;
 					DDLMsg msg = DDLMsg.fromJson(data);
-					if(msg.getLocalhost_name().equals(localhost_name))
-					{
-						LOG.info("ignore msg sent by myself:"+msg.toJson());
-						return;
+					// NOTE-XXX: ignore file-related messages
+					if (conf.getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW) && (
+					    msg.getEvent_id() == MSGType.MSG_CREATE_FILE ||
+					    msg.getEvent_id() == MSGType.MSG_DEL_FILE ||
+					    msg.getEvent_id() == MSGType.MSG_REP_FILE_CHANGE ||
+					    msg.getEvent_id() == MSGType.MSG_REP_FILE_ONOFF ||
+					    msg.getEvent_id() == MSGType.MSG_STA_FILE_CHANGE ||
+					    msg.getEvent_id() == MSGType.MSG_FILE_USER_SET_REP_CHANGE
+					    )) {
+					  return;
 					}
 					while (time <= 3) {
 						if (time >= 3) {
 							failedq.add(msg);
-							LOG.info("handle msg failed, add msg into failed queue: "+ msg.getMsg_id());
+							LOG.info("handle msg failed, add msg into failed queue: " + msg.getMsg_id());
 							break;
 						}
 						try {
@@ -368,20 +371,19 @@ public class MsgServer {
     return new MSGFactory.DDLMsg(event_id, id, old_object_params, eventObject, max_msg_id++, db_id, node_id, now, null,old_object_params);
   }
 
-	public static class LocalConsumer implements Runnable
-	{
+	public static class LocalConsumer implements Runnable {
 		private final Semaphore lcsem  = new Semaphore(0);
 		private ObjectStore ob;
 
-		public LocalConsumer()
-		{
+		public LocalConsumer() {
 			ob = new ObjectStore();
     	ob.setConf(new HiveConf());
 		}
-		public void release()
-		{
+
+		public void release()	{
 			lcsem.release();
 		}
+
 		@Override
 		public void run() {
 			while (true) {
@@ -411,7 +413,7 @@ public class MsgServer {
 									ob.createFileLocation(sfl);
 								} catch (Exception e) {
 									LOG.error(e,e);
-									LOG.info("handle msg failed: " + msg.toJson());
+									LOG.error("handle msg failed: " + msg.toJson());
 								}
 	          	}
 	          	if (op.equals("del")) {
@@ -419,7 +421,7 @@ public class MsgServer {
 									ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
 								} catch (MetaException e) {
 									LOG.error(e,e);
-									LOG.info("handle msg failed: " + msg.toJson());
+									LOG.error("handle msg failed: " + msg.toJson());
 								}
 	          	}
 	          	break;
@@ -432,7 +434,7 @@ public class MsgServer {
 								ob.updateSFile(sf);
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.info("handle msg failed: " + msg.toJson());
+								LOG.error("handle msg failed: " + msg.toJson());
 							}
 
 	          	break;
@@ -444,7 +446,7 @@ public class MsgServer {
 								ob.updateSFileLocation(sfl);
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.info("handle msg failed: " + msg.toJson());
+								LOG.error("handle msg failed: " + msg.toJson());
 							}
 	          	break;
 	          }
@@ -453,16 +455,10 @@ public class MsgServer {
 	          	try {
 								SFile sf = (SFile) msg.getEventObject();
 								ob.persistFile(sf);
-								if(sf.getLocations() != null) {
-                  for(SFileLocation sfl : sf.getLocations()) {
-                    ob.createFileLocation(sfl);
-                  }
-                }
 							} catch (Exception e) {
 								LOG.error(e,e);
-								LOG.info("handle msg failed:"+msg.toJson());
+								LOG.error("handle msg failed: " + msg.toJson());
 							}
-
 	          	break;
 	          }
 	          case MSGType.MSG_DEL_FILE:
@@ -477,7 +473,7 @@ public class MsgServer {
 								ob.delSFile(sf.getFid());
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.info("handle msg failed:"+msg.toJson());
+								LOG.error("handle msg failed: " + msg.toJson());
 							}
 	          	break;
 						}
@@ -489,13 +485,18 @@ public class MsgServer {
 								ob.updateNode(n);
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.info("handle msg failed:"+msg.toJson());
+								LOG.error("handle msg failed: " + msg.toJson());
 							}
 	          }
 	        }//end of switch
 			  }  catch (Exception e) {
+			    try {
 			    ob = new ObjectStore();
 			    ob.setConf(new HiveConf());
+			    } catch (Exception e1) {
+			      LOG.error(e1, e1);
+			      LOG.error("Exception in exception handling, BAD!");
+			    }
 			  }
 			}
 		}

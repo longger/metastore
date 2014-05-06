@@ -5334,7 +5334,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       throws NoSuchObjectException, MetaException, TException {
         incrementCounter("user_authentication");
 
-        Boolean ret = false;
+        boolean ret = false;
         try {
           ret = getMS().authentication(user_name, "'" + passwd + "'");
         } catch (NoSuchObjectException e) {

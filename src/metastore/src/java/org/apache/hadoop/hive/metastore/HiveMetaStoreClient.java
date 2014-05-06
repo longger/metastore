@@ -117,6 +117,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
   private String tokenStrForm;
   private final boolean localMetaStore;
   private final HashMap<String,HiveMetaStoreClient> remore_dc_map = new HashMap<String,HiveMetaStoreClient>();
+  private boolean isAuthed = false;
 
   // for thrift connects
   private int retries = 5;
@@ -261,17 +262,19 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
       // connection has died and the default connection is likely to be the first array element.
       promoteRandomMetaStoreURI();
       open();
-      // must re-authenticated here!
-      String user_name = conf.getVar(HiveConf.ConfVars.HIVE_USER);
-      String passwd = conf.getVar(HiveConf.ConfVars.HIVE_USERPWD);
-      try {
-        this.authentication(user_name, passwd);
-      } catch (NoSuchObjectException e) {
-        e.printStackTrace();
-        throw new MetaException(e.getMessage());
-      } catch (TException e) {
-        e.printStackTrace();
-        throw new MetaException(e.getMessage());
+      if (isAuthed) {
+        // must re-authenticated here!
+        String user_name = conf.getVar(HiveConf.ConfVars.HIVE_USER);
+        String passwd = conf.getVar(HiveConf.ConfVars.HIVE_USERPWD);
+        try {
+          this.authentication(user_name, passwd);
+        } catch (NoSuchObjectException e) {
+          e.printStackTrace();
+          throw new MetaException(e.getMessage());
+        } catch (TException e) {
+          e.printStackTrace();
+          throw new MetaException(e.getMessage());
+        }
       }
     }
   }
@@ -393,6 +396,9 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
         if (isConnected) {
           break;
         }
+      }
+      if (isConnected) {
+        break;
       }
       // Wait before launching the next round of connection retries.
       if (retryDelaySeconds > 0) {
@@ -1645,7 +1651,8 @@ public List<String> list_users(Database db) throws MetaException, TException {
 @Override
 public boolean authentication(String user_name, String passwd)
     throws NoSuchObjectException, MetaException, TException {
-  return client.authentication(user_name, passwd);
+  isAuthed = client.authentication(user_name, passwd);
+  return isAuthed;
 }
 //added by liulichao
 

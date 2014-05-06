@@ -1,9 +1,11 @@
 package org.apache.hadoop.hive.metastore.newms;
 
+import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
@@ -12,20 +14,21 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.hadoop.hive.conf.HiveConf;
+
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
-import com.google.common.io.Files;
 
 public class ThriftRPCInfo {
   private static final AtomicLong TOTAL_COUNT = new AtomicLong();
   private static final Date CURRENT_DATE = new Date();
   private static final String FORMAT = "Report_For_Date:\t%s%n" +
-      "RPC_Count:\t%s%n" +
-      "RPC_Average_Time:\t%.2f%n" +
-      "RPC_Max_Method:\t%s%n" +
-      "RPC_Max_Time:\t%.2f%n" +
-      "RPC_Min_Method:\t%s%n" +
-      "RPC_Min_Time:\t%.2f%n";
+      "RPC_Count:      \t%s%n" +
+      "RPC_Avg_Time:   \t%.2f%n" +
+      "RPC_Max_Method: \t%s%n" +
+      "RPC_Max_Time:   \t%.2f%n" +
+      "RPC_Min_Method: \t%s%n" +
+      "RPC_Min_Time:   \t%.2f%n";
 
   private static final ConcurrentHashMap<String, _Info> info = new ConcurrentHashMap<String, ThriftRPCInfo._Info>();
   private static final AtomicLong totalTime = new AtomicLong();
@@ -58,24 +61,41 @@ public class ThriftRPCInfo {
     if (Strings.isNullOrEmpty(path)) {
       throw new IOException("Invalid path");
     }
-    File file = new File(path);
-    if (!file.isFile()) {
-      throw new IOException(String.format("'%s' is not a file", path));
+
+    Date d = new Date(System.currentTimeMillis());
+    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+    String str = new HiveConf().getVar(HiveConf.ConfVars.DM_REPORT_DIR);
+    if (str == null) {
+      str = System.getProperty("user.dir") + "/sotstore/reports/rpcinfo-" + sdf.format(d);
+    }
+    File reportFile = new File(str);
+    if (!reportFile.getParentFile().exists() && !reportFile.getParentFile().mkdirs()) {
+      throw new IOException("Make directory " + reportFile.getParent() + " failed, can't write report data.");
     }
     List<Entry<String,_Info>> entries = Lists.newArrayList(info.entrySet());
     Collections.sort(entries, comp);
     StringBuilder sb = new StringBuilder();
     sb.append(new Date());
-    //sb.append(String.format("Name\t\tMax\t\tMin\t\tAvg\t\t\n"));
+    sb.append("TS\tName\t\tNr\t\tAvg\t\tMax\t\tMin\t\t\n");
     for (Entry<String, _Info> e : entries) {
-      sb.append(String.format("%-8s\t%-4.2f\t%-4.2f\t%-8.2f\t\n", e.getKey(),
-          e.getValue().getMax(), e.getValue().getMin(), e.getValue().avg()));
+      sb.append(String.format("%d\t%-30s:\tnr= %10d\tavg= %.2f\tmax= %s\tmin= %s\n",
+          System.currentTimeMillis() / 1000,
+          e.getKey(),
+          e.getValue().count.get(),
+          e.getValue().avg() / 1000.0,
+          (e.getValue().getMax() == Long.MIN_VALUE ? "MIN" : String.format("%.2f", (e.getValue().getMax() / 1000.0))),
+          (e.getValue().getMin() == Long.MAX_VALUE ? "MAX" : String.format("%.2f", (e.getValue().getMin() / 1000.0))))
+          );
     }
     // write sb to filep
-    FileOutputStream fos = new FileOutputStream(file, true);
-    fos.write(sb.toString().getBytes());
-    fos.close();
-//    Files.write(sb.toString().getBytes(), file);
+    FileWriter fw = null;
+    if (!reportFile.exists()) {
+      reportFile.createNewFile();
+    }
+    fw = new FileWriter(reportFile.getAbsoluteFile(), true);
+    BufferedWriter bw = new BufferedWriter(fw);
+    bw.write(sb.toString());
+    bw.close();
   }
 
   @Override
@@ -89,7 +109,7 @@ public class ThriftRPCInfo {
         break;
       }
     }
-    if(last < 0) {
+    if (last < 0) {
       return "no rpc called";
     }
     StringBuilder sb = new StringBuilder();
@@ -103,13 +123,13 @@ public class ThriftRPCInfo {
         )).append("RPC_TOP_10:\t\n");
 
     for (int i = 0; i < 10; i++) {
-      sb.append(String.format("%s:\tavg=%.2f\tmax=%s\tmin=%s\n",
+      sb.append(String.format("%-30s:\tnr=%10d\tavg=%.2f\tmax=%s\tmin=%s\n",
           entries.get(i).getKey(),
+          entries.get(i).getValue().count.get(),
           entries.get(i).getValue().avg() / 1000.0,
           (entries.get(i).getValue().getMax() == Long.MIN_VALUE ? "MIN" : String.format("%.2f", (entries.get(i).getValue().getMax() / 1000.0))),
           (entries.get(i).getValue().getMin() == Long.MAX_VALUE ? "MAX" : String.format("%.2f", (entries.get(i).getValue().getMin() / 1000.0)))));
     }
-    sb.append("\n");
     return sb.toString();
   }
 

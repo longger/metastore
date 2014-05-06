@@ -13,7 +13,6 @@ import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
-import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
 import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TProcessor;
@@ -101,12 +100,12 @@ public class NewMS {
         TServerTransport serverTransport = tcpKeepAlive ?
             new TServerSocketKeepAlive(port) : new TServerSocket(port);
 			  //TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
-			  TProcessor tprocessor = new TSetIpAddressProcessor<Iface>(new ThriftRPC().newProxy());
+			  TProcessor tprocessor = new NewMSTSetIpAddressProcessor<Iface>(new ThriftRPC().newProxy());
 
 			  TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(serverTransport)
+			  .processor(tprocessor)
 			  .transportFactory(new TTransportFactory())
 			  .protocolFactory(new TBinaryProtocol.Factory())
-			  .processor(tprocessor)
 			  .minWorkerThreads(minWorkerThreads)
 			  .maxWorkerThreads(maxWorkerThreads);
 
@@ -206,10 +205,10 @@ public class NewMS {
         }
 
         rpc.stop();
-        LOG.info("stop RPCServer.");
+        LOG.info("Stop RPCServer.");
 
-        while(!MsgServer.isQueueEmpty()){
-        	LOG.info("waiting for queues in MsgServer to be empty...");
+        while (!MsgServer.isQueueEmpty()) {
+        	LOG.info("Waiting for queues in MsgServer to be empty...");
         	try {
 						Thread.sleep(100);
 					} catch (InterruptedException e) {

@@ -498,7 +498,6 @@ public class RawStoreImp implements RawStore {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
-
 	}
 
 	@Override
@@ -508,9 +507,9 @@ public class RawStoreImp implements RawStore {
 	    if (old != null) {
 	      return false;
 	    }
-			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, location.getFid()+"");
-			if(sf == null) {
-        throw new MetaException("No SFile found by id:"+location.getFid());
+			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, location.getFid() + "");
+			if (sf == null) {
+        throw new MetaException("No SFile found by id: " + location.getFid());
       }
 			sf.addToLocations(location);
 			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
@@ -640,15 +639,15 @@ public class RawStoreImp implements RawStore {
 		String sflkey = SFileImage.generateSflkey(location, devid);
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
-			if(sfl == null) {
+			if (sfl == null) {
         return true;
       }
-			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
-			if(sf == null) {
-        throw new MetaException("no sfile found by id:"+sfl.getFid());
+			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid() + "");
+			if (sf == null) {
+        throw new MetaException("No sfile found by id: " + sfl.getFid());
       }
 			sf.getLocations().remove(sfl);
-			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+			cs.writeObject(ObjectType.SFILE, sf.getFid() + "", sf);
 			cs.removeObject(ObjectType.SFILELOCATION, sflkey);
 			success = true;
 
@@ -822,10 +821,9 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<String> getAllTables(String dbName) throws MetaException {
 		List<String> ts = new ArrayList<String>();
-		for(String s : CacheStore.getTableHm().keySet())
-		{
-			if(s.startsWith(dbName+".")) {
-        ts.add(s);
+		for (String s : CacheStore.getTableHm().keySet()) {
+			if (s.startsWith(dbName + ".")) {
+        ts.add(s.split("\\.")[1]);
       }
 		}
 		return ts;
@@ -1797,11 +1795,31 @@ public class RawStoreImp implements RawStore {
       if (sfl.size() > 0) {
         for (int i = 0; i < sfl.size(); i++) {
           SFileLocation x = sfl.get(i);
+          Device d = null;
 
-          if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+          try {
+            d = (Device) cs.readObject(ObjectType.DEVICE, x.getDevid());
+          } catch (Exception e) {
+          }
+
+          if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE &&
+              (d != null && (d.getProp() == MetaStoreConst.MDeviceProp.ALONE ||
+              d.getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE))) {
             selected = true;
             idx = i;
             break;
+          }
+        }
+        if (!selected) {
+          // ok, try to select shared device
+          for (int i = 0; i < sfl.size(); i++) {
+           SFileLocation x = sfl.get(i);
+
+            if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+              selected = true;
+              idx = i;
+              break;
+            }
           }
         }
         if (selected) {

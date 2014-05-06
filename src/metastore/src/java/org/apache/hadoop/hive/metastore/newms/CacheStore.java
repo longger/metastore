@@ -562,7 +562,6 @@ public class CacheStore {
     default: {
     	Jedis jedis = refreshJedis();
       try {
-        jedis = rf.getDefaultInstance();
         jedis.hdel(key.getName(), field);
       } catch (JedisException e) {
         err = -1;
@@ -690,7 +689,6 @@ public class CacheStore {
     int err = 0;
 
     try {
-      jedis = rf.getDefaultInstance();
       String k = generateFtlKey(values);
       Set<String> mem = jedis.smembers(k);
       List<SFile> rls = new ArrayList<SFile>();
@@ -709,7 +707,7 @@ public class CacheStore {
       }
       return rls;
     } catch (JedisException e){
-      err = 0;
+      err = -1;
       throw e;
     } finally {
       if (err < 0) {
@@ -985,17 +983,22 @@ public class CacheStore {
         lingering.add(m);
       }
       if (m.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-        int offnr = 0, onnr = 0;
+        int offnr = 0, onnr = 0, suspnr = 0;
 
         for (SFileLocation fl : l) {
           if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
             onnr++;
           } else if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
             offnr++;
+          } else if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
+            suspnr++;
           }
         }
-        if ((m.getRep_nr() <= onnr && offnr > 0) ||
-            (onnr + offnr >= node_nr && offnr > 0)) {
+        // NOTE: logic is ->
+        // if online nr >= requested nr, we try to remove any offline/suspect SFLs,
+        // otherwise, if online + offline + suspect >= node_nr, try to remove offline SFLs
+        if ((m.getRep_nr() <= onnr && (offnr > 0 || suspnr > 0)) ||
+            (onnr + offnr + suspnr >= node_nr && offnr > 0)) {
           try {
             lingering.add(m);
           } catch (javax.jdo.JDOObjectNotFoundException e) {
@@ -1012,7 +1015,6 @@ public class CacheStore {
 		List<SFileLocation> sfll = new LinkedList<SFileLocation>();
 		int err = 0;
     try{
-      jedis = rf.getDefaultInstance();
       ScanResult<String> re = null;
       ScanParams sp = new ScanParams();
       sp.count(5000);

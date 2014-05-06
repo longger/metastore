@@ -22,7 +22,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -110,7 +109,6 @@ import org.apache.thrift.transport.TTransportException;
 
 import com.facebook.fb303.FacebookBase;
 import com.facebook.fb303.fb_status;
-import com.google.common.base.Strings;
 
 /*
  * 没缓存的对象，但是rpc里要得到的
@@ -121,7 +119,6 @@ import com.google.common.base.Strings;
 public class ThriftRPC extends FacebookBase implements
     org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface {
 
-  private final static ConcurrentHashMap<String, IMetaStoreClient> clients = new ConcurrentHashMap<String, IMetaStoreClient>();
   private final static String DEFAULT_USER_NAME = "_unauthed_user";
   private final static ThriftRPCInfo rpcInfo = new ThriftRPCInfo();
   private final HiveConf hiveConf = new HiveConf(this.getClass());
@@ -165,10 +162,7 @@ public class ThriftRPC extends FacebookBase implements
 
   private void init() throws IOException {
     if (!initialized) {
-      IMetaStoreClient client = null;
       try {
-        client = MsgProcessing.createMetaStoreClient();
-        clients.put(DEFAULT_USER_NAME, client);
         //每20秒打印一次rpcInfo基本信息
         schedule.scheduleAtFixedRate(new Runnable(){
           @Override
@@ -187,12 +181,12 @@ public class ThriftRPC extends FacebookBase implements
             try {
               rpcInfo.dumpToFile(path);
             } catch (IOException e) {
-              LOG.error("error in dump rpc info to file\n",e);
+              LOG.error("Error in dump rpc info to file\n", e);
             }
           }
         }, 1, 1, TimeUnit.MINUTES);
-      } catch (MetaException e) {
-        LOG.error("Can't init IMetaStoreClient", e);
+      } catch (Exception e) {
+        LOG.error("Init ThriftRPC server failed", e);
         throw new IOException(e.getMessage());
       }
       initialized = true;
@@ -264,39 +258,28 @@ public class ThriftRPC extends FacebookBase implements
     }
   }
 
-  private IMetaStoreClient __getCli() {
-    IMetaStoreClient cli = clients.get(this.getUserName());
-    if (cli == null) {
-      if (__do_reconnect()) {
-        cli = clients.get(this.getUserName());
-      }
-    }
-    return cli;
-  }
-
   private boolean __do_reconnect() {
     boolean success = false;
     HiveMetaStoreServerContext context = this.getServerContext();
 
-    if (this.getServerContext().isAuthenticated()) {
-      // 如果重连之前客户端没有修改过密码，则重新验证能成功，但是还存在潜在风险
-      // 移除和认证应该保持原子操作
-      clients.remove(context.getUserName());
+    try {
+      __cli.set(MsgProcessing.createMetaStoreClient());
+      if (__cli.get() != null) {
+        success = true;
+      }
+    } catch (MetaException e) {
+    }
+
+    if (success && this.getServerContext().isAuthenticated()) {
       try {
         success = this.authentication(context.getUserName(), context.getPassword());
         if (!success) {
-          // this means passwd changes, active shutdown now
+          // this means passwd changes or connection failed, active shutdown now
           this.shutdown();
         }
       } catch (NoSuchObjectException e) {
       } catch (MetaException e) {
       } catch (TException e) {
-      }
-    } else {
-      try {
-        clients.put(DEFAULT_USER_NAME, MsgProcessing.createMetaStoreClient());
-        success = true;
-      } catch (MetaException e) {
       }
     }
     return success;
@@ -319,6 +302,8 @@ public class ThriftRPC extends FacebookBase implements
       String methodName = method.getName();
       Object result = null;
       long startTime = System.nanoTime();
+      boolean isRetry = false;
+
       /*
        * 在客户端失效重连阶段会先从clients中移除失效的client，然后重新创建并认证新client
        * 如果移除旧client后认证新client前客户端调用rpc中使用client的方法可能会导致NullPointerException
@@ -326,38 +311,28 @@ public class ThriftRPC extends FacebookBase implements
        */
       while (true) {
         try {
-          IMetaStoreClient cli = __getCli();
-          if (cli != null) {
-            __cli.set(cli);
-            synchronized (cli) {
-              result = method.invoke(rpc, args);
-            }
-          } else {
-            rpc.shutdown();
-          }
+          result = method.invoke(rpc, args);
           rpcInfo.captureInfo(method.getName(), System.nanoTime() - startTime);
           return result;
-        }catch (UndeclaredThrowableException e) {
+        } catch (UndeclaredThrowableException e) {
           throw e.getCause();
         } catch (InvocationTargetException e) {
-          if ((e.getCause() instanceof TApplicationException) ||
+          if ((e.getCause() instanceof NullPointerException)) {
+            // this means we should do client connect
+            if (!isRetry) {
+              __do_reconnect();
+              isRetry = true;
+            } else {
+              throw e.getCause();
+            }
+          } else if ((e.getCause() instanceof TApplicationException) ||
               (e.getCause() instanceof TProtocolException) ||
               (e.getCause() instanceof TTransportException)) {
-         // 发生连接异常，自动重建连接
-            LOG.info("Some error occured when call method " + methodName + ", try reconnect");
-
-            if (__do_reconnect()) {
-              try {
-                // 用新连接重新执行客户端调用的方法一次，即重试，如果重试再次失败则抛出异常
-                result = method.invoke(rpc, args);
-                rpcInfo.captureInfo(method.getName(), System.nanoTime() - startTime);
-                return result;
-              } catch (Exception t) {
-                LOG.error(
-                    "I have tried my best to retry, but still cause some exceptions, please check program",
-                    t);
-                throw t.getCause();
-              }
+            // 发生连接异常，自动重建连接
+            if (!isRetry) {
+              LOG.error("Some error occured when call method " + methodName + ", try reconnect.");
+              __do_reconnect();
+              isRetry = true;
             } else {
               throw e.getCause();
             }
@@ -365,7 +340,6 @@ public class ThriftRPC extends FacebookBase implements
             throw e.getCause();
           }
         }
-
       }
     }
   }
@@ -415,7 +389,10 @@ public class ThriftRPC extends FacebookBase implements
       rs.shutdown();
     }
     schedule.shutdown();*/
-    LOG.info("Metastore shutdown complete.");
+    if (__cli.get() != null) {
+      __cli.get().close();
+    }
+    LOG.info("NewMS shutdown complete.");
   }
 
   @Override
@@ -562,14 +539,14 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public int add_subpartition_files(Subpartition subpart, List<SFile> files)
       throws TException {
-    return clients.get(this.getUserName())
+    return __cli.get()
         .add_subpartition_files(subpart, files);
   }
 
   @Override
   public boolean add_subpartition_index(Index index, Subpartition subpart)
       throws MetaException, AlreadyExistsException, TException {
-    return clients.get(this.getUserName())
+    return __cli.get()
         .add_subpartition_index(index, subpart);
   }
 
@@ -675,40 +652,19 @@ public class ThriftRPC extends FacebookBase implements
   public boolean authentication(String userName, String passwd)
       throws NoSuchObjectException, MetaException, TException {
     incrementCounter("user_authentication");
-    IMetaStoreClient client = MsgProcessing.createMetaStoreClient();
-    if (client != null && client.authentication(userName, passwd)) {
-      if (clients.get(userName) != null) {
-        client.close();
-        return true;
-      }
-      // 避免并发环境下多次设置serverContext中的值
-      if (clients.putIfAbsent(userName, client) == null) {
-        HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler
-            .getServerContext(msss.getSessionId());
-        if (serverContext != null) {
-          serverContext.setUserName(userName);
-          serverContext.setPassword(passwd);
-          serverContext.setAuthenticated(true);
-        }
-      } else {
-        client.close();
+
+    if (__cli.get().authentication(userName, passwd)) {
+      HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler
+          .getServerContext(msss.getSessionId());
+      if (serverContext != null) {
+        serverContext.setUserName(userName);
+        serverContext.setPassword(passwd);
+        serverContext.setAuthenticated(true);
       }
       return true;
     } else {
       return false;
     }
-  }
-
-  private String getPassword() {
-    return this.getServerContext().getPassword();
-  }
-
-  private String getUserName() {
-    final HiveMetaStoreServerContext context = this.getServerContext();
-    if (context == null || Strings.isNullOrEmpty(context.getUserName())) {
-      return DEFAULT_USER_NAME;
-    }
-    return context.getUserName();
   }
 
   private HiveMetaStoreServerContext getServerContext() {
@@ -789,7 +745,13 @@ public class ThriftRPC extends FacebookBase implements
             FOFailReason.INVALID_FILE);
       }
 
-      file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
+      // NOTE-XXX: check repnr here. If we can go at this line, we ONLY has one valid SFL here.
+      if (1 >= saved.getRep_nr()) {
+        file.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
+      } else {
+        file.setStore_status(MetaStoreConst.MFileStoreStatus.CLOSED);
+      }
+
       // keep repnr unchanged
       file.setRep_nr(saved.getRep_nr());
       rs.updateSFile(file, true);
@@ -981,25 +943,28 @@ public class ThriftRPC extends FacebookBase implements
       // this means we should select Best Available Node and Best Available Device;
       // FIXME: add FLSelector here, filter already used nodes, update will used nodes;
       try {
-        node_name = dm.findBestNode(flp);
-        if (node_name == null) {
-          throw new IOException("Folloing the FLP(" + flp
-              + "), we can't find any available node now.");
-        }
         if (db_name != null && table_name != null && values.size() == 3) {
           try {
             String l2keys[] = values.get(2).getValue().split("-");
             if (l2keys.length == 2) {
-              LOG.info("FLSelector will choose "
-                  + DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
-                      Long.parseLong(values.get(0).getValue()),
-                      Long.parseLong(l2keys[1])) + " for " + db_name + "." + table_name +
+              node_name = DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
+                  Long.parseLong(values.get(0).getValue()), Long.parseLong(l2keys[1]));
+              repnr = DiskManager.flselector.updateRepnr(db_name + "." + table_name, repnr);
+              LOG.info("FLSelector choose " + node_name +
+                  " for " + db_name + "." + table_name +
                   " L1Key=" + values.get(0).getValue() +
-                  " L2Key=" + l2keys[1] + ", vs " + node_name);
+                  " L2Key=" + l2keys[1] + ", repnr=" + repnr);
             }
-          } catch (NumberFormatException nfe) {
+          }
+          catch (NumberFormatException nfe) {
             LOG.error(nfe, nfe);
           }
+        }
+        if (node_name == null) {
+          node_name = dm.findBestNode(flp);
+        }
+        if (node_name == null) {
+          throw new IOException("Following the FLP(" + flp + "), we can't find any available node now.");
         }
       } catch (IOException e) {
         LOG.error(e, e);
@@ -1417,8 +1382,7 @@ public class ThriftRPC extends FacebookBase implements
 
   @Override
   public int del_node(String nodeName) throws MetaException, TException {
-    return (!isNullOrEmpty(nodeName) && clients.get(this.getUserName())
-        .del_node(nodeName)) ? 1 : 0;
+    return (!isNullOrEmpty(nodeName) && __cli.get().del_node(nodeName)) ? 1 : 0;
   }
 
   @Override
@@ -1437,9 +1401,7 @@ public class ThriftRPC extends FacebookBase implements
   public boolean deleteNodeAssignment(String nodeName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
     boolean expr = isNullOrEmpty(nodeName) || isNullOrEmpty(dbName);
-    return !expr
-        && clients.get(this.getUserName())
-            .deleteNodeAssignment(nodeName, dbName);
+    return !expr && __cli.get().deleteNodeAssignment(nodeName, dbName);
   }
 
   @Override
@@ -1459,7 +1421,7 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public boolean deleteRoleAssignment(String roleName, String dbName)
       throws MetaException, NoSuchObjectException, TException {
-    return clients.get(this.getUserName())
+    return __cli.get()
         .deleteRoleAssignment(roleName, dbName);
   }
 
@@ -1518,7 +1480,7 @@ public class ThriftRPC extends FacebookBase implements
       throws MetaException, NoSuchObjectException, TException {
     final boolean expr = isNullOrEmpty(userName) || isNullOrEmpty(dbName);
     return !expr
-        && clients.get(this.getUserName())
+        && __cli.get()
             .deleteUserAssignment(userName, dbName);
   }
 
@@ -1631,8 +1593,7 @@ public class ThriftRPC extends FacebookBase implements
   @Override
   public void drop_table(String dbName, String tableName, boolean ifDelData)
       throws NoSuchObjectException, MetaException, TException {
-    clients.get(this.getUserName())
-        .dropTable(dbName, tableName, ifDelData, true);
+    __cli.get().dropTable(dbName, tableName, ifDelData, true);
   }
 
   @Override
@@ -2057,7 +2018,9 @@ public class ThriftRPC extends FacebookBase implements
     switch (r.getStore_status()) {
     case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
     case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
-    	r.getLocations().clear();
+      if (r.getLocations() != null) {
+        r.getLocations().clear();
+      }
       break;
     default:
 //    	r.setLocations(rs.getSFileLocations(r.getFid()));
@@ -2271,7 +2234,7 @@ public class ThriftRPC extends FacebookBase implements
   public List<SFileRef> get_partition_index_files(Index index, Partition part)
       throws MetaException, TException {
     // return rs.getPartitionIndexFiles(index, part);
-    return clients.get(this.getUserName())
+    return __cli.get()
         .get_partition_index_files(index, part);
   }
 
@@ -3082,17 +3045,22 @@ public class ThriftRPC extends FacebookBase implements
     // reget the file now
     SFile stored_file = get_file_by_id(file.getFid());
 
-    if (stored_file.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-      throw new MetaException("online filelocation can only do on INCREATE file " + file.getFid() +
-          " STATE: " + stored_file.getStore_status());
+    try {
+      if (stored_file.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
+        throw new MetaException("online filelocation can only do on INCREATE file " + file.getFid() +
+            " STATE: " + stored_file.getStore_status());
+      }
+      if (stored_file.getLocationsSize() != 1) {
+        throw new MetaException("Invalid file location in SFile fid: " + stored_file.getFid());
+      }
+      SFileLocation sfl = stored_file.getLocations().get(0);
+      assert sfl != null;
+      sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
+      rs.updateSFileLocation(sfl);
+    } catch (MetaException e) {
+      LOG.error(e, e);
+      throw e;
     }
-    if (stored_file.getLocationsSize() != 1) {
-      throw new MetaException("Invalid file location in SFile fid: " + stored_file.getFid());
-    }
-    SFileLocation sfl = stored_file.getLocations().get(0);
-    assert sfl != null;
-    sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
-    rs.updateSFileLocation(sfl);
 
     return true;
   }
@@ -3145,32 +3113,37 @@ public class ThriftRPC extends FacebookBase implements
   public boolean reopen_file(long fid) throws FileOperationException, MetaException, TException {
     DMProfile.freopenR.incrementAndGet();
     startFunction("reopen_file ", "fid: " + fid);
-
-    SFile saved = rs.getSFile(fid);
     boolean success = false;
 
-    if (saved == null) {
-      throw new FileOperationException("Can not find SFile by FID " + fid,
-          FOFailReason.INVALID_FILE);
-    }
-    // check if this file is in REPLICATED state, otherwise, complain about that.
-    switch (saved.getStore_status()) {
-    case MetaStoreConst.MFileStoreStatus.INCREATE:
-      throw new FileOperationException("SFile " + fid + " has already been in INCREATE state.",
-          FOFailReason.INVALID_STATE);
-    case MetaStoreConst.MFileStoreStatus.CLOSED:
-      throw new FileOperationException("SFile " + fid + " is in CLOSE state, please wait.",
-          FOFailReason.INVALID_STATE);
-    case MetaStoreConst.MFileStoreStatus.REPLICATED:
-      // FIXME: seq reopenSFiles
-      synchronized (file_reopen_lock) {
-        success = rs.reopenSFile(saved);
+    try {
+      SFile saved = rs.getSFile(fid);
+
+      if (saved == null) {
+        throw new FileOperationException("Can not find SFile by FID " + fid,
+            FOFailReason.INVALID_FILE);
       }
-      break;
-    case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
-    case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
-      throw new FileOperationException("SFile " + fid + " is in RM-* state, reject all reopens.",
-          FOFailReason.INVALID_STATE);
+      // check if this file is in REPLICATED state, otherwise, complain about that.
+      switch (saved.getStore_status()) {
+      case MetaStoreConst.MFileStoreStatus.INCREATE:
+        throw new FileOperationException("SFile " + fid + " has already been in INCREATE state.",
+            FOFailReason.INVALID_STATE);
+      case MetaStoreConst.MFileStoreStatus.CLOSED:
+        throw new FileOperationException("SFile " + fid + " is in CLOSE state, please wait.",
+            FOFailReason.INVALID_STATE);
+      case MetaStoreConst.MFileStoreStatus.REPLICATED:
+        // FIXME: seq reopenSFiles
+        synchronized (file_reopen_lock) {
+          success = rs.reopenSFile(saved);
+        }
+        break;
+      case MetaStoreConst.MFileStoreStatus.RM_LOGICAL:
+      case MetaStoreConst.MFileStoreStatus.RM_PHYSICAL:
+        throw new FileOperationException("SFile " + fid + " is in RM-* state, reject all reopens.",
+            FOFailReason.INVALID_STATE);
+      }
+    } catch (FileOperationException e) {
+      LOG.error(e.getMessage());
+      throw e;
     }
     return success;
   }
@@ -3238,9 +3211,15 @@ public class ThriftRPC extends FacebookBase implements
           FOFailReason.INVALID_FILE);
     }
 
+    if (saved.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
+      LOG.info("Try to set REPLICATED to fid " + file.getFid() + " to physically deleted it.");
+      saved.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
+      saved = rs.updateSFile(saved);
+    }
+
     if (!(saved.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE ||
-        saved.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED || saved
-          .getStore_status() == MetaStoreConst.MFileStoreStatus.RM_LOGICAL)) {
+        saved.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED ||
+        saved.getStore_status() == MetaStoreConst.MFileStoreStatus.RM_LOGICAL)) {
       throw new FileOperationException(
           "File StoreStatus is not in INCREATE/REPLICATED/RM_LOGICAL.", FOFailReason.INVALID_STATE);
     }
@@ -3444,9 +3423,10 @@ public class ThriftRPC extends FacebookBase implements
     if(saved != null){
       startFunction("del_filelocation", ": FID " + saved.getFid() + " dev " + saved.getDevid() + " loc " + saved.getLocation());
       r = rs.delSFileLocation(sfl.getDevid(), sfl.getLocation());
-      if(r){
+      if (r) {
         dm.asyncDelSFL(saved);
       }
+      endFunction("del_filelocation", r, null);
     }
     return r;
   }
@@ -3455,6 +3435,7 @@ public class ThriftRPC extends FacebookBase implements
   public List<SFile> get_files_by_ids(List<Long> fids)
       throws FileOperationException, MetaException, TException {
     List<SFile> fl = new ArrayList<SFile>();
+
     if (fids.size() > 0) {
       for (Long fid : fids) {
         try {
@@ -3472,9 +3453,15 @@ public class ThriftRPC extends FacebookBase implements
   public boolean offlineDevicePhysically(String devid) throws MetaException, TException {
   	List<SFileLocation> sfls = rs.getSFileLocations(devid, System.currentTimeMillis(), 0);
     LOG.info("Offline Device " + devid + " physically, hit " + sfls.size() + " SFLs.");
+    boolean isSharedDevice = dm.isSharedDevice(devid);
+
     for (SFileLocation f : sfls) {
+      // NOTE: we have already delete the METADATA imediately, but we might leak on physical removals.
       boolean r = rs.delSFileLocation(devid, f.getLocation());
       if (r) {
+        if (isSharedDevice) {
+          f.setNode_name("");
+        }
         dm.asyncDelSFL(f);
       }
     }
@@ -3483,13 +3470,17 @@ public class ThriftRPC extends FacebookBase implements
 
   @Override
   public boolean flSelectorWatch(String table, int op) throws MetaException, TException {
-  	switch (op) {
+    int true_op = op & 0xff;
+
+  	switch (true_op) {
     case 0:
       return DiskManager.flselector.watched(table);
     case 1:
       return DiskManager.flselector.unWatched(table);
     case 2:
       return DiskManager.flselector.flushWatched(table);
+    case 3:
+      return DiskManager.flselector.repnrWatched(table, op >> 8);
     default:
       return false;
     }
@@ -3498,7 +3489,26 @@ public class ThriftRPC extends FacebookBase implements
 	@Override
 	public List<String> listDevsByNode(String nodeName) throws MetaException,
 			TException {
-		return rs.listDevsByNode(nodeName);
+		List<String> r = rs.listDevsByNode(nodeName);
+		Set<String> s = new TreeSet<String>();
+		s.addAll(r);
+		r.clear();
+
+		if (dm != null) {
+		  List<DeviceInfo> dis;
+		  try {
+		    dis = dm.findDevices(nodeName);
+		    if (dis != null) {
+		      for (DeviceInfo di : dis) {
+		        s.add(di.dev);
+		      }
+		    }
+		  } catch (IOException e) {
+		  }
+		}
+		r.addAll(s);
+
+		return r;
 	}
 
 	@Override
