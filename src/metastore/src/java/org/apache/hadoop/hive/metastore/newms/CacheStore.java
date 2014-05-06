@@ -158,7 +158,7 @@ public class CacheStore {
 	      		p.evalsha(sha, 1, new String[]{k, sfi.getFid() + ""});
 	      	}
 	      	// update index for filtertablefiles
-	      	if (sfi.getValues() != null && sfi.getValues().size() > 0) {
+	      	{
 	      		String k2 = generateFtlKey(sfi.getValues());
 	      		p.sadd(k2, sfi.getFid() + "");
 	      	}
@@ -1064,10 +1064,16 @@ public class CacheStore {
 
   private String generateFtlKey(List<SplitValue> value) {
     String p = "sf.ftf.";
-    if (value == null) {
-      return p;
+    if (value == null || value.size() == 0) {
+      return p+"none";
     }
-    return p + value.hashCode();
+    List<SplitValue> ls = new ArrayList<SplitValue>();
+    for(SplitValue v : value)
+    {
+    	if(v.getLevel() == 1)
+    		ls.add(v);
+    }
+    return p + ls.hashCode();
   }
 
   private String generateLfbdKey(String digest) {
