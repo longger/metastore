@@ -6,8 +6,10 @@ import static org.apache.commons.lang.StringUtils.join;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -87,6 +89,7 @@ import org.apache.hadoop.hive.metastore.api.SFileRef;
 import org.apache.hadoop.hive.metastore.api.SplitValue;
 import org.apache.hadoop.hive.metastore.api.Subpartition;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface;
 import org.apache.hadoop.hive.metastore.api.Type;
 import org.apache.hadoop.hive.metastore.api.UnknownDBException;
 import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
@@ -100,7 +103,10 @@ import org.apache.hadoop.hive.serde2.Deserializer;
 import org.apache.hadoop.hive.serde2.SerDeException;
 import org.apache.hadoop.hive.serde2.SerDeUtils;
 import org.apache.hadoop.util.StringUtils;
+import org.apache.thrift.TApplicationException;
 import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TProtocolException;
+import org.apache.thrift.transport.TTransportException;
 
 import com.facebook.fb303.FacebookBase;
 import com.facebook.fb303.fb_status;
@@ -121,10 +127,11 @@ public class ThriftRPC extends FacebookBase implements
   private final HiveConf hiveConf = new HiveConf(this.getClass());
   private final RawStoreImp rs;
   private IMetaStoreClient client;
+  private static boolean initialized = false;
 
   private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
   private static final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
-  private DiskManager dm;
+  private static DiskManager dm;
   Random rand = new Random();
   public static Long file_creation_lock = 0L;
   public static Long file_reopen_lock = 0L;
@@ -157,20 +164,38 @@ public class ThriftRPC extends FacebookBase implements
   };
 
   private void init() throws IOException {
-    IMetaStoreClient client = null;
-    try {
-      client = MsgProcessing.createMetaStoreClient();
-      clients.put(DEFAULT_USER_NAME, client);
-      //每20秒打印一次rpcInfo基本信息
-      schedule.scheduleAtFixedRate(new Runnable(){
-        @Override
-        public void run() {
-          LOG.info(rpcInfo);
-        }
-      }, 20, 20, TimeUnit.SECONDS);
-    } catch (MetaException e) {
-      LOG.error("Can't init IMetaStoreClient", e);
-      throw new IOException(e.getMessage());
+    if (!initialized) {
+      IMetaStoreClient client = null;
+      try {
+        client = MsgProcessing.createMetaStoreClient();
+        clients.put(DEFAULT_USER_NAME, client);
+        //每20秒打印一次rpcInfo基本信息
+        schedule.scheduleAtFixedRate(new Runnable(){
+          @Override
+          public void run() {
+            LOG.info(rpcInfo);
+          }
+        }, 20, 20, TimeUnit.SECONDS);
+
+        dm = new DiskManager(hiveConf, LOG, RsStatus.NEWMS);
+
+        //dump rpcInfo per minute
+        schedule.scheduleAtFixedRate(new Runnable() {
+          @Override
+          public void run() {
+            String path = hiveConf.getVar(HiveConf.ConfVars.NEWMS_RPC_INFO_FILENAME);
+            try {
+              rpcInfo.dumpToFile(path);
+            } catch (IOException e) {
+              LOG.error("error in dump rpc info to file\n",e);
+            }
+          }
+        }, 1, 1, TimeUnit.MINUTES);
+      } catch (MetaException e) {
+        LOG.error("Can't init IMetaStoreClient", e);
+        throw new IOException(e.getMessage());
+      }
+      initialized = true;
     }
   }
 
@@ -230,29 +255,12 @@ public class ThriftRPC extends FacebookBase implements
     init();
     rs = new RawStoreImp();
     try {
-      final HiveConf hc = new HiveConf(DiskManager.class);
-      dm = new DiskManager(hc, LOG, RsStatus.NEWMS);
       endFunctionListeners = MetaStoreUtils.getMetaStoreListeners(
-          MetaStoreEndFunctionListener.class, hc,
-          hc.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
-      //dump rpcInfo per minute
-      schedule.scheduleAtFixedRate(new Runnable() {
-        @Override
-        public void run() {
-          String path = hc.getVar(HiveConf.ConfVars.NEWMS_RPC_INFO_FILENAME);
-          try {
-            rpcInfo.dumpToFile(path);
-          } catch (IOException e) {
-            LOG.error("error in dump rpc info to file\n",e);
-          }
-        }
-    }, 1, 1, TimeUnit.MINUTES);
+          MetaStoreEndFunctionListener.class, hiveConf,
+          hiveConf.getVar(HiveConf.ConfVars.METASTORE_END_FUNCTION_LISTENERS));
     } catch (MetaException e) {
       LOG.error(e, e);
       throw new IOException(e.getMessage());
-    } catch (IOException e) {
-      LOG.error(e, e);
-      throw e;
     }
   }
 
@@ -301,16 +309,16 @@ public class ThriftRPC extends FacebookBase implements
       this.rpc = rpc;
     }
 
-    public ThriftRPC getRPC() {
-      return (ThriftRPC) Proxy.newProxyInstance(rpc.getClass().getClassLoader(), rpc.getClass()
-          .getInterfaces(), this);
+    public Iface getRPC() {
+      return (Iface) Proxy.newProxyInstance(ThriftRPC.class.getClassLoader(),
+          ThriftRPC.class.getInterfaces(), this);
     }
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
       String methodName = method.getName();
       Object result = null;
-      long startTime = System.currentTimeMillis();
+      long startTime = System.nanoTime();
       /*
        * 在客户端失效重连阶段会先从clients中移除失效的client，然后重新创建并认证新client
        * 如果移除旧client后认证新client前客户端调用rpc中使用client的方法可能会导致NullPointerException
@@ -327,39 +335,43 @@ public class ThriftRPC extends FacebookBase implements
           } else {
             rpc.shutdown();
           }
-          rpcInfo.captureInfo(method.getName(), System.currentTimeMillis() - startTime);
+          rpcInfo.captureInfo(method.getName(), System.nanoTime() - startTime);
           return result;
-        } catch (Exception e) {
-          if (e instanceof TException) {
-            // 发生连接异常，自动重建连接
+        }catch (UndeclaredThrowableException e) {
+          throw e.getCause();
+        } catch (InvocationTargetException e) {
+          if ((e.getCause() instanceof TApplicationException) ||
+              (e.getCause() instanceof TProtocolException) ||
+              (e.getCause() instanceof TTransportException)) {
+         // 发生连接异常，自动重建连接
             LOG.info("Some error occured when call method " + methodName + ", try reconnect");
 
             if (__do_reconnect()) {
               try {
                 // 用新连接重新执行客户端调用的方法一次，即重试，如果重试再次失败则抛出异常
                 result = method.invoke(rpc, args);
-                rpcInfo.captureInfo(method.getName(), System.currentTimeMillis() - startTime);
+                rpcInfo.captureInfo(method.getName(), System.nanoTime() - startTime);
                 return result;
               } catch (Exception t) {
                 LOG.error(
                     "I have tried my best to retry, but still cause some exceptions, please check program",
                     t);
-                throw t;
+                throw t.getCause();
               }
             } else {
-              throw e;
+              throw e.getCause();
             }
           } else {
-            // 其他异常，直接抛出
-            throw e;
+            throw e.getCause();
           }
-        }
+        } 
+        
       }
     }
   }
 
-  public ThriftRPC newThriftRPC() throws IOException {
-    return new _ProxyThriftRPC(new ThriftRPC()).getRPC();
+  public Iface newProxy() throws IOException {
+    return new _ProxyThriftRPC(this).getRPC();
   }
 
   @Override

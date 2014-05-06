@@ -28,14 +28,21 @@ public class ThriftRPCInfo {
   private static final ConcurrentHashMap<String, _Info> info = new ConcurrentHashMap<String, ThriftRPCInfo._Info>();
   private static final AtomicLong totalTime = new AtomicLong();
 
+  private Comparator<Entry<String, _Info>> comp = new Comparator<Entry<String, _Info>>() {
+    @Override
+    public int compare(Entry<String, _Info> o1, Entry<String, _Info> o2) {
+      return (o2.getValue().avg() - o1.getValue().avg()) > 0?1:-1;
+    }
+  };
   // 初始化时为ThriftRPC类中所有的公有方法初始一个_Info
   static {
     Class<ThriftRPC> clazz = ThriftRPC.class;
     Method[] methods = clazz.getMethods();
+    //重载的多个方法有相同的方法名
     for (Method m : methods) {
-      if (m.isAccessible()) {
+//      if (m.isAccessible()) {
         info.put(m.getName(), new _Info());
-      }
+//      }
     }
   }
 
@@ -50,16 +57,12 @@ public class ThriftRPCInfo {
       throw new IOException("Invalid path");
     }
     File file = new File(path);
+   	file.createNewFile();
     if (!file.isFile()) {
       throw new IOException(String.format("'%s' is not a file", path));
     }
     List<Entry<String,_Info>> entries = Lists.newArrayList(info.entrySet());
-    Collections.sort(entries, new Comparator<Entry<String, _Info>>() {
-      @Override
-      public int compare(Entry<String, _Info> o1, Entry<String, _Info> o2) {
-        return (int) (o1.getValue().avg() - o2.getValue().avg());
-      }
-    });
+    Collections.sort(entries, comp);
     StringBuilder sb = new StringBuilder();
     sb.append(new Date());
     //sb.append(String.format("Name\t\tMax\t\tMin\t\tAvg\t\t\n"));
@@ -74,12 +77,7 @@ public class ThriftRPCInfo {
   @Override
   public String toString() {
     List<Entry<String,_Info>> entries = Lists.newArrayList(info.entrySet());
-    Collections.sort(entries, new Comparator<Entry<String, _Info>>() {
-      @Override
-      public int compare(Entry<String, _Info> o1, Entry<String, _Info> o2) {
-        return (int) (o1.getValue().avg() - o2.getValue().avg());
-      }
-    });
+    Collections.sort(entries, comp);
     // 统计信息排除没有被调用过的方法
     int last;
     for (last = entries.size()- 1; last >= 0; last--) {
@@ -87,6 +85,8 @@ public class ThriftRPCInfo {
         break;
       }
     }
+    if(last < 0)
+    	return "no rpc called";
     StringBuilder sb = new StringBuilder();
     sb.append(String.format(FORMAT,
         CURRENT_DATE, TOTAL_COUNT.get(),
@@ -108,7 +108,7 @@ public class ThriftRPCInfo {
 
   private static class _Info implements Comparable<_Info> {
     private final AtomicLong count = new AtomicLong();
-    private Double avg;
+    private Double avg = new Double(0.0);
     private Long max = Long.MIN_VALUE;
     private Long min = Long.MAX_VALUE;
 

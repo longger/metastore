@@ -43,7 +43,7 @@ public class RedisFactory {
 	public synchronized Jedis getDefaultInstance() {
 		switch (conf.getRedisMode()) {
 		case STANDALONE:
-
+		{
 			if (ri == null) {
 				ri = conf.getRedisHP();
 				if (ri != null) {
@@ -53,6 +53,8 @@ public class RedisFactory {
 			if (jp != null) {
         return jp.getResource();
       }
+			break;
+		}
 		case SENTINEL:
 		{
 			Jedis r;

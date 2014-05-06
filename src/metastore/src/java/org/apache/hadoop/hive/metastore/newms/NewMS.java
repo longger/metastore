@@ -14,6 +14,7 @@ import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
 import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
+import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -100,7 +101,7 @@ public class NewMS {
         TServerTransport serverTransport = tcpKeepAlive ?
             new TServerSocketKeepAlive(port) : new TServerSocket(port);
 			  //TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
-			  TProcessor tprocessor = new TSetIpAddressProcessor<ThriftRPC>(new ThriftRPC());
+			  TProcessor tprocessor = new TSetIpAddressProcessor<Iface>(new ThriftRPC().newProxy());
 
 			  TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(serverTransport)
 			  .transportFactory(new TTransportFactory())
@@ -121,7 +122,6 @@ public class NewMS {
 			  HiveMetaStoreServerEventHandler eventHandler = new HiveMetaStoreServerEventHandler();
 			  server.setServerEventHandler(eventHandler);
 
-			  server.serve();
 			} catch (Throwable x) {
 			  x.printStackTrace();
 			  LOG.error(StringUtils.stringifyException(x));
@@ -176,6 +176,7 @@ public class NewMS {
             RawStoreImp.setFID(Long.parseLong(fid));
           }
 				}
+    		LOG.info("NewMS restore FID to " + id);
     	}
     } catch (JedisException e) {
     	LOG.warn(e,e);
@@ -223,13 +224,23 @@ public class NewMS {
 				@Override
 				public void run() {
 					try {
-						HiveMetaStore.main(new String[]{});
+						String uri = conf.getVar(ConfVars.METASTOREURIS);
+						uri = uri.substring(uri.lastIndexOf(":") + 1);
+						HiveMetaStore.main(new String[]{uri});
 					} catch (Throwable e) {
 						LOG.error(e, e);
 					}
 				}
 	    });
 	    t.start();
+	    LOG.info("Waiting for OldMS starting ...");
+	    synchronized (HiveMetaStore.isStarted) {
+	      try {
+	        HiveMetaStore.isStarted.wait();
+	      } catch (InterruptedException e) {
+	      }
+	    }
+	    LOG.info("OldMS service is started, starting NewMS ...");
     }
 
     Timer timer = new Timer("FidStorer",true);

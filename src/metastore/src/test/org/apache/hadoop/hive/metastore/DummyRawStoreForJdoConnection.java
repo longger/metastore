@@ -1274,6 +1274,12 @@ public class DummyRawStoreForJdoConnection implements RawStore {
     return null;
   }
 
+  @Override
+  public long countFiles() throws MetaException {
+    // TODO Auto-generated method stub
+    return 0;
+  }
+
 }
 
 

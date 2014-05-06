@@ -699,7 +699,7 @@ public class CacheStore {
           SFile f = null;
           try {
             f = (SFile) readObject(ObjectType.SFILE, id);
-            if (f != null) {
+            if (f != null && f.getTableName().equals(tabName) && f.getDbName().equals(dbName) && f.getValues().equals(values)) {
               rls.add(f);
             }
           } catch (Exception e) {
@@ -1030,12 +1030,13 @@ public class CacheStore {
 							//it means sflDevKey in redis is inconsistent, bad....
 							LOG.warn("key("+en+") read from SflDevKey("+generateSflDevKey(devid)+") refers to a non-exist SFileLocation, bad...");
 						}
-						else if(sfl.getUpdate_time() + timeout < curts)
-	  		    	 sfll.add(sfl);
+						else if(sfl.getUpdate_time() + timeout < curts) {
+              sfll.add(sfl);
+            }
 					} catch (Exception e) {
 						LOG.error(e,e);
 					}
-  		     
+
   			}
   		}while(!cursor.equals("0"));
     }catch (JedisException e) {
@@ -1050,7 +1051,7 @@ public class CacheStore {
     }
     return sfll;
 	}
-	
+
   private String generateLtfKey(String tablename, String dbname) {
     String p = "sf.ltf.";
     if (tablename == null || dbname == null) {
@@ -1109,7 +1110,7 @@ public class CacheStore {
       }
     }
   }
-  
+
   public void removeSflStatValue(int status, String value) throws IOException, JedisException
   {
   	String key = this.generateSflStatKey(status);
@@ -1129,7 +1130,7 @@ public class CacheStore {
       }
     }
   }
-  
+
   public void removeLfbdValue(String digest, String value) throws IOException, JedisException
   {
   	String key = this.generateLfbdKey(digest);
@@ -1157,6 +1158,32 @@ public class CacheStore {
     return rf;
   }
 
+  public long getCounts(ObjectType.TypeDesc key) throws JedisException, IOException {
+    long nr = 0;
+
+    switch (key.getId()) {
+    case SFILE: {
+      Jedis jedis = refreshJedis();
+      int err = 0;
+
+      try {
+        nr = jedis.hlen(key.getName());
+      } catch (JedisException e) {
+        err = -1;
+        throw e;
+      } finally {
+        if (err < 0) {
+          RedisFactory.putBrokenInstance(jedis);
+        } else {
+          RedisFactory.putInstance(jedis);
+        }
+      }
+      break;
+    }
+    default:;
+    }
+    return nr;
+  }
 
   public static ConcurrentHashMap<String, PrivilegeBag> getPrivilegeBagHm() {
     return privilegeBagHm;
