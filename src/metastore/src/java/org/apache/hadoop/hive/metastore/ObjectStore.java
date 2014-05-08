@@ -1793,7 +1793,7 @@ public class ObjectStore implements RawStore, Configurable {
           dbName = mfloc.getFile().getTable().getDatabase().getName();
         }
       } else {
-        throw new InvalidObjectException("FID" + location.getFid() + " create Loc " + location.getLocation() + " failed.");
+        throw new InvalidObjectException("FID " + location.getFid() + " create Loc " + location.getLocation() + " failed.");
       }
       commited = commitTransaction();
     } finally {

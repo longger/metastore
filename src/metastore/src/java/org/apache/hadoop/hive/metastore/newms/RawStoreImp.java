@@ -217,37 +217,39 @@ public class RawStoreImp implements RawStore {
 			throws InvalidObjectException, MetaException {
 	  try {
 	    boolean doCreate = false;
-	    Device de  = (Device) cs.readObject(ObjectType.DEVICE, di.dev);
-	    if(de == null){
+	    Device de = (Device) cs.readObject(ObjectType.DEVICE, di.dev);
+	    if (de == null) {
 	      Node n = getNode(node.getNode_name());
-	      if(n == null){
+	      if (n == null) {
 	        throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
 	      }
 
-	      if(di.mp == null){
+	      if (di.mp == null) {
 	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.SUSPECT, ng.getNode_group_name());
-	      }else{
+	      } else {
 	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.ONLINE, ng.getNode_group_name());
 	      }
 	      doCreate = true;
 	    } else{
-	      if( di.mp != null && de.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT){
+	      if (di.mp != null && de.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT) {
 	        de.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
 	      }
-	      if(!de.getNode_name().equals(node.getNode_name()) &&
+	      if (!de.getNode_name().equals(node.getNode_name()) &&
             de.getProp() == MetaStoreConst.MDeviceProp.ALONE){
 	        Node n = getNode(node.getNode_name());
-	        if(n == null){
+	        if (n == null) {
 	          throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
 	        }
 	        de.setNode_name(node.getNode_name());
 	        doCreate = true;
 	      }
-	      if(doCreate){
+	      if (doCreate) {
 	        cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
 	      }
 	    }
-	   } catch (Exception e) {
+	  } catch (InvalidObjectException e) {
+	    throw e;
+	  } catch (Exception e) {
 	     LOG.error(e,e);
 	     throw new MetaException(e.getMessage());
     }
@@ -1505,16 +1507,18 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public GlobalSchema getSchema(String schema_name)
 			throws NoSuchObjectException, MetaException {
+	  GlobalSchema gs = null;
+
 		try {
-			GlobalSchema gs = (GlobalSchema) cs.readObject(ObjectType.GLOBALSCHEMA, schema_name);
-			if(gs == null) {
-        throw new NoSuchObjectException("Can not find globalschema :"+schema_name);
-      }
-			return gs;
+			 gs = (GlobalSchema) cs.readObject(ObjectType.GLOBALSCHEMA, schema_name);
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
+		if (gs == null) {
+		  throw new NoSuchObjectException("Can not find globalschema :"+schema_name);
+		}
+		return gs;
 	}
 
 	@Override
