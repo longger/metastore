@@ -205,8 +205,10 @@ public class DiskManager {
             r += "Table '" + e.getKey() + "' -> {\n";
             r += "\trepnr=" + e.getValue().repnr + ", ";
             r += "l1Key=" + e.getValue().l1Key + ", l2KeyMax?=" + e.getValue().l2KeyMax + "\n";
-            r += "\t" + e.getValue().distribution + "\n";
-            r += "\t" + e.getValue().statis + "\n";
+            synchronized (e.getValue()) {
+              r += "\t" + e.getValue().distribution + "\n";
+              r += "\t" + e.getValue().statis + "\n";
+            }
             r += "}\n";
           }
         }
@@ -1666,8 +1668,9 @@ public class DiskManager {
             }
             for (SFileLocation fl : s) {
               synchronized (trs) {
+                // BUG-XXX: space leaking? we should trigger a delete to dservice; otherwise enable VERIFY to auto clean the dangling dirs.
+                //asyncDelSFL(fl);
                 try {
-                  // BUG-XXX: space leaking? we should trigger a delete to dservice; otherwise enable VERIFY to auto clean the dangling dirs.
                   trs.delSFileLocation(fl.getDevid(), fl.getLocation());
                 } catch (MetaException e) {
                   LOG.error(e, e);
@@ -2215,7 +2218,11 @@ public class DiskManager {
             synchronized (rs_s1) {
               // automatically create device here!
               // NOTE-XXX: Every 30+ seconds, we have to get up to 280 devices.
-              Device d = rs_s1.getDevice(di.dev);
+              Device d = null;
+              try {
+                 d = rs_s1.getDevice(di.dev);
+              } catch (NoSuchObjectException e) {
+              }
               if (d == null ||
                   (d.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT && di.mp != null) ||
                   (!d.getNode_name().equals(node.getNode_name()) && d.getProp() == MetaStoreConst.MDeviceProp.ALONE)) {
@@ -3177,6 +3184,7 @@ public class DiskManager {
     }
 
     // this is user provided SFL, should check on node_name
+    // Caller must make sure that this SFL will NEVER be used again (e.g. not used in reopen)
     public void asyncDelSFL(SFileLocation sfl) {
       synchronized (ndmap) {
         if (sfl.getNode_name().equals("")) {
@@ -4140,21 +4148,23 @@ public class DiskManager {
                             toDel.setLocation(args[2]);
                             throw new MetaException("Can not find SFileLocation " + args[0] + "," + args[1] + "," + args[2]);
                           }
-                          SFile file = rs.getSFile(newsfl.getFid());
-                          if (file != null) {
-                            if (file.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
-                              LOG.warn("Somebody reopen the file " + file.getFid() + " and we do replicate on it, so ignore this replicate and delete it:(");
-                              toDel = newsfl;
+                          synchronized (MetaStoreConst.file_reopen_lock) {
+                            SFile file = rs.getSFile(newsfl.getFid());
+                            if (file != null) {
+                              if (file.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+                                LOG.warn("Somebody reopen the file " + file.getFid() + " and we do replicate on it, so ignore this replicate and delete it:(");
+                                toDel = newsfl;
+                              } else {
+                                toCheckRep.add(file);
+                                newsfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
+                                // BUG-XXX: We should check the digest here, and compare it with file.getDigest().
+                                newsfl.setDigest(args[3]);
+                                rs.updateSFileLocation(newsfl);
+                              }
                             } else {
-                              toCheckRep.add(file);
-                              newsfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
-                              // BUG-XXX: We should check the digest here, and compare it with file.getDigest().
-                              newsfl.setDigest(args[3]);
-                              rs.updateSFileLocation(newsfl);
+                              LOG.warn("SFL " + newsfl.getDevid() + ":" + newsfl.getLocation() + " -> FID " + newsfl.getFid() + " nonexist, delete it.");
+                              toDel = newsfl;
                             }
-                          } else {
-                            LOG.warn("SFL " + newsfl.getDevid() + ":" + newsfl.getLocation() + " -> FID " + newsfl.getFid() + " nonexist, delete it.");
-                            toDel = newsfl;
                           }
                         }
                       } catch (MetaException e) {

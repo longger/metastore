@@ -78,14 +78,16 @@ public class ThriftRPCInfo {
     sb.append(new Date());
     sb.append("TS\tName\t\tNr\t\tAvg\t\tMax\t\tMin\t\t\n");
     for (Entry<String, _Info> e : entries) {
-      sb.append(String.format("%d\t%-30s:\tnr= %10d\tavg= %.2f\tmax= %s\tmin= %s\n",
-          System.currentTimeMillis() / 1000,
-          e.getKey(),
-          e.getValue().count.get(),
-          e.getValue().avg() / 1000.0,
-          (e.getValue().getMax() == Long.MIN_VALUE ? "MIN" : String.format("%.2f", (e.getValue().getMax() / 1000.0))),
-          (e.getValue().getMin() == Long.MAX_VALUE ? "MAX" : String.format("%.2f", (e.getValue().getMin() / 1000.0))))
-          );
+      if (e.getValue().count.get() > 0) {
+        sb.append(String.format("%d\t%-30s:\tnr= %10d\tavg= %.2f\tmax= %s\tmin= %s\n",
+            System.currentTimeMillis() / 1000,
+            e.getKey(),
+            e.getValue().count.get(),
+            e.getValue().avg() / 1000.0,
+            (e.getValue().getMax() == Long.MIN_VALUE ? "MIN" : String.format("%.2f", (e.getValue().getMax() / 1000.0))),
+            (e.getValue().getMin() == Long.MAX_VALUE ? "MAX" : String.format("%.2f", (e.getValue().getMin() / 1000.0))))
+            );
+      }
     }
     // write sb to filep
     FileWriter fw = null;

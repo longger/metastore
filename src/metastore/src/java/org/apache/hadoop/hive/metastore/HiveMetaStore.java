@@ -214,7 +214,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
   public static Random rand = new Random();
 
   public static Long file_creation_lock = 0L;
-  public static Long file_reopen_lock = 0L;
 
   public static class HMSHandler extends FacebookBase implements
       IHMSHandler {
@@ -6966,7 +6965,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           throw new FileOperationException("SFile " + fid + " is in CLOSE state, please wait.", FOFailReason.INVALID_STATE);
         case MetaStoreConst.MFileStoreStatus.REPLICATED:
           // FIXME: seq reopenSFiles
-          synchronized (file_reopen_lock) {
+          synchronized (MetaStoreConst.file_reopen_lock) {
             success = getMS().reopenSFile(saved);
           }
           break;
@@ -7264,17 +7263,19 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         conf.set((String) item.getKey(), (String) item.getValue());
       }
 
-      // Add shutdown hook.
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        @Override
-        public void run() {
-          String shutdownMsg = "Shutting down hive metastore.";
-          HMSHandler.LOG.info(shutdownMsg);
-          if (isCliVerbose) {
-            System.err.println(shutdownMsg);
+      // Add shutdown hook only if in standalone mode.
+      if (!conf.getBoolVar(HiveConf.ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+          @Override
+          public void run() {
+            String shutdownMsg = "Shutting down hive metastore.";
+            HMSHandler.LOG.info(shutdownMsg);
+            if (isCliVerbose) {
+              System.err.println(shutdownMsg);
+            }
           }
-        }
-      });
+        });
+      }
 
       if (!conf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION) && !conf.getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
         dm = new DiskManager(new HiveConf(DiskManager.class), HMSHandler.LOG);
@@ -7347,7 +7348,12 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       connect_to_top_attribution(conf);
 
       // generate this msuri
-      HMSHandler.msUri = "thrift://" + InetAddress.getLocalHost().getHostName() + ":" + port;
+      // BUG-XXX: if we are in OldMS with NewMS mode, update msUri
+      if (!conf.getBoolVar(HiveConf.ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
+        HMSHandler.msUri = "thrift://" + InetAddress.getLocalHost().getHostName() + ":" + port;
+      } else {
+        HMSHandler.msUri = "thrift://" + InetAddress.getLocalHost().getHostName() + ":" + conf.getVar(ConfVars.NEWMS_RPC_PORT);
+      }
 
       // Server will create new threads up to max as necessary. After an idle
       // period, it will destory threads to keep the number of threads in the

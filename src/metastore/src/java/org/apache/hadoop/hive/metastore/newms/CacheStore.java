@@ -697,8 +697,26 @@ public class CacheStore {
           SFile f = null;
           try {
             f = (SFile) readObject(ObjectType.SFILE, id);
-            if (f != null && f.getTableName().equals(tabName) && f.getDbName().equals(dbName) && f.getValues().equals(values)) {
-              rls.add(f);
+            if (f != null) {
+              if (f.getTableName() != null && f.getDbName() != null) {
+                if (f.getTableName().equals(tabName) && f.getDbName().equals(dbName)) {
+                  if (f.getValues() != null && values != null && f.getValues().containsAll(values)) {
+                    rls.add(f);
+                  } else if (f.getValues() != null && f.getValuesSize() == 0) {
+                    if (values == null || values.size() == 0) {
+                      rls.add(f);
+                    }
+                  } else if (values != null && values.size() == 0) {
+                    if (f.getValues() == null || f.getValuesSize() == 0) {
+                      rls.add(f);
+                    }
+                  } else if (values == null && f.getValues() == null) {
+                    rls.add(f);
+                  }
+                }
+              } else {
+                rls.add(f);
+              }
             }
           } catch (Exception e) {
             LOG.error(e,e);
@@ -1065,13 +1083,13 @@ public class CacheStore {
   private String generateFtlKey(List<SplitValue> value) {
     String p = "sf.ftf.";
     if (value == null || value.size() == 0) {
-      return p+"none";
+      return p + "none";
     }
     List<SplitValue> ls = new ArrayList<SplitValue>();
-    for(SplitValue v : value)
-    {
-    	if(v.getLevel() == 1)
-    		ls.add(v);
+    for (SplitValue v : value) {
+    	if (v.getLevel() == 1) {
+        ls.add(v);
+      }
     }
     return p + ls.hashCode();
   }

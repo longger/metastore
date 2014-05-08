@@ -1735,24 +1735,25 @@ public class ObjectStore implements RawStore, Configurable {
       return null;
     }
   }
-  
+
   /**
    * 与createfile方法功能基本一致，区别在于不会重新设置参数的fid，不发消息
    * @param file
-   * @throws InvalidObjectException 
+   * @throws InvalidObjectException
    */
   public boolean persistFile(SFile file) throws InvalidObjectException
   {
   	boolean commited = false;
   	MFile f = getMFile(file.getFid());
-  	if(f != null)
-  		throw new InvalidObjectException("file(fid="+file.getFid()+") already exists.");
+  	if(f != null) {
+      throw new InvalidObjectException("file(fid="+file.getFid()+") already exists.");
+    }
     try {
       openTransaction();
       MFile mfile = convertToMFile(file);
       pm.makePersistent(mfile);
       commited = commitTransaction();
-      
+
       HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", mfile.getFid());
       old_params.put("db_name", file.getDbName());
@@ -2112,7 +2113,7 @@ public class ObjectStore implements RawStore, Configurable {
       }
     }
   }
-  private void deleteBusiTypeCol(MBusiTypeColumn mbc) 
+  private void deleteBusiTypeCol(MBusiTypeColumn mbc)
   {
   	boolean commited = false;
   	MTable mtbl = mbc.getTable();
@@ -2135,7 +2136,7 @@ public class ObjectStore implements RawStore, Configurable {
       }
     }
   }
-  private void insertBusiTypeCol(MBusiTypeColumn mbc) 
+  private void insertBusiTypeCol(MBusiTypeColumn mbc)
   {
   	boolean commited = false;
   	MTable mtbl = mbc.getTable();
@@ -2603,8 +2604,10 @@ public class ObjectStore implements RawStore, Configurable {
               if (i != idx) {
                 MFileLocation x = mfl.get(i);
                 // mark it as OFFLINE
-                x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-                pm.makePersistent(x);
+                //x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+                //pm.makePersistent(x);
+                // BUG-XXX: delete the SFL, cause SFL not found exception for incomming REP_DONE
+                pm.deletePersistent(x);
                 toOffline.add(x);
               }
             }
@@ -5014,7 +5017,7 @@ public class ObjectStore implements RawStore, Configurable {
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
       }
-      
+
       //alter comment
       {
       	 List<MFieldSchema> oldCols = new ArrayList<MFieldSchema>();
@@ -5038,13 +5041,13 @@ public class ObjectStore implements RawStore, Configurable {
         			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
         			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
 							 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, mf.getName()));
-        			 
+
         		 }
         	 }
          }
          oldCols.clear();
          oldCols.addAll( oldt.getSd().getCD().getCols());
-         
+
          newCols.removeAll(oldCols);
          for(MFieldSchema mf : newCols)		//add col, insert busitype
          {
@@ -5071,14 +5074,14 @@ public class ObjectStore implements RawStore, Configurable {
          }
          newCols.clear();
          newCols.addAll(newt.getSd().getCD().getCols());
-        
-         
+
+
          oldCols.retainAll(newCols);			//留下的是两者的交集
          newCols.retainAll(oldCols);
          for(MFieldSchema omf : oldCols)
          {
         	 for(MFieldSchema nmf : newCols)
-        	 { 
+        	 {
         		 if(omf.equals(nmf))
         		 {
         			 if(nmf.getComment() == null && omf.getComment() == null)
@@ -5123,7 +5126,7 @@ public class ObjectStore implements RawStore, Configurable {
               			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
               			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
 										 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
-              			 
+
               		 }
               	 }
         			 }
@@ -5157,14 +5160,14 @@ public class ObjectStore implements RawStore, Configurable {
 	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
 	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
 											 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, omf.getName()));
-      	        	 
+
         					 }
         				 }
         			 }
-        			 
+
         		 }
         	 }
-        	 
+
          }
       }
     //MSG_ALT_TALBE_PARTITIONING

@@ -579,14 +579,23 @@ public class RawStoreImp implements RawStore {
 	public SFileLocation updateSFileLocation(SFileLocation newsfl) throws MetaException {
 		boolean changed = false;
 		try {
-			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
+			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION,
+			    SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
 			if (sfl == null) {
         throw new MetaException("Invalid SFileLocation provided");
       }
 			//防止缓存中的sfile的location与更新之后的sfl不一致。。。。
 			// FIXME 这样手动维护sfile与sfilelocation的关系很麻烦，很容易出错。。。
 			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
-			sf.getLocations().remove(sfl);
+			if (sf.getLocations() != null) {
+			  for (int i = 0; i < sf.getLocationsSize(); i++) {
+			    if (sfl.getDevid().equals(sf.getLocations().get(i).getDevid()) &&
+			        sfl.getLocation().equals(sf.getLocations().get(i).getLocation())) {
+			      sf.getLocations().remove(i);
+			      break;
+			    }
+			  }
+			}
 
 			sfl.setUpdate_time(System.currentTimeMillis());
 			if (sfl.getVisit_status() != newsfl.getVisit_status()) {
@@ -646,7 +655,15 @@ public class RawStoreImp implements RawStore {
 			if (sf == null) {
         throw new MetaException("No sfile found by id: " + sfl.getFid());
       }
-			sf.getLocations().remove(sfl);
+			if (sf.getLocations() != null) {
+			  for (int i = 0; i < sf.getLocationsSize(); i++) {
+			    if (sfl.getDevid().equals(sf.getLocations().get(i).getDevid()) &&
+			        sfl.getLocation().equals(sf.getLocations().get(i).getLocation())) {
+			      sf.getLocations().remove(i);
+			      break;
+			    }
+			  }
+			}
 			cs.writeObject(ObjectType.SFILE, sf.getFid() + "", sf);
 			cs.removeObject(ObjectType.SFILELOCATION, sflkey);
 			success = true;
@@ -781,12 +798,11 @@ public class RawStoreImp implements RawStore {
 			throws MetaException {
 		Iterator<String> iter = CacheStore.getTableHm().keySet().iterator();
 		List<String> tn = new LinkedList<String>();
-		while(iter.hasNext()){
+		while (iter.hasNext()) {
 			String key = iter.next();
-			if(key.startsWith(dbName))
-			{
+			if (key.startsWith(dbName)) {
 				String tabname = key.split("\\.")[1];
-				if(tabname.matches(pattern)) {
+				if (tabname.matches(pattern)) {
           tn.add(tabname);
         }
 			}
@@ -832,31 +848,26 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<String> listTableNamesByFilter(String dbName, String filter,
 			short max_tables) throws MetaException, UnknownDBException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new MetaException("Please use getAllTables and do filtering by yourself.");
 	}
 
 	@Override
 	public List<String> listPartitionNames(String db_name, String tbl_name,
 			short max_parts) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		return new ArrayList<String>();
 	}
 
 	@Override
 	public List<String> listPartitionNamesByFilter(String db_name,
 			String tbl_name, String filter, short max_parts)
 			throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new MetaException("Please use listPartitionNames and do filtering by yourself.");
 	}
 
 	@Override
 	public void alterPartition(String db_name, String tbl_name,
 			String partName, List<String> part_vals, Partition new_part)
 			throws InvalidObjectException, MetaException {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
@@ -864,14 +875,11 @@ public class RawStoreImp implements RawStore {
 			List<String> partNames, List<List<String>> part_vals_list,
 			List<Partition> new_parts) throws InvalidObjectException,
 			MetaException {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
 	public boolean addIndex(Index index) throws InvalidObjectException,
 			MetaException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -890,7 +898,6 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public boolean dropIndex(String dbName, String origTableName,
 			String indexName) throws MetaException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -904,7 +911,6 @@ public class RawStoreImp implements RawStore {
 			if(en.getKey().startsWith(dbName+"."+origTableName+".")) {
         ins.add(en.getValue());
       }
-
 		}
 		return ins;
 	}
@@ -918,7 +924,6 @@ public class RawStoreImp implements RawStore {
 			if(en.getKey().startsWith(dbName+"."+origTableName+".")) {
         ins.add(en.getValue().getIndexName());
       }
-
 		}
 		return ins;
 	}
@@ -926,16 +931,13 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public void alterIndex(String dbname, String baseTblName, String name,
 			Index newIndex) throws InvalidObjectException, MetaException {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
 	public List<Partition> getPartitionsByFilter(String dbName, String tblName,
 			String filter, short maxParts) throws MetaException,
 			NoSuchObjectException {
-		// TODO Auto-generated method stub
-		return null;
+	  throw new MetaException("Please use listPartitionNames and do filtering by yourself.");
 	}
 
 	@Override
@@ -966,14 +968,12 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public boolean addRole(String rowName, String ownerName)
 			throws InvalidObjectException, MetaException, NoSuchObjectException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public boolean removeRole(String roleName) throws MetaException,
 			NoSuchObjectException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -982,7 +982,6 @@ public class RawStoreImp implements RawStore {
 			PrincipalType principalType, String grantor,
 			PrincipalType grantorType, boolean grantOption)
 			throws MetaException, NoSuchObjectException, InvalidObjectException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -990,7 +989,6 @@ public class RawStoreImp implements RawStore {
 	public boolean revokeRole(Role role, String userName,
 			PrincipalType principalType) throws MetaException,
 			NoSuchObjectException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -1423,16 +1421,18 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public Device getDevice(String devid) throws MetaException,	NoSuchObjectException {
+	  Device de = null;
+
 		try {
-			Device de = (Device) cs.readObject(ObjectType.DEVICE, devid);
-			if(de == null) {
-        throw new NoSuchObjectException("Can not find device :"+devid);
-      }
-			return de;
+			de = (Device) cs.readObject(ObjectType.DEVICE, devid);
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
+		if (de == null) {
+		  throw new NoSuchObjectException("Can not find device :"+devid);
+		}
+		return de;
 	}
 
 	@Override

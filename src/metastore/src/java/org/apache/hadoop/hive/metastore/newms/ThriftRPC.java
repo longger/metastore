@@ -129,9 +129,8 @@ public class ThriftRPC extends FacebookBase implements
   private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
   private static final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
   private static DiskManager dm;
-  Random rand = new Random();
+  private final Random rand = new Random();
   public static Long file_creation_lock = 0L;
-  public static Long file_reopen_lock = 0L;
   private List<MetaStoreEndFunctionListener> endFunctionListeners;
   private static int nextSerialNum = 0;
   private static final ThreadLocal<Integer> threadLocalId = new ThreadLocal<Integer>() {
@@ -391,6 +390,7 @@ public class ThriftRPC extends FacebookBase implements
     schedule.shutdown();*/
     if (__cli.get() != null) {
       __cli.get().close();
+      __cli.set(null);
     }
     LOG.info("NewMS shutdown complete.");
   }
@@ -3132,7 +3132,7 @@ public class ThriftRPC extends FacebookBase implements
             FOFailReason.INVALID_STATE);
       case MetaStoreConst.MFileStoreStatus.REPLICATED:
         // FIXME: seq reopenSFiles
-        synchronized (file_reopen_lock) {
+        synchronized (MetaStoreConst.file_reopen_lock) {
           success = rs.reopenSFile(saved);
         }
         break;
