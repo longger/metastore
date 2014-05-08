@@ -2063,6 +2063,8 @@ public class DiskManager {
 	              }
 	            } catch (NoSuchObjectException e1) {
 	              LOG.error(e1, e1);
+	            } catch (MetaException e1) {
+	              LOG.error(e1, e1);
 	            }
 	          }
 	        }
