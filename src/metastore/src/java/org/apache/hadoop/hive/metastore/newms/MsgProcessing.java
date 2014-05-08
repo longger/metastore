@@ -531,6 +531,22 @@ public class MsgProcessing {
 		    //		    	client.
 		    break;
 		  }
+		  
+		  case MSGType.MSG_CREATE_DEVICE:
+		  {
+		  	String devid = msg.getMsg_data().get("devid").toString();
+		  	Device d = client.getDevice(devid);
+		  	if(d == null)
+		  		break;
+		  	cs.writeObject(ObjectType.DEVICE, devid, d);
+		  	break;
+		  }
+		  case MSGType.MSG_DEL_DEVICE:
+		  {
+		  	String devid = msg.getMsg_data().get("devid").toString();
+		  	cs.removeObject(ObjectType.DEVICE, devid);
+		  	break;
+		  }
 		  default:
 		  {
 		    LOG.debug("unhandled msg from metaq: "+msg.getEvent_id());

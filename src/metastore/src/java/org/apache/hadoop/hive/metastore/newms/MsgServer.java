@@ -15,6 +15,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.ObjectStore;
+import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Node;
 import org.apache.hadoop.hive.metastore.api.SFile;
@@ -73,6 +74,8 @@ public class MsgServer {
 		case MSGType.MSG_DEL_FILE:
 		case MSGType.MSG_FAIL_NODE:
     case MSGType.MSG_BACK_NODE:
+    case MSGType.MSG_CREATE_DEVICE:
+    case MSGType.MSG_DEL_DEVICE:
 			localQueue.add(msg);
 			lc.release();
 		}
@@ -397,7 +400,7 @@ public class MsgServer {
           if (msg == null) {
               continue;
           }
-          LOG.debug("LocalConsumer, consume msg:"+msg.toJson());
+          LOG.info("consume msg from localq: "+msg.toJson());
           if (msg.getEventObject() == null) {
           	LOG.warn("eventObject is null, event id is "+msg.getEvent_id());
           	continue;
@@ -487,6 +490,30 @@ public class MsgServer {
 								LOG.error(e,e);
 								LOG.error("handle msg failed: " + msg.toJson());
 							}
+	          	break;
+	          }
+	          
+	          case MSGType.MSG_CREATE_DEVICE:
+	          {
+	          	Device d = (Device) msg.getEventObject();
+	          	try{
+	          		ob.createDevice(d);
+	          	}catch(MetaException e){
+	          		LOG.error(e,e);
+								LOG.error("handle msg failed: " + msg.toJson());
+	          	}
+	          	break;
+	          }
+	          case MSGType.MSG_DEL_DEVICE:
+	          {
+	          	String devid = msg.getMsg_data().get("devid").toString();
+	          	try{
+	          		ob.delDevice(devid);
+	          	}catch(MetaException e){
+	          		LOG.error(e,e);
+								LOG.error("handle msg failed: " + msg.toJson());
+	          	}
+	          	break;
 	          }
 	        }//end of switch
 			  }  catch (Exception e) {

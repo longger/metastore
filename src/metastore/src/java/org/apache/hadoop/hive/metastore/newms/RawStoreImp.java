@@ -244,7 +244,7 @@ public class RawStoreImp implements RawStore {
 	        doCreate = true;
 	      }
 	      if(doCreate){
-	        cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+	        createDevice(de);
 	      }
 	    }
 	   } catch (Exception e) {
@@ -252,6 +252,15 @@ public class RawStoreImp implements RawStore {
 	     throw new MetaException(e.getMessage());
     }
 
+	}
+	
+	public void createDevice(Device de) throws JedisException, IOException
+	{
+		cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+		HashMap<String, Object> old_params = new HashMap<String, Object>();
+		old_params.put("devid", de.getDevid());
+		old_params.put("node_name", de.getNode_name());
+		MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_CREATE_DEVICE, -1l, -1l, null, de, old_params));
 	}
 
 	@Override
@@ -1437,8 +1446,23 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public boolean delDevice(String devid) throws MetaException {
-		// TODO Auto-generated method stub
-		return false;
+		Device de = null;
+		try {
+			de = this.getDevice(devid);
+			if(de == null)
+				return true;
+		} catch (NoSuchObjectException e) {
+			return true;
+		}
+		try {
+			cs.removeObject(ObjectType.DEVICE, de.getDevid());
+			HashMap<String, Object> old_params = new HashMap<String, Object>();
+			old_params.put("devid", de.getDevid());
+			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_DEL_DEVICE, -1l, -1l, null, de, old_params));
+			return true;
+		} catch (Exception e) {
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override

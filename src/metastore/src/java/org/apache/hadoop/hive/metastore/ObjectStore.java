@@ -158,6 +158,7 @@ import org.apache.hadoop.hive.metastore.msg.MSGFactory;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
 import org.apache.hadoop.hive.metastore.msg.MetaMsgServer;
+import org.apache.hadoop.hive.metastore.newms.MsgServer;
 import org.apache.hadoop.hive.metastore.parser.ExpressionTree.ANTLRNoCaseStringStream;
 import org.apache.hadoop.hive.metastore.parser.FilterLexer;
 import org.apache.hadoop.hive.metastore.parser.FilterParser;
@@ -1498,6 +1499,30 @@ public class ObjectStore implements RawStore, Configurable {
 
     return s;
   }
+  
+  public void createDevice(Device device) throws MetaException, NoSuchObjectException, InvalidObjectException {
+  	MDevice md = this.getMDevice(device.getDevid());
+
+  	if (md == null) {
+  		MNode mn = this.getMNode(device.getNode_name());
+  		MNodeGroup mng = null;
+  		try {
+  			mng = this.getMNodeGroup(device.getNg_name());
+  		} catch (NoSuchObjectException e) {
+  		}
+  		md = new MDevice(mn, mng, device.getDevid(), device.getProp(), device.getStatus());
+  		createDevice(md);
+  	} else {
+  		// update
+  		Node n = null;
+  		try {
+				n = this.getNode(device.getNode_name());
+			} catch (MetaException e) {
+			}
+  		
+  		this.modifyDevice(device, n);
+  	}
+  }
 
   public void createDevice(MDevice md) throws InvalidObjectException, MetaException {
     boolean commited = false;
@@ -1506,6 +1531,12 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       pm.makePersistent(md);
       commited = commitTransaction();
+      if(commited)
+      {
+      	HashMap<String, Object> old_params = new HashMap<String, Object>();
+    		old_params.put("devid", md.getDev_name());
+    		MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_DEVICE, -1l, -1l, null, null, old_params));
+      }
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -9342,6 +9373,12 @@ public MUser getMUser(String userName) {
         pm.deletePersistent(md);
       }
       success = commitTransaction();
+      if(success)
+      {
+      	HashMap<String, Object> old_params = new HashMap<String, Object>();
+  			old_params.put("devid", devid);
+  			MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_DEL_DEVICE, -1l, -1l, null, md, old_params));
+      }
     } finally {
       if (!success) {
         rollbackTransaction();
