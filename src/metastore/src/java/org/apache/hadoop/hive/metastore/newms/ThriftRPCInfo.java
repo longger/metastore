@@ -21,9 +21,11 @@ import com.google.common.collect.Lists;
 
 public class ThriftRPCInfo {
   private static final AtomicLong TOTAL_COUNT = new AtomicLong();
+  private static final AtomicLong ERROR_COUNT = new AtomicLong();
   private static final Date CURRENT_DATE = new Date();
   private static final String FORMAT = "Report_For_Date:\t%s%n" +
       "RPC_Count:      \t%s%n" +
+      "RPC_ERR_Count:  \t%s%n" +
       "RPC_Avg_Time:   \t%.2f%n" +
       "RPC_Max_Method: \t%s%n" +
       "RPC_Max_Time:   \t%.2f%n" +
@@ -51,6 +53,10 @@ public class ThriftRPCInfo {
     }
   }
 
+  public void incErr() {
+    ERROR_COUNT.incrementAndGet();
+  }
+
   public void captureInfo(String methodName, long time) {
     TOTAL_COUNT.incrementAndGet();
     info.get(methodName).addTime(time);
@@ -76,7 +82,8 @@ public class ThriftRPCInfo {
     Collections.sort(entries, comp);
     StringBuilder sb = new StringBuilder();
     sb.append(new Date());
-    sb.append("TS\tName\t\tNr\t\tAvg\t\tMax\t\tMin\t\t\n");
+    sb.append(" : total " + TOTAL_COUNT.get() + ", err " + ERROR_COUNT.get() +
+        " TS\tName\t\tNr\t\tAvg\t\tMax\t\tMin\t\t\n");
     for (Entry<String, _Info> e : entries) {
       if (e.getValue().count.get() > 0) {
         sb.append(String.format("%d\t%-30s:\tnr= %10d\tavg= %.2f\tmax= %s\tmin= %s\n",
@@ -116,7 +123,7 @@ public class ThriftRPCInfo {
     }
     StringBuilder sb = new StringBuilder();
     sb.append(String.format(FORMAT,
-        CURRENT_DATE, TOTAL_COUNT.get(),
+        CURRENT_DATE, TOTAL_COUNT.get(), ERROR_COUNT.get(),
         (double) totalTime.get() / TOTAL_COUNT.get() / 1000,
         entries.get(0).getKey(),// RPC_Max_Method
         entries.get(0).getValue().avg() / 1000,// RPC_Max_Time

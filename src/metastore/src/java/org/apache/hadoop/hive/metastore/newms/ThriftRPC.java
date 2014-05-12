@@ -314,6 +314,7 @@ public class ThriftRPC extends FacebookBase implements
           rpcInfo.captureInfo(method.getName(), System.nanoTime() - startTime);
           return result;
         } catch (UndeclaredThrowableException e) {
+          rpcInfo.incErr();
           throw e.getCause();
         } catch (InvocationTargetException e) {
           if ((e.getCause() instanceof NullPointerException)) {
@@ -322,6 +323,7 @@ public class ThriftRPC extends FacebookBase implements
               __do_reconnect();
               isRetry = true;
             } else {
+              rpcInfo.incErr();
               throw e.getCause();
             }
           } else if ((e.getCause() instanceof TApplicationException) ||
@@ -333,9 +335,11 @@ public class ThriftRPC extends FacebookBase implements
               __do_reconnect();
               isRetry = true;
             } else {
+              rpcInfo.incErr();
               throw e.getCause();
             }
           } else {
+            rpcInfo.incErr();
             throw e.getCause();
           }
         }
@@ -754,7 +758,7 @@ public class ThriftRPC extends FacebookBase implements
 
       // keep repnr unchanged
       file.setRep_nr(saved.getRep_nr());
-      rs.updateSFile(file, true);
+      rs.updateSFile(file, false);
 
       if (e != null) {
         throw e;
@@ -820,7 +824,6 @@ public class ThriftRPC extends FacebookBase implements
       listener.onEndFunction(function, context);
     }
   }
-
 
   @Override
   public int createBusitype(Busitype bt) throws InvalidObjectException,

@@ -224,13 +224,17 @@ public class RawStoreImp implements RawStore {
 	        throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
 	      }
 
+	      String ng_name = null;
+	      if (ng != null) {
+          ng_name = ng.getNode_group_name();
+        }
 	      if (di.mp == null) {
-	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.SUSPECT, ng.getNode_group_name());
+	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.SUSPECT, ng_name);
 	      } else {
-	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.ONLINE, ng.getNode_group_name());
+	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.ONLINE, ng_name);
 	      }
 	      doCreate = true;
-	    } else{
+	    } else {
 	      if (di.mp != null && de.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT) {
 	        de.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
 	      }
@@ -243,9 +247,9 @@ public class RawStoreImp implements RawStore {
 	        de.setNode_name(node.getNode_name());
 	        doCreate = true;
 	      }
-	      if (doCreate) {
-	        cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
-	      }
+	    }
+	    if (doCreate){
+	      createDevice(de);
 	    }
 	  } catch (InvalidObjectException e) {
 	    throw e;
@@ -253,7 +257,15 @@ public class RawStoreImp implements RawStore {
 	     LOG.error(e,e);
 	     throw new MetaException(e.getMessage());
     }
+	}
 
+	public void createDevice(Device de) throws JedisException, IOException
+	{
+		cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+		HashMap<String, Object> old_params = new HashMap<String, Object>();
+		old_params.put("devid", de.getDevid());
+		old_params.put("node_name", de.getNode_name());
+		MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_CREATE_DEVICE, -1l, -1l, null, de, old_params));
 	}
 
 	@Override
@@ -452,13 +464,12 @@ public class RawStoreImp implements RawStore {
 	  }
 
 		try {
-//			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
-			//update index here
-			if(!sf.getDigest().equals(newfile.getDigest())) {
-        cs.removeLfbdValue(sf.getDigest(), sf.getFid()+"");
+			// update index here
+			if (!sf.getDigest().equals(newfile.getDigest())) {
+        cs.removeLfbdValue(sf.getDigest(), sf.getFid() + "");
       }
-			if(stat_changed) {
-        cs.removeSfileStatValue(sf.getStore_status(), sf.getFid()+"");
+			if (stat_changed) {
+        cs.removeSfileStatValue(sf.getStore_status(), sf.getFid() + "");
       }
 			sf.setRep_nr(newfile.getRep_nr());
       sf.setDigest(newfile.getDigest());
@@ -515,7 +526,6 @@ public class RawStoreImp implements RawStore {
       }
 			sf.addToLocations(location);
 			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
-			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(location.getLocation(), location.getDevid()), location);
 
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", new Long(location.getFid()));
@@ -586,7 +596,20 @@ public class RawStoreImp implements RawStore {
 			if (sfl == null) {
         throw new MetaException("Invalid SFileLocation provided");
       }
-			//防止缓存中的sfile的location与更新之后的sfl不一致。。。。
+
+			sfl.setUpdate_time(System.currentTimeMillis());
+			if (sfl.getVisit_status() != newsfl.getVisit_status()) {
+        changed = true;
+        // update index
+        cs.removeSflStatValue(sfl.getVisit_status(),
+            SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
+        sfl.setVisit_status(newsfl.getVisit_status());
+      }
+
+			sfl.setRep_id(newsfl.getRep_id());
+			sfl.setDigest(newsfl.getDigest());
+
+			// 防止缓存中的sfile的location与更新之后的sfl不一致。。。。
 			// FIXME 这样手动维护sfile与sfilelocation的关系很麻烦，很容易出错。。。
 			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
 			if (sf.getLocations() != null) {
@@ -598,21 +621,9 @@ public class RawStoreImp implements RawStore {
 			    }
 			  }
 			}
-
-			sfl.setUpdate_time(System.currentTimeMillis());
-			if (sfl.getVisit_status() != newsfl.getVisit_status()) {
-        changed = true;
-      }
-			//update index
-			if(changed) {
-        cs.removeSflStatValue(sfl.getVisit_status(), SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
-      }
-			sfl.setVisit_status(newsfl.getVisit_status());
-			sfl.setRep_id(newsfl.getRep_id());
-			sfl.setDigest(newsfl.getDigest());
-//			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
 			sf.addToLocations(sfl);
-			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);			//写入了sfile，也就把sfilelocation写入了
+			//写入了sfile，也就把sfilelocation写入了
+			cs.writeObject(ObjectType.SFILE, sf.getFid() + "", sf);
 
 			if (changed) {
 	      switch (newsfl.getVisit_status()) {
@@ -1439,8 +1450,24 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public boolean delDevice(String devid) throws MetaException {
-		// TODO Auto-generated method stub
-		return false;
+		Device de = null;
+		try {
+			de = this.getDevice(devid);
+			if(de == null) {
+        return true;
+      }
+		} catch (NoSuchObjectException e) {
+			return true;
+		}
+		try {
+			cs.removeObject(ObjectType.DEVICE, de.getDevid());
+			HashMap<String, Object> old_params = new HashMap<String, Object>();
+			old_params.put("devid", de.getDevid());
+			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_DEL_DEVICE, -1l, -1l, null, de, old_params));
+			return true;
+		} catch (Exception e) {
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -1832,8 +1859,10 @@ public class RawStoreImp implements RawStore {
             if (i != idx) {
               SFileLocation x = sfl.get(i);
               // mark it as OFFLINE
-              x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-              this.updateSFileLocation(x);
+              //x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+              //this.updateSFileLocation(x);
+              // BUG-XXX: delete the SFL, cause SFL not found exception for incomming REP_DONE
+              this.delSFileLocation(x.getDevid(), x.getLocation());
               toOffline.add(x);
             }
           }

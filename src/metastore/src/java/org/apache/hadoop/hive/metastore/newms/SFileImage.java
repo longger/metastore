@@ -59,7 +59,7 @@ public class SFileImage implements Serializable{
 	  }
 	  return new SFileImage(sf.getFid(), sf.getDbName(), sf.getTableName(),
 	      sf.getStore_status(), sf.getRep_nr(), sf.getDigest(), sf.getRecord_nr(),
-	      sf.getAll_record_nr(), sflkeys,sf.getLength(),
+	      sf.getAll_record_nr(), sflkeys, sf.getLength(),
 	      sf.getRef_files(), sf.getValues(), sf.getLoad_status());
 	}
 

@@ -4299,7 +4299,10 @@ public class DiskManager {
                       rrmap.remove(t);
                       // connect to remote DC, and close the file
                       try {
-                        Database rdb = HMSHandler.topdcli.get_attribution(me.to_dc);
+                        Database rdb = null;
+                        synchronized (HMSHandler.topdcli) {
+                          rdb = HMSHandler.topdcli.get_attribution(me.to_dc);
+                        }
                         IMetaStoreClient rcli = new HiveMetaStoreClient(rdb.getParameters().get("service.metastore.uri"),
                             HiveConf.getIntVar(hiveConf, HiveConf.ConfVars.METASTORETHRIFTCONNECTIONRETRIES),
                             hiveConf.getIntVar(HiveConf.ConfVars.METASTORE_CLIENT_CONNECT_RETRY_DELAY),

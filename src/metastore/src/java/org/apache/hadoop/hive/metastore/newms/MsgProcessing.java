@@ -478,38 +478,26 @@ public class MsgProcessing {
 		  }
 
 		  case MSGType.MSG_NEW_NODEGROUP:
+		  case MSGType.MSG_ALTER_NODEGROUP:
+		  case MSGType.MSG_MODIFY_NODEGROUP:
 		  {
 		    String nodeGroupName = (String)msg.getMsg_data().get("nodegroup_name");
 		    List<String> ngNames = new ArrayList<String>();
 		    ngNames.add(nodeGroupName);
 		    List<NodeGroup> ngs = client.listNodeGroups(ngNames);
-		    if(ngs == null || ngs.size() == 0) {
+		    if (ngs == null || ngs.size() == 0) {
 		      break;
 		    }
 		    NodeGroup ng = ngs.get(0);
 		    cs.writeObject(ObjectType.NODEGROUP, nodeGroupName, ng);
-		    /*
-				NodeGroupImage ngi = NodeGroupImage.generateNodeGroupImage(ng);
-				CacheStore.getNodeGroupHm().put(ng.getNode_group_name(), ng);
-				cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ngi);
-				for(int i = 0; i<ngi.getNodeKeys().size();i++){
-					if(!CacheStore.getNodeHm().containsKey(ngi.getNodeKeys().get(i))){
-						Node node = client.get_node(ngi.getNodeKeys().get(i));
-						cs.writeObject(ObjectType.NODE, ngi.getNodeKeys().get(i), node);
-					}
-				}
-		     */
 		    break;
 		  }
-		  // TODO-XXX:
-		  //case MSGType.MSG_ALTER_NODEGROUP:
 		  case MSGType.MSG_DEL_NODEGROUP:{
 		    String nodeGroupName = (String)msg.getMsg_data().get("nodegroup_name");
 		    cs.removeObject(ObjectType.NODEGROUP, nodeGroupName);
 		    cs.updateCache(ObjectType.TABLE);
 		    break;
 		  }
-
 
 		  //what can I do...
 		  case MSGType.MSG_GRANT_GLOBAL:
@@ -530,6 +518,23 @@ public class MsgProcessing {
 		  {
 		    //		    	client.
 		    break;
+		  }
+
+		  case MSGType.MSG_CREATE_DEVICE:
+		  {
+		  	String devid = msg.getMsg_data().get("devid").toString();
+		  	Device d = client.getDevice(devid);
+		  	if(d == null) {
+          break;
+        }
+		  	cs.writeObject(ObjectType.DEVICE, devid, d);
+		  	break;
+		  }
+		  case MSGType.MSG_DEL_DEVICE:
+		  {
+		  	String devid = msg.getMsg_data().get("devid").toString();
+		  	cs.removeObject(ObjectType.DEVICE, devid);
+		  	break;
 		  }
 		  default:
 		  {

@@ -4682,7 +4682,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         return;
       }
       for (SFileLocation sfl : lsfl) {
-        DeviceInfo di = dm.getDeviceInfo(sfl.getDevid());
+        DeviceInfo di = null;
+
+        if (dm != null) {
+          di = dm.getDeviceInfo(sfl.getDevid());
+        }
         if (di == null || di.prop < 0) {
           Device d = getMS().getDevice(sfl.getDevid());
           if (d.getProp() == MetaStoreConst.MDeviceProp.SHARED ||
@@ -7314,8 +7318,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         LOG.info("User authentication failed: NoSuchUser?");
         throw new MetaException(e.getMessage());
       } catch (TException e) {
-        LOG.info("User authentication failed with unknown TException!\n" + e.getMessage());
-        throw new MetaException(e.getMessage());
+        HMSHandler.topdcli = null;
       }
     }
   }
