@@ -261,7 +261,7 @@ public class RawStoreImp implements RawStore {
 
 	public void createDevice(Device de) throws JedisException, IOException
 	{
-		cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+		cs.writeObject(ObjectType.DEVICE, de.getDevid(), de, false);
 		HashMap<String, Object> old_params = new HashMap<String, Object>();
 		old_params.put("devid", de.getDevid());
 		old_params.put("node_name", de.getNode_name());
@@ -302,7 +302,7 @@ public class RawStoreImp implements RawStore {
         }
         n.setStatus(node.getStatus());
         n.setIps(node.getIps());
-        cs.writeObject(ObjectType.NODE, n.getNode_name(), n);
+        cs.writeObject(ObjectType.NODE, n.getNode_name(), n, false);
 
         //不抛异常就说明更新操作成功了，可以发消息了
         if (changed) {
@@ -377,7 +377,7 @@ public class RawStoreImp implements RawStore {
       break;
     } while (true);
 		try {
-			cs.writeObject(ObjectType.SFILE, file.getFid()+"", file);
+			cs.writeObject(ObjectType.SFILE, file.getFid()+"", file, true);
 
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
 			old_params.put("f_id", file.getFid());
@@ -388,7 +388,7 @@ public class RawStoreImp implements RawStore {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
-		return file;
+		return file == null ? null : file.deepCopy();
 	}
 
 	@Override
@@ -479,10 +479,8 @@ public class RawStoreImp implements RawStore {
       sf.setLoad_status(newfile.getLoad_status());
       sf.setLength(newfile.getLength());
       sf.setRef_files(newfile.getRef_files());
-      if(isWithSfl) {
-        sf.setLocations(newfile.getLocations());
-      }
-      cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+
+      cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf, true);
 
       if (stat_changed) {
         // send the SFile state change message
@@ -506,7 +504,7 @@ public class RawStoreImp implements RawStore {
         MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_FILE_USER_SET_REP_CHANGE, -1l, -1l, null, sf, old_params));
       }
 
-      return sf;
+      return sf == null ? null : sf.deepCopy();
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
@@ -525,7 +523,7 @@ public class RawStoreImp implements RawStore {
         throw new MetaException("No SFile found by id: " + location.getFid());
       }
 			sf.addToLocations(location);
-			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf, false);
 
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", new Long(location.getFid()));
@@ -611,7 +609,7 @@ public class RawStoreImp implements RawStore {
 
 			// 防止缓存中的sfile的location与更新之后的sfl不一致。。。。
 			// FIXME 这样手动维护sfile与sfilelocation的关系很麻烦，很容易出错。。。
-			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
+			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid() + "");
 			if (sf.getLocations() != null) {
 			  for (int i = 0; i < sf.getLocationsSize(); i++) {
 			    if (sfl.getDevid().equals(sf.getLocations().get(i).getDevid()) &&
@@ -623,7 +621,7 @@ public class RawStoreImp implements RawStore {
 			}
 			sf.addToLocations(sfl);
 			//写入了sfile，也就把sfilelocation写入了
-			cs.writeObject(ObjectType.SFILE, sf.getFid() + "", sf);
+			cs.writeObject(ObjectType.SFILE, sf.getFid() + "", sf, false);
 
 			if (changed) {
 	      switch (newsfl.getVisit_status()) {
@@ -648,7 +646,7 @@ public class RawStoreImp implements RawStore {
 	      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, sfl, old_params));
 	    }
 
-			return sfl;
+			return sfl == null ? null : sfl.deepCopy();
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
@@ -677,7 +675,7 @@ public class RawStoreImp implements RawStore {
 			    }
 			  }
 			}
-			cs.writeObject(ObjectType.SFILE, sf.getFid() + "", sf);
+			cs.writeObject(ObjectType.SFILE, sf.getFid() + "", sf, false);
 			cs.removeObject(ObjectType.SFILELOCATION, sflkey);
 			success = true;
 
@@ -690,7 +688,7 @@ public class RawStoreImp implements RawStore {
 			old_params.put("op", "del");
 			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, sfl, old_params));
 
-		}catch(Exception e){
+		} catch(Exception e){
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		} finally {
@@ -1811,14 +1809,10 @@ public class RawStoreImp implements RawStore {
 	public boolean reopenSFile(SFile file) throws MetaException {
 		boolean changed = false;
 		SFile sf = this.getSFile(file.getFid());
-		List<SFileLocation> toOffline = new ArrayList<SFileLocation>();
 		if (sf == null) {
       throw new MetaException("No SFile found by id " + file.getFid());
     }
 		if (sf.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
-      sf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
-      this.updateSFile(sf);
-
       List<SFileLocation> sfl = sf.getLocations();
       boolean selected = false;
       int idx = 0;
@@ -1858,36 +1852,17 @@ public class RawStoreImp implements RawStore {
           for (int i = 0; i < sfl.size(); i++) {
             if (i != idx) {
               SFileLocation x = sfl.get(i);
-              // mark it as OFFLINE
-              //x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-              //this.updateSFileLocation(x);
               // BUG-XXX: delete the SFL, cause SFL not found exception for incomming REP_DONE
               this.delSFileLocation(x.getDevid(), x.getLocation());
-              toOffline.add(x);
             }
           }
+          SFile nf = this.getSFile(file.getFid());
+          nf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
+          this.updateSFile(nf);
         }
       }
       if (selected) {
         changed = true;
-      }
-
-      if (changed) {
-        // ok, send msgs
-        HashMap<String, Object> old_params = new HashMap<String, Object>();
-        old_params.put("f_id", file.getFid());
-        old_params.put("new_status", MetaStoreConst.MFileStoreStatus.INCREATE);
-        MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, null, sf, old_params));
-        if (toOffline.size() > 0) {
-          for (SFileLocation y : toOffline) {
-            HashMap<String, Object> params = new HashMap<String, Object>();
-            params.put("f_id", file.getFid());
-            params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-            params.put("devid", y.getDevid());
-            params.put("location", y.getLocation());
-            MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, y, params));
-          }
-        }
       }
     }
 		return changed;

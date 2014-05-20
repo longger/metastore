@@ -2589,6 +2589,7 @@ public class ObjectStore implements RawStore, Configurable {
 
     try {
       List<MFileLocation> toOffline = new ArrayList<MFileLocation>();
+      List<String> devList = new ArrayList<String>();
 
       // TODO: FIXME: there might be one bug: on recv file rep report, dm change sfl vstatus
       // to online if file's storestatus is NOT in INCREATE. thus, we should commit
@@ -2638,6 +2639,7 @@ public class ObjectStore implements RawStore, Configurable {
                 // BUG-XXX: delete the SFL, cause SFL not found exception for incomming REP_DONE
                 pm.deletePersistent(x);
                 toOffline.add(x);
+                devList.add(x.getDev().getDev_name());
               }
             }
           }
@@ -2654,11 +2656,16 @@ public class ObjectStore implements RawStore, Configurable {
         old_params.put("new_status", MetaStoreConst.MFileStoreStatus.INCREATE);
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, pm, mf, old_params));
         if (toOffline.size() > 0) {
-          for (MFileLocation y : toOffline) {
+          for (int i = 0; i < toOffline.size(); i++) {
+            MFileLocation y = toOffline.get(i);
             HashMap<String, Object> params = new HashMap<String, Object>();
             params.put("f_id", file.getFid());
-            params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, pm, y, params));
+            params.put("devid", devList.get(i));
+            params.put("location", y.getLocation());
+            params.put("db_name", file.getDbName());
+            params.put("table_name", file.getTableName());
+            params.put("op", "del");
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, y, params));
           }
         }
       }

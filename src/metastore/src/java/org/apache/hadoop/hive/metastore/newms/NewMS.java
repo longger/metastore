@@ -26,8 +26,6 @@ import org.apache.thrift.transport.TTransportFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.exceptions.JedisException;
 
-import com.taobao.metamorphosis.exception.MetaClientException;
-
 public class NewMS {
 	public static Log LOG = LogFactory.getLog(NewMS.class);
 	private static HiveConf conf = new HiveConf();
@@ -249,7 +247,7 @@ public class NewMS {
         MsgServer.startConsumer(conf.getVar(ConfVars.ZOOKEEPERADDRESS), "meta-test", "newms");
 //        MsgServer.startProducer();
         MsgServer.startLocalConsumer();
-      } catch (MetaClientException e) {
+      } catch (Exception e) {
         LOG.error(e, e);
         throw new IOException("Start MsgServer failed: " + e.getMessage());
       }

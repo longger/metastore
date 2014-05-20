@@ -301,7 +301,7 @@ public class ThriftRPC extends FacebookBase implements
       String methodName = method.getName();
       Object result = null;
       long startTime = System.nanoTime();
-      boolean isRetry = false;
+      boolean isRetry1 = false, isRetry2 = false;
 
       /*
        * 在客户端失效重连阶段会先从clients中移除失效的client，然后重新创建并认证新client
@@ -319,9 +319,9 @@ public class ThriftRPC extends FacebookBase implements
         } catch (InvocationTargetException e) {
           if ((e.getCause() instanceof NullPointerException)) {
             // this means we should do client connect
-            if (!isRetry) {
+            if (!isRetry1) {
               __do_reconnect();
-              isRetry = true;
+              isRetry1 = true;
             } else {
               rpcInfo.incErr();
               throw e.getCause();
@@ -330,10 +330,10 @@ public class ThriftRPC extends FacebookBase implements
               (e.getCause() instanceof TProtocolException) ||
               (e.getCause() instanceof TTransportException)) {
             // 发生连接异常，自动重建连接
-            if (!isRetry) {
+            if (!isRetry2) {
               LOG.error("Some error occured when call method " + methodName + ", try reconnect.");
               __do_reconnect();
-              isRetry = true;
+              isRetry2 = true;
             } else {
               rpcInfo.incErr();
               throw e.getCause();
@@ -733,6 +733,13 @@ public class ThriftRPC extends FacebookBase implements
             sfl.setDigest(file.getDigest());
             rs.updateSFileLocation(sfl);
           } else {
+            sflToDel.add(sfl);
+            dm.asyncDelSFL(sfl);
+          }
+        }
+        for (SFileLocation sfl : saved.getLocations()) {
+          // double check and delete invalid SFLs, this might result in false warnings in SFL delete
+          if (sfl.getVisit_status() != MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
             sflToDel.add(sfl);
             dm.asyncDelSFL(sfl);
           }

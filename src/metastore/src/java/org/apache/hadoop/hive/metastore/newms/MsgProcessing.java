@@ -25,6 +25,7 @@ import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Node;
 import org.apache.hadoop.hive.metastore.api.NodeGroup;
 import org.apache.hadoop.hive.metastore.api.SFile;
+import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
@@ -36,7 +37,7 @@ public class MsgProcessing {
 
 	private IMetaStoreClient client;
 	private static HiveConf hiveConf;
-	private CacheStore cs;
+	private final CacheStore cs;
 	private static final Log LOG = LogFactory.getLog(MsgProcessing.class);
 
 	public boolean __reconnect() {
@@ -48,16 +49,19 @@ public class MsgProcessing {
 	  return client != null;
 	}
 
-	public MsgProcessing() {
+	public MsgProcessing() throws MetaException, IOException {
+	  client = createMetaStoreClient();
+	  cs = new CacheStore();
+	}
+
+	public void getAllObjects() throws Exception {
 		try {
-			client = createMetaStoreClient();
-			cs = new CacheStore();
 			if (client != null && hiveConf.getBoolVar(ConfVars.NEWMS_IS_GET_ALL_OBJECTS)) {
 				long start = System.currentTimeMillis();
 				// device
 	      List<Device> dl = client.listDevice();
 	      for (Device de : dl) {
-          cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
+          cs.writeObject(ObjectType.DEVICE, de.getDevid(), de, false);
         }
 	      long end = System.currentTimeMillis();
 	      LOG.info("Get devices in " + (end - start) + " ms");
@@ -66,7 +70,7 @@ public class MsgProcessing {
 				List<Database> dbs = client.get_all_attributions();
 	      for(Database db : dbs)
 	      {
-	        cs.writeObject(ObjectType.DATABASE, db.getName(), db);
+	        cs.writeObject(ObjectType.DATABASE, db.getName(), db, false);
 	      }
 	      end = System.currentTimeMillis();
 	      LOG.info("get databases in "+(end-start)+" ms");
@@ -107,9 +111,9 @@ public class MsgProcessing {
 	        for(String tn : client.getAllTables(db.getName()))
 	        {
 	        	Table t = client.getTable(db.getName(), tn);
-	        	cs.writeObject(ObjectType.TABLE, t.getDbName()+"."+t.getTableName(), t);
+	        	cs.writeObject(ObjectType.TABLE, t.getDbName()+"."+t.getTableName(), t, false);
 	        	for(Index in : client.listIndexes(db.getName(), tn,(short) 127)) {
-              cs.writeObject(ObjectType.INDEX, db.getName()+"."+tn+"."+in.getIndexName(), in);
+              cs.writeObject(ObjectType.INDEX, db.getName()+"."+tn+"."+in.getIndexName(), in, false);
             }
 	        }
 	      }
@@ -120,21 +124,21 @@ public class MsgProcessing {
 
 	      //node
 	      for(Node n : client.listNodes()) {
-          cs.writeObject(ObjectType.NODE, n.getNode_name(),n);
+          cs.writeObject(ObjectType.NODE, n.getNode_name(),n, false);
         }
 	      end = System.currentTimeMillis();
 	      LOG.info("get nodes in "+(end-start)+" ms");
 	      start = end;
 	      //globalschema
 	      for(GlobalSchema gs : client.listSchemas()) {
-          cs.writeObject(ObjectType.GLOBALSCHEMA, gs.getSchemaName(), gs);
+          cs.writeObject(ObjectType.GLOBALSCHEMA, gs.getSchemaName(), gs, false);
         }
 	      end = System.currentTimeMillis();
 	      LOG.info("get globalschema in "+(end-start)+" ms");
 	      start = end;
 	      //nodegroup
 	      for(NodeGroup ng : client.listNodeGroups()) {
-          cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ng);
+          cs.writeObject(ObjectType.NODEGROUP, ng.getNode_group_name(), ng, false);
         }
 	      end = System.currentTimeMillis();
 	      LOG.info("get nodegroup in "+(end-start)+" ms");
@@ -145,24 +149,14 @@ public class MsgProcessing {
             t.join();
           }
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
 					LOG.error(e,e);
 				}
 				LOG.info("get sfile and sfilelocation in "+(end-start)+" ms");
 				LOG.info("get all objects complete.");
 			}
-		} catch (MetaException e) {
-			// TODO Auto-generated catch block
+		} catch (Exception e) {
 			LOG.error(e,e);
-		} catch (TException e) {
-			// TODO Auto-generated catch block
-			LOG.error(e,e);
-		} catch (JedisConnectionException e) {
-			// TODO Auto-generated catch block
-			LOG.error(e,e);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			LOG.error(e,e);
+			throw e;
 		}
 	}
 
@@ -195,7 +189,7 @@ public class MsgProcessing {
 	    		LOG.info(Thread.currentThread().getId() + ": get_files_by_ids: " + ids.get(0) + " , " +
 	    		    ids.get(ids.size() - 1) + ", get number:" + files.size());
 	    		for (SFile sf : files) {
-	    			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+	    			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf, true);
 	    		}
 	    	}
 			}catch(Exception e){
@@ -241,7 +235,7 @@ public class MsgProcessing {
 		    String dbName = (String) msg.getMsg_data().get("db_name");
 		    try {
 		      Database db = client.getDatabase(dbName);
-		      cs.writeObject(ObjectType.DATABASE, dbName, db);
+		      cs.writeObject(ObjectType.DATABASE, dbName, db, false);
 		    } catch (NoSuchObjectException e) {
 		      LOG.error(e,e);
 		    }
@@ -266,7 +260,7 @@ public class MsgProcessing {
 		    Table tbl = client.getTable(dbName, tableName);
 		    TableImage ti = TableImage.generateTableImage(tbl);
 		    CacheStore.getTableHm().put(newKey, tbl);
-		    cs.writeObject(ObjectType.TABLE, newKey, ti);
+		    cs.writeObject(ObjectType.TABLE, newKey, ti, false);
 		    break;
 		  }
 		  case MSGType.MSG_NEW_TALBE:
@@ -283,7 +277,7 @@ public class MsgProcessing {
 		    String tableName = (String) msg.getMsg_data().get("table_name");
 		    String key = dbName + "." + tableName;
 		    Table tbl = client.getTable(dbName, tableName);
-		    cs.writeObject(ObjectType.TABLE, key, tbl);
+		    cs.writeObject(ObjectType.TABLE, key, tbl, false);
 		    /*
 				TableImage ti = TableImage.generateTableImage(tbl);
 				CacheStore.getTableHm().put(key, tbl);
@@ -339,14 +333,18 @@ public class MsgProcessing {
 		        break;
 		      }
 		    }
-		    Object op = msg.getMsg_data().get("op");
-		    if (op.equals("del")) {
-		      String devid = msg.getMsg_data().get("devid").toString();
-		      String location = msg.getMsg_data().get("location").toString();
-		      String sflkey = SFileImage.generateSflkey(location, devid);
-		      cs.removeObject(ObjectType.SFILELOCATION, sflkey);
+		    SFile of = (SFile) cs.readObject(ObjectType.SFILE, fid + "");
+		    if (of != null) {
+		      cs.removeSfileStatValue(of.getStore_status(), fid + "");
+		      cs.removeLfbdValue(of.getDigest(), fid + "");
+		      if (of.getLocations() != null && of.getLocationsSize() > 0) {
+		        for (SFileLocation sfl: of.getLocations()) {
+		          String sflkey = SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid());
+		          cs.removeObject(ObjectType.SFILELOCATION, sflkey);
+		        }
+		      }
 		    }
-		    cs.writeObject(ObjectType.SFILE, fid+"", sf);
+		    cs.writeObject(ObjectType.SFILE, fid+"", sf, true);
 		    break;
 		  }
 		  case MSGType.MSG_STA_FILE_CHANGE:
@@ -368,7 +366,19 @@ public class MsgProcessing {
 		        break;
 		      }
 		    }
-		    cs.writeObject(ObjectType.SFILE, fid + "", sf);
+		    SFile of = (SFile) cs.readObject(ObjectType.SFILE, fid + "");
+		    if (of != null) {
+		      cs.removeSfileStatValue(of.getStore_status(), fid + "");
+		      cs.removeLfbdValue(of.getDigest(), fid + "");
+		      if (of.getLocations() != null && of.getLocationsSize() > 0) {
+		        for (SFileLocation sfl: of.getLocations()) {
+		          String sflkey = SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid());
+		          cs.removeObject(ObjectType.SFILELOCATION, sflkey);
+		        }
+		      }
+		    }
+
+		    cs.writeObject(ObjectType.SFILE, fid + "", sf, true);
 		    break;
 		  }
 		  //在删除文件时，会在之前发几个1307,然后才是4002
@@ -393,7 +403,7 @@ public class MsgProcessing {
 		    }
 		    Index ind = client.getIndex(dbName, tblName, indexName);
 		    String key = dbName + "." + tblName + "." + indexName;
-		    cs.writeObject(ObjectType.INDEX, key, ind);
+		    cs.writeObject(ObjectType.INDEX, key, ind, false);
 		    break;
 		  }
 		  case MSGType.MSG_DEL_INDEX:
@@ -416,7 +426,7 @@ public class MsgProcessing {
 		  {
 		    String nodename = (String)msg.getMsg_data().get("node_name");
 		    Node node = client.get_node(nodename);
-		    cs.writeObject(ObjectType.NODE, nodename, node);
+		    cs.writeObject(ObjectType.NODE, nodename, node, false);
 		    break;
 		  }
 
@@ -439,7 +449,7 @@ public class MsgProcessing {
 		    String schema_name = (String)msg.getMsg_data().get("schema_name");
 		    try{
 		      GlobalSchema s = client.getSchemaByName(schema_name);
-		      cs.writeObject(ObjectType.GLOBALSCHEMA, schema_name, s);
+		      cs.writeObject(ObjectType.GLOBALSCHEMA, schema_name, s, false);
 		    }catch(NoSuchObjectException e){
 		      LOG.error(e,e);
 		    }
@@ -455,18 +465,17 @@ public class MsgProcessing {
 		    if(gs != null)
 		    {
 		      cs.removeObject(ObjectType.GLOBALSCHEMA, old_schema_name);
-		      cs.writeObject(ObjectType.GLOBALSCHEMA, schema_name, gs);
+		      cs.writeObject(ObjectType.GLOBALSCHEMA, schema_name, gs, false);
 		    }
 		    else{
 		      try{
 		        GlobalSchema ngs = client.getSchemaByName(schema_name);
-		        cs.writeObject(ObjectType.GLOBALSCHEMA, schema_name, ngs);
+		        cs.writeObject(ObjectType.GLOBALSCHEMA, schema_name, ngs, false);
 		      }
 		      catch(NoSuchObjectException e)
 		      {
 		        LOG.error(e,e);
 		      }
-
 		    }
 		  }
 
@@ -489,7 +498,8 @@ public class MsgProcessing {
 		      break;
 		    }
 		    NodeGroup ng = ngs.get(0);
-		    cs.writeObject(ObjectType.NODEGROUP, nodeGroupName, ng);
+		    cs.writeObject(ObjectType.NODEGROUP, nodeGroupName, ng, false);
+		    cs.updateCache(ObjectType.TABLE);
 		    break;
 		  }
 		  case MSGType.MSG_DEL_NODEGROUP:{
@@ -527,7 +537,7 @@ public class MsgProcessing {
 		  	if(d == null) {
           break;
         }
-		  	cs.writeObject(ObjectType.DEVICE, devid, d);
+		  	cs.writeObject(ObjectType.DEVICE, devid, d, false);
 		  	break;
 		  }
 		  case MSGType.MSG_DEL_DEVICE:

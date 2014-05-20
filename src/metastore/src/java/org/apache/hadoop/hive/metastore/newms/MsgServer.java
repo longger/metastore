@@ -1,5 +1,6 @@
 package org.apache.hadoop.hive.metastore.newms;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Date;
@@ -88,9 +89,11 @@ public class MsgServer {
 		}
 	}
 
-	public static void startConsumer(String zkaddr, String topic, String group) throws MetaClientException
+	public static void startConsumer(String zkaddr, String topic, String group) throws Exception
 	{
-		new Consumer(zkaddr, topic, group).consume();
+		Consumer c = new Consumer(zkaddr, topic, group);
+		c.consume();
+		c.startMsgProcessing();
 	}
 
 	public static void startLocalConsumer()
@@ -281,8 +284,9 @@ public class MsgServer {
 		private final String group;
 		private final ConcurrentLinkedQueue<DDLMsg> failedq = new ConcurrentLinkedQueue<DDLMsg>();
 		private final MsgProcessing mp;
+		private boolean isNotified = false;
 
-		public Consumer(String zkaddr, String topic, String group) {
+		public Consumer(String zkaddr, String topic, String group) throws MetaException, IOException {
 			this.zkaddr = zkaddr;
 			this.topic = topic;
 			this.group = group;
@@ -292,6 +296,14 @@ public class MsgServer {
 				LOG.error(e,e);
 			}
 			mp = new MsgProcessing();
+		}
+
+		public void startMsgProcessing() throws Exception {
+		  mp.getAllObjects();
+		  synchronized (mp) {
+		    isNotified = true;
+		    mp.notifyAll();
+		  }
 		}
 
 		public void consume() throws MetaClientException {
@@ -320,6 +332,17 @@ public class MsgServer {
 
 				@Override
 				public void recieveMessages(final Message message) {
+				  if (!isNotified) {
+				    synchronized (mp) {
+				      while (true) {
+				        try {
+				          mp.wait();
+				          break;
+				        } catch (InterruptedException e) {
+				        }
+				      }
+				    }
+				  }
 					String data = new String(message.getData());
 					LOG.info("Consume msg from metaq: " + data);
 					int time = 0;
@@ -400,13 +423,13 @@ public class MsgServer {
           if (msg == null) {
               continue;
           }
-          LOG.info("consume msg from localq: "+msg.toJson());
+          LOG.info("consume msg from localq: " + msg.toJson());
           if (msg.getEventObject() == null) {
-          	LOG.warn("eventObject is null, event id is "+msg.getEvent_id());
+          	LOG.warn("eventObject is null, event id is " + msg.getEvent_id());
           	continue;
           }
           int event_id = (int) msg.getEvent_id();
-          switch(event_id){
+          switch (event_id) {
 	          case MSGType.MSG_REP_FILE_CHANGE:
 	          {
 	          	String op = msg.getMsg_data().get("op").toString();
@@ -468,8 +491,8 @@ public class MsgServer {
 	          {
 	          	try {
 	          		SFile sf = (SFile) msg.getEventObject();
-	          		if(sf.getLocations() != null) {
-                  for(SFileLocation sfl : sf.getLocations()) {
+	          		if (sf.getLocations() != null) {
+                  for (SFileLocation sfl : sf.getLocations()) {
                     ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
                   }
                 }
@@ -492,13 +515,13 @@ public class MsgServer {
 							}
 	          	break;
 	          }
-	          
+
 	          case MSGType.MSG_CREATE_DEVICE:
 	          {
 	          	Device d = (Device) msg.getEventObject();
-	          	try{
+	          	try {
 	          		ob.createDevice(d);
-	          	}catch(MetaException e){
+	          	} catch (MetaException e){
 	          		LOG.error(e,e);
 								LOG.error("handle msg failed: " + msg.toJson());
 	          	}
@@ -507,9 +530,9 @@ public class MsgServer {
 	          case MSGType.MSG_DEL_DEVICE:
 	          {
 	          	String devid = msg.getMsg_data().get("devid").toString();
-	          	try{
+	          	try {
 	          		ob.delDevice(devid);
-	          	}catch(MetaException e){
+	          	} catch (MetaException e){
 	          		LOG.error(e,e);
 								LOG.error("handle msg failed: " + msg.toJson());
 	          	}
