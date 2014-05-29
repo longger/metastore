@@ -139,7 +139,8 @@ public class CacheStore {
     }
   }
 
-  public void writeObject(ObjectType.TypeDesc key, String field, Object o) throws JedisException, IOException {
+  public void writeObject(ObjectType.TypeDesc key, String field, Object o,
+      boolean updateIndex) throws JedisException, IOException {
     int err = 0;
 
     switch (key.getId()) {
@@ -158,7 +159,7 @@ public class CacheStore {
 	      		p.evalsha(sha, 1, new String[]{k, sfi.getFid() + ""});
 	      	}
 	      	// update index for filtertablefiles
-	      	if (sfi.getValues() != null && sfi.getValues().size() > 0) {
+	      	if (updateIndex) {
 	      		String k2 = generateFtlKey(sfi.getValues());
 	      		p.sadd(k2, sfi.getFid() + "");
 	      	}
@@ -168,7 +169,7 @@ public class CacheStore {
 	      		p.sadd(k, sfi.getFid() + "");
 	      	}
 	      	// update index for findFiles
-	      	{
+	      	if (updateIndex) {
 	      		String k = generateSfStatKey(sfi.getStore_status());
 	      		p.sadd(k, sfi.getFid() + "");
 	      	}
@@ -184,7 +185,8 @@ public class CacheStore {
           }
         }
       	for (int i = 0; i < sfi.getSflkeys().size(); i++) {
-					writeObject(ObjectType.SFILELOCATION, sfi.getSflkeys().get(i), sf.getLocations().get(i));
+					writeObject(ObjectType.SFILELOCATION, sfi.getSflkeys().get(i),
+					    sf.getLocations().get(i), updateIndex);
 				}
       	break;
       }
@@ -295,97 +297,13 @@ public class CacheStore {
   	return readObject(key, field, false);
   }
 
-  /**
-   * 有些时候为了保持redis中存储的对象和内存缓存中的一致，需要刷新内存缓存，可以通过一次读取操作完成
-   * @param key
-   * @param field
-   * @param isRefreshCache	是否通过这次读操作来刷新内存缓存，true的话就忽略缓存，直接从redis中读取对象，然后put到缓存中，达到刷新缓存的效果
-   * @return
-   * @throws JedisConnectionException
-   * @throws IOException
-   * @throws ClassNotFoundException
-   */
-  public Object readObject(ObjectType.TypeDesc key, String field, boolean isRefreshCache) throws JedisException, IOException, ClassNotFoundException {
+  private Object readObjectFromRedis(ObjectType.TypeDesc key, String field) throws JedisException, IOException, ClassNotFoundException {
     Object o = null;
-
-    if (!isRefreshCache) {
-      switch (key.getId()) {
-      case SFILE: {
-        SFile temp = (SFile)sFileHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case SFILELOCATION: {
-        SFileLocation temp = (SFileLocation)sflHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case DATABASE: {
-        Database temp = databaseHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case TABLE: {
-        Table temp  = tableHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case INDEX: {
-        Index temp = indexHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case NODE: {
-        Node temp = nodeHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case NODEGROUP: {
-        NodeGroup temp = nodeGroupHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case GLOBALSCHEMA: {
-        GlobalSchema temp = globalSchemaHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case PRIVILEGE: {
-        PrivilegeBag temp = privilegeBagHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case PARTITION: {
-        Partition temp = partitionHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      case DEVICE: {
-        Device temp = deviceHm.get(field);
-        o = temp == null ? null : temp.deepCopy();
-        break;
-      }
-      }
-    }
-
-    if (o != null) {
-      //LOG.debug("in function readObject: read "+key.getName()+":"+field+" from cache.");
-      return o;
-    }
     String js = null;
     Jedis jedis = refreshJedis();
     int err = 0;
 
     try {
-      /*
-      byte[] buf = jedis.hget(key.getName().getBytes(), field.getBytes());
-      if(buf == null) {
-        return null;
-      }
-      ByteArrayInputStream bais = new ByteArrayInputStream(buf);
-      ObjectInputStream ois = new ObjectInputStream(bais);
-      o = ois.readObject();
-      */
       js = jedis.hget(key.getName(), field);
     } catch (JedisException e){
       err = -1;
@@ -423,7 +341,7 @@ public class CacheStore {
           sfi.getDigest(), sfi.getRecord_nr(), sfi.getAll_record_nr(), locations, sfi.getLength(),
           sfi.getRef_files(), sfi.getValues(), sfi.getLoad_status());
       sFileHm.put(field, sf);
-      o = sf;
+      o = sf == null ? null : sf.deepCopy();
       break;
     }
     case TABLE: {
@@ -441,7 +359,7 @@ public class CacheStore {
           ti.getSd(), ti.getPartitionKeys(), ti.getParameters(), ti.getViewOriginalText(),
           ti.getViewExpandedText(), ti.getTableType(), ngs, ti.getFileSplitKeys());
       tableHm.put(field, t);
-      o = t;
+      o = t == null ? null : t.deepCopy();
       break;
     }
     case NODEGROUP: {
@@ -456,45 +374,142 @@ public class CacheStore {
       }
       NodeGroup ng = new NodeGroup(ngi.getNode_group_name(), ngi.getComment(), ngi.getStatus(), nodes);
       nodeGroupHm.put(field, ng);
-      o = ng;
+      o = ng == null ? null : ng.deepCopy();
       break;
     }
     case DATABASE: {
-      databaseHm.put(field, (Database)o);
+      Database db = (Database) o;
+      databaseHm.put(field, db);
+      o = db == null ? null : db.deepCopy();
       break;
     }
     case SFILELOCATION: {
-      sflHm.put(field, (SFileLocation)o);
+      SFileLocation sfl = (SFileLocation)o;
+      sflHm.put(field, sfl);
+      o = sfl == null ? null : sfl.deepCopy();
       break;
     }
     case INDEX: {
-      indexHm.put(field, (Index)o);
+      Index idx = (Index)o;
+      indexHm.put(field, idx);
+      o = idx == null ? null : idx.deepCopy();
       break;
     }
     case NODE: {
-      nodeHm.put(field, (Node)o);
+      Node n = (Node)o;
+      nodeHm.put(field, n);
+      o = n == null ? null : n.deepCopy();
       break;
     }
     case GLOBALSCHEMA: {
-      globalSchemaHm.put(field, (GlobalSchema)o);
+      GlobalSchema gs = (GlobalSchema)o;
+      globalSchemaHm.put(field, gs);
+      o = gs == null ? null : gs.deepCopy();
       break;
     }
     case PRIVILEGE: {
-      privilegeBagHm.put(field, (PrivilegeBag)o);
+      PrivilegeBag pb = (PrivilegeBag)o;
+      privilegeBagHm.put(field, pb);
+      o = pb == null ? null : pb.deepCopy();
       break;
     }
     case PARTITION: {
-      partitionHm.put(field, (Partition)o);
+      Partition p = (Partition)o;
+      partitionHm.put(field, p);
+      o = p == null ? null : p.deepCopy();
       break;
     }
     case DEVICE: {
-      deviceHm.put(field, (Device)o);
+      Device d = (Device)o;
+      deviceHm.put(field, d);
+      o = d == null ? null : d.deepCopy();
       break;
     }
     }
-    //LOG.debug("in function readObject: read "+key.getName()+":"+field+" from redis.");
 
     return o;
+  }
+
+  /**
+   * 有些时候为了保持redis中存储的对象和内存缓存中的一致，需要刷新内存缓存，可以通过一次读取操作完成
+   * @param key
+   * @param field
+   * @param isRefreshCache	是否通过这次读操作来刷新内存缓存，true的话就忽略缓存，直接从redis中读取对象，然后put到缓存中，达到刷新缓存的效果
+   * @return
+   * @throws JedisConnectionException
+   * @throws IOException
+   * @throws ClassNotFoundException
+   */
+  public Object readObject(ObjectType.TypeDesc key, String field, boolean isRefreshCache) throws JedisException, IOException, ClassNotFoundException {
+    Object o = null;
+
+    if (isRefreshCache) {
+      return readObjectFromRedis(key, field);
+    }
+
+    switch (key.getId()) {
+    case SFILE: {
+      SFile temp = (SFile)sFileHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case SFILELOCATION: {
+      SFileLocation temp = (SFileLocation)sflHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case DATABASE: {
+      Database temp = databaseHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case TABLE: {
+      Table temp  = tableHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case INDEX: {
+      Index temp = indexHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case NODE: {
+      Node temp = nodeHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case NODEGROUP: {
+      NodeGroup temp = nodeGroupHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case GLOBALSCHEMA: {
+      GlobalSchema temp = globalSchemaHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case PRIVILEGE: {
+      PrivilegeBag temp = privilegeBagHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case PARTITION: {
+      Partition temp = partitionHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    case DEVICE: {
+      Device temp = deviceHm.get(field);
+      o = temp == null ? null : temp.deepCopy();
+      break;
+    }
+    }
+
+    if (o == null) {
+      return readObjectFromRedis(key, field);
+    } else {
+      return o;
+    }
   }
 
   public void removeObject(ObjectType.TypeDesc key, String field) throws JedisException, IOException, ClassNotFoundException {
@@ -562,7 +577,6 @@ public class CacheStore {
     default: {
     	Jedis jedis = refreshJedis();
       try {
-        jedis = rf.getDefaultInstance();
         jedis.hdel(key.getName(), field);
       } catch (JedisException e) {
         err = -1;
@@ -690,7 +704,6 @@ public class CacheStore {
     int err = 0;
 
     try {
-      jedis = rf.getDefaultInstance();
       String k = generateFtlKey(values);
       Set<String> mem = jedis.smembers(k);
       List<SFile> rls = new ArrayList<SFile>();
@@ -699,8 +712,26 @@ public class CacheStore {
           SFile f = null;
           try {
             f = (SFile) readObject(ObjectType.SFILE, id);
-            if (f != null && f.getTableName().equals(tabName) && f.getDbName().equals(dbName) && f.getValues().equals(values)) {
-              rls.add(f);
+            if (f != null) {
+              if (f.getTableName() != null && f.getDbName() != null) {
+                if (f.getTableName().equals(tabName) && f.getDbName().equals(dbName)) {
+                  if (f.getValues() != null && values != null && f.getValues().containsAll(values)) {
+                    rls.add(f);
+                  } else if (f.getValues() != null && f.getValuesSize() == 0) {
+                    if (values == null || values.size() == 0) {
+                      rls.add(f);
+                    }
+                  } else if (values != null && values.size() == 0) {
+                    if (f.getValues() == null || f.getValuesSize() == 0) {
+                      rls.add(f);
+                    }
+                  } else if (values == null && f.getValues() == null) {
+                    rls.add(f);
+                  }
+                }
+              } else {
+                rls.add(f);
+              }
             }
           } catch (Exception e) {
             LOG.error(e,e);
@@ -709,7 +740,7 @@ public class CacheStore {
       }
       return rls;
     } catch (JedisException e){
-      err = 0;
+      err = -1;
       throw e;
     } finally {
       if (err < 0) {
@@ -985,17 +1016,22 @@ public class CacheStore {
         lingering.add(m);
       }
       if (m.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-        int offnr = 0, onnr = 0;
+        int offnr = 0, onnr = 0, suspnr = 0;
 
         for (SFileLocation fl : l) {
           if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
             onnr++;
           } else if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
             offnr++;
+          } else if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
+            suspnr++;
           }
         }
-        if ((m.getRep_nr() <= onnr && offnr > 0) ||
-            (onnr + offnr >= node_nr && offnr > 0)) {
+        // NOTE: logic is ->
+        // if online nr >= requested nr, we try to remove any offline/suspect SFLs,
+        // otherwise, if online + offline + suspect >= node_nr, try to remove offline SFLs
+        if ((m.getRep_nr() <= onnr && (offnr > 0 || suspnr > 0)) ||
+            (onnr + offnr + suspnr >= node_nr && offnr > 0)) {
           try {
             lingering.add(m);
           } catch (javax.jdo.JDOObjectNotFoundException e) {
@@ -1012,7 +1048,6 @@ public class CacheStore {
 		List<SFileLocation> sfll = new LinkedList<SFileLocation>();
 		int err = 0;
     try{
-      jedis = rf.getDefaultInstance();
       ScanResult<String> re = null;
       ScanParams sp = new ScanParams();
       sp.count(5000);
@@ -1062,10 +1097,16 @@ public class CacheStore {
 
   private String generateFtlKey(List<SplitValue> value) {
     String p = "sf.ftf.";
-    if (value == null) {
-      return p;
+    if (value == null || value.size() == 0) {
+      return p + "none";
     }
-    return p + value.hashCode();
+    List<SplitValue> ls = new ArrayList<SplitValue>();
+    for (SplitValue v : value) {
+    	if (v.getLevel() == 1) {
+        ls.add(v);
+      }
+    }
+    return p + ls.hashCode();
   }
 
   private String generateLfbdKey(String digest) {

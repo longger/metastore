@@ -1,6 +1,8 @@
 package org.apache.hadoop.hive.metastore.model;
 
 public class MetaStoreConst {
+  public static Long file_reopen_lock = 0L;
+
   public class MFileLoadStatus {
     public static final int OK = 0;
     public static final int BAD = 1;

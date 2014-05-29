@@ -217,41 +217,55 @@ public class RawStoreImp implements RawStore {
 			throws InvalidObjectException, MetaException {
 	  try {
 	    boolean doCreate = false;
-	    Device de  = (Device) cs.readObject(ObjectType.DEVICE, di.dev);
-	    if(de == null){
+	    Device de = (Device) cs.readObject(ObjectType.DEVICE, di.dev);
+	    if (de == null) {
 	      Node n = getNode(node.getNode_name());
-	      if(n == null){
+	      if (n == null) {
 	        throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
 	      }
 
-	      if(di.mp == null){
-	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.SUSPECT, ng.getNode_group_name());
-	      }else{
-	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.ONLINE, ng.getNode_group_name());
+	      String ng_name = null;
+	      if (ng != null) {
+          ng_name = ng.getNode_group_name();
+        }
+	      if (di.mp == null) {
+	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.SUSPECT, ng_name);
+	      } else {
+	        de = new Device(di.dev, di.prop, node.getNode_name(), MetaStoreConst.MDeviceStatus.ONLINE, ng_name);
 	      }
 	      doCreate = true;
-	    } else{
-	      if( di.mp != null && de.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT){
+	    } else {
+	      if (di.mp != null && de.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT) {
 	        de.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
 	      }
-	      if(!de.getNode_name().equals(node.getNode_name()) &&
+	      if (!de.getNode_name().equals(node.getNode_name()) &&
             de.getProp() == MetaStoreConst.MDeviceProp.ALONE){
 	        Node n = getNode(node.getNode_name());
-	        if(n == null){
+	        if (n == null) {
 	          throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
 	        }
 	        de.setNode_name(node.getNode_name());
 	        doCreate = true;
 	      }
-	      if(doCreate){
-	        cs.writeObject(ObjectType.DEVICE, de.getDevid(), de);
-	      }
 	    }
-	   } catch (Exception e) {
+	    if (doCreate){
+	      createDevice(de);
+	    }
+	  } catch (InvalidObjectException e) {
+	    throw e;
+	  } catch (Exception e) {
 	     LOG.error(e,e);
 	     throw new MetaException(e.getMessage());
     }
+	}
 
+	public void createDevice(Device de) throws JedisException, IOException
+	{
+		cs.writeObject(ObjectType.DEVICE, de.getDevid(), de, false);
+		HashMap<String, Object> old_params = new HashMap<String, Object>();
+		old_params.put("devid", de.getDevid());
+		old_params.put("node_name", de.getNode_name());
+		MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_CREATE_DEVICE, -1l, -1l, null, de, old_params));
 	}
 
 	@Override
@@ -288,7 +302,7 @@ public class RawStoreImp implements RawStore {
         }
         n.setStatus(node.getStatus());
         n.setIps(node.getIps());
-        cs.writeObject(ObjectType.NODE, n.getNode_name(), n);
+        cs.writeObject(ObjectType.NODE, n.getNode_name(), n, false);
 
         //不抛异常就说明更新操作成功了，可以发消息了
         if (changed) {
@@ -363,7 +377,7 @@ public class RawStoreImp implements RawStore {
       break;
     } while (true);
 		try {
-			cs.writeObject(ObjectType.SFILE, file.getFid()+"", file);
+			cs.writeObject(ObjectType.SFILE, file.getFid()+"", file, true);
 
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
 			old_params.put("f_id", file.getFid());
@@ -374,7 +388,7 @@ public class RawStoreImp implements RawStore {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
-		return file;
+		return file == null ? null : file.deepCopy();
 	}
 
 	@Override
@@ -450,13 +464,12 @@ public class RawStoreImp implements RawStore {
 	  }
 
 		try {
-//			cs.removeObject(ObjectType.SFILE, sf.getFid()+"");
-			//update index here
-			if(!sf.getDigest().equals(newfile.getDigest())) {
-        cs.removeLfbdValue(sf.getDigest(), sf.getFid()+"");
+			// update index here
+			if (!sf.getDigest().equals(newfile.getDigest())) {
+        cs.removeLfbdValue(sf.getDigest(), sf.getFid() + "");
       }
-			if(stat_changed) {
-        cs.removeSfileStatValue(sf.getStore_status(), sf.getFid()+"");
+			if (stat_changed) {
+        cs.removeSfileStatValue(sf.getStore_status(), sf.getFid() + "");
       }
 			sf.setRep_nr(newfile.getRep_nr());
       sf.setDigest(newfile.getDigest());
@@ -466,10 +479,8 @@ public class RawStoreImp implements RawStore {
       sf.setLoad_status(newfile.getLoad_status());
       sf.setLength(newfile.getLength());
       sf.setRef_files(newfile.getRef_files());
-      if(isWithSfl) {
-        sf.setLocations(newfile.getLocations());
-      }
-      cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+
+      cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf, true);
 
       if (stat_changed) {
         // send the SFile state change message
@@ -493,12 +504,11 @@ public class RawStoreImp implements RawStore {
         MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_FILE_USER_SET_REP_CHANGE, -1l, -1l, null, sf, old_params));
       }
 
-      return sf;
+      return sf == null ? null : sf.deepCopy();
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
-
 	}
 
 	@Override
@@ -508,13 +518,12 @@ public class RawStoreImp implements RawStore {
 	    if (old != null) {
 	      return false;
 	    }
-			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, location.getFid()+"");
-			if(sf == null) {
-        throw new MetaException("No SFile found by id:"+location.getFid());
+			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, location.getFid() + "");
+			if (sf == null) {
+        throw new MetaException("No SFile found by id: " + location.getFid());
       }
 			sf.addToLocations(location);
-			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
-			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(location.getLocation(), location.getDevid()), location);
+			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf, false);
 
 			HashMap<String, Object> old_params = new HashMap<String, Object>();
       old_params.put("f_id", new Long(location.getFid()));
@@ -580,29 +589,39 @@ public class RawStoreImp implements RawStore {
 	public SFileLocation updateSFileLocation(SFileLocation newsfl) throws MetaException {
 		boolean changed = false;
 		try {
-			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
+			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION,
+			    SFileImage.generateSflkey(newsfl.getLocation(), newsfl.getDevid()));
 			if (sfl == null) {
         throw new MetaException("Invalid SFileLocation provided");
       }
-			//防止缓存中的sfile的location与更新之后的sfl不一致。。。。
-			// FIXME 这样手动维护sfile与sfilelocation的关系很麻烦，很容易出错。。。
-			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
-			sf.getLocations().remove(sfl);
 
 			sfl.setUpdate_time(System.currentTimeMillis());
 			if (sfl.getVisit_status() != newsfl.getVisit_status()) {
         changed = true;
+        // update index
+        cs.removeSflStatValue(sfl.getVisit_status(),
+            SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
+        sfl.setVisit_status(newsfl.getVisit_status());
       }
-			//update index
-			if(changed) {
-        cs.removeSflStatValue(sfl.getVisit_status(), SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()));
-      }
-			sfl.setVisit_status(newsfl.getVisit_status());
+
 			sfl.setRep_id(newsfl.getRep_id());
 			sfl.setDigest(newsfl.getDigest());
-//			cs.writeObject(ObjectType.SFILELOCATION, SFileImage.generateSflkey(sfl.getLocation(), sfl.getDevid()), sfl);
+
+			// 防止缓存中的sfile的location与更新之后的sfl不一致。。。。
+			// FIXME 这样手动维护sfile与sfilelocation的关系很麻烦，很容易出错。。。
+			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid() + "");
+			if (sf.getLocations() != null) {
+			  for (int i = 0; i < sf.getLocationsSize(); i++) {
+			    if (sfl.getDevid().equals(sf.getLocations().get(i).getDevid()) &&
+			        sfl.getLocation().equals(sf.getLocations().get(i).getLocation())) {
+			      sf.getLocations().remove(i);
+			      break;
+			    }
+			  }
+			}
 			sf.addToLocations(sfl);
-			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);			//写入了sfile，也就把sfilelocation写入了
+			//写入了sfile，也就把sfilelocation写入了
+			cs.writeObject(ObjectType.SFILE, sf.getFid() + "", sf, false);
 
 			if (changed) {
 	      switch (newsfl.getVisit_status()) {
@@ -627,7 +646,7 @@ public class RawStoreImp implements RawStore {
 	      MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, sfl, old_params));
 	    }
 
-			return sfl;
+			return sfl == null ? null : sfl.deepCopy();
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
@@ -640,15 +659,23 @@ public class RawStoreImp implements RawStore {
 		String sflkey = SFileImage.generateSflkey(location, devid);
 		try {
 			SFileLocation sfl = (SFileLocation) cs.readObject(ObjectType.SFILELOCATION, sflkey);
-			if(sfl == null) {
+			if (sfl == null) {
         return true;
       }
-			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid()+"");
-			if(sf == null) {
-        throw new MetaException("no sfile found by id:"+sfl.getFid());
+			SFile sf = (SFile) cs.readObject(ObjectType.SFILE, sfl.getFid() + "");
+			if (sf == null) {
+        throw new MetaException("No sfile found by id: " + sfl.getFid());
       }
-			sf.getLocations().remove(sfl);
-			cs.writeObject(ObjectType.SFILE, sf.getFid()+"", sf);
+			if (sf.getLocations() != null) {
+			  for (int i = 0; i < sf.getLocationsSize(); i++) {
+			    if (sfl.getDevid().equals(sf.getLocations().get(i).getDevid()) &&
+			        sfl.getLocation().equals(sf.getLocations().get(i).getLocation())) {
+			      sf.getLocations().remove(i);
+			      break;
+			    }
+			  }
+			}
+			cs.writeObject(ObjectType.SFILE, sf.getFid() + "", sf, false);
 			cs.removeObject(ObjectType.SFILELOCATION, sflkey);
 			success = true;
 
@@ -661,7 +688,7 @@ public class RawStoreImp implements RawStore {
 			old_params.put("op", "del");
 			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, null, sfl, old_params));
 
-		}catch(Exception e){
+		} catch(Exception e){
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		} finally {
@@ -782,12 +809,11 @@ public class RawStoreImp implements RawStore {
 			throws MetaException {
 		Iterator<String> iter = CacheStore.getTableHm().keySet().iterator();
 		List<String> tn = new LinkedList<String>();
-		while(iter.hasNext()){
+		while (iter.hasNext()) {
 			String key = iter.next();
-			if(key.startsWith(dbName))
-			{
+			if (key.startsWith(dbName)) {
 				String tabname = key.split("\\.")[1];
-				if(tabname.matches(pattern)) {
+				if (tabname.matches(pattern)) {
           tn.add(tabname);
         }
 			}
@@ -822,10 +848,9 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<String> getAllTables(String dbName) throws MetaException {
 		List<String> ts = new ArrayList<String>();
-		for(String s : CacheStore.getTableHm().keySet())
-		{
-			if(s.startsWith(dbName+".")) {
-        ts.add(s);
+		for (String s : CacheStore.getTableHm().keySet()) {
+			if (s.startsWith(dbName + ".")) {
+        ts.add(s.split("\\.")[1]);
       }
 		}
 		return ts;
@@ -834,31 +859,26 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public List<String> listTableNamesByFilter(String dbName, String filter,
 			short max_tables) throws MetaException, UnknownDBException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new MetaException("Please use getAllTables and do filtering by yourself.");
 	}
 
 	@Override
 	public List<String> listPartitionNames(String db_name, String tbl_name,
 			short max_parts) throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		return new ArrayList<String>();
 	}
 
 	@Override
 	public List<String> listPartitionNamesByFilter(String db_name,
 			String tbl_name, String filter, short max_parts)
 			throws MetaException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new MetaException("Please use listPartitionNames and do filtering by yourself.");
 	}
 
 	@Override
 	public void alterPartition(String db_name, String tbl_name,
 			String partName, List<String> part_vals, Partition new_part)
 			throws InvalidObjectException, MetaException {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
@@ -866,14 +886,11 @@ public class RawStoreImp implements RawStore {
 			List<String> partNames, List<List<String>> part_vals_list,
 			List<Partition> new_parts) throws InvalidObjectException,
 			MetaException {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
 	public boolean addIndex(Index index) throws InvalidObjectException,
 			MetaException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -892,7 +909,6 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public boolean dropIndex(String dbName, String origTableName,
 			String indexName) throws MetaException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -906,7 +922,6 @@ public class RawStoreImp implements RawStore {
 			if(en.getKey().startsWith(dbName+"."+origTableName+".")) {
         ins.add(en.getValue());
       }
-
 		}
 		return ins;
 	}
@@ -920,7 +935,6 @@ public class RawStoreImp implements RawStore {
 			if(en.getKey().startsWith(dbName+"."+origTableName+".")) {
         ins.add(en.getValue().getIndexName());
       }
-
 		}
 		return ins;
 	}
@@ -928,16 +942,13 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public void alterIndex(String dbname, String baseTblName, String name,
 			Index newIndex) throws InvalidObjectException, MetaException {
-		// TODO Auto-generated method stub
-
 	}
 
 	@Override
 	public List<Partition> getPartitionsByFilter(String dbName, String tblName,
 			String filter, short maxParts) throws MetaException,
 			NoSuchObjectException {
-		// TODO Auto-generated method stub
-		return null;
+	  throw new MetaException("Please use listPartitionNames and do filtering by yourself.");
 	}
 
 	@Override
@@ -968,14 +979,12 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public boolean addRole(String rowName, String ownerName)
 			throws InvalidObjectException, MetaException, NoSuchObjectException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public boolean removeRole(String roleName) throws MetaException,
 			NoSuchObjectException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -984,7 +993,6 @@ public class RawStoreImp implements RawStore {
 			PrincipalType principalType, String grantor,
 			PrincipalType grantorType, boolean grantOption)
 			throws MetaException, NoSuchObjectException, InvalidObjectException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -992,7 +1000,6 @@ public class RawStoreImp implements RawStore {
 	public boolean revokeRole(Role role, String userName,
 			PrincipalType principalType) throws MetaException,
 			NoSuchObjectException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -1425,22 +1432,40 @@ public class RawStoreImp implements RawStore {
 
 	@Override
 	public Device getDevice(String devid) throws MetaException,	NoSuchObjectException {
+	  Device de = null;
+
 		try {
-			Device de = (Device) cs.readObject(ObjectType.DEVICE, devid);
-			if(de == null) {
-        throw new NoSuchObjectException("Can not find device :"+devid);
-      }
-			return de;
+			de = (Device) cs.readObject(ObjectType.DEVICE, devid);
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
+		if (de == null) {
+		  throw new NoSuchObjectException("Can not find device :"+devid);
+		}
+		return de;
 	}
 
 	@Override
 	public boolean delDevice(String devid) throws MetaException {
-		// TODO Auto-generated method stub
-		return false;
+		Device de = null;
+		try {
+			de = this.getDevice(devid);
+			if(de == null) {
+        return true;
+      }
+		} catch (NoSuchObjectException e) {
+			return true;
+		}
+		try {
+			cs.removeObject(ObjectType.DEVICE, de.getDevid());
+			HashMap<String, Object> old_params = new HashMap<String, Object>();
+			old_params.put("devid", de.getDevid());
+			MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_DEL_DEVICE, -1l, -1l, null, de, old_params));
+			return true;
+		} catch (Exception e) {
+			throw new MetaException(e.getMessage());
+		}
 	}
 
 	@Override
@@ -1507,16 +1532,18 @@ public class RawStoreImp implements RawStore {
 	@Override
 	public GlobalSchema getSchema(String schema_name)
 			throws NoSuchObjectException, MetaException {
+	  GlobalSchema gs = null;
+
 		try {
-			GlobalSchema gs = (GlobalSchema) cs.readObject(ObjectType.GLOBALSCHEMA, schema_name);
-			if(gs == null) {
-        throw new NoSuchObjectException("Can not find globalschema :"+schema_name);
-      }
-			return gs;
+			 gs = (GlobalSchema) cs.readObject(ObjectType.GLOBALSCHEMA, schema_name);
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
 		}
+		if (gs == null) {
+		  throw new NoSuchObjectException("Can not find globalschema :"+schema_name);
+		}
+		return gs;
 	}
 
 	@Override
@@ -1782,14 +1809,10 @@ public class RawStoreImp implements RawStore {
 	public boolean reopenSFile(SFile file) throws MetaException {
 		boolean changed = false;
 		SFile sf = this.getSFile(file.getFid());
-		List<SFileLocation> toOffline = new ArrayList<SFileLocation>();
 		if (sf == null) {
       throw new MetaException("No SFile found by id " + file.getFid());
     }
 		if (sf.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
-      sf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
-      this.updateSFile(sf);
-
       List<SFileLocation> sfl = sf.getLocations();
       boolean selected = false;
       int idx = 0;
@@ -1797,11 +1820,31 @@ public class RawStoreImp implements RawStore {
       if (sfl.size() > 0) {
         for (int i = 0; i < sfl.size(); i++) {
           SFileLocation x = sfl.get(i);
+          Device d = null;
 
-          if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+          try {
+            d = (Device) cs.readObject(ObjectType.DEVICE, x.getDevid());
+          } catch (Exception e) {
+          }
+
+          if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE &&
+              (d != null && (d.getProp() == MetaStoreConst.MDeviceProp.ALONE ||
+              d.getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE))) {
             selected = true;
             idx = i;
             break;
+          }
+        }
+        if (!selected) {
+          // ok, try to select shared device
+          for (int i = 0; i < sfl.size(); i++) {
+           SFileLocation x = sfl.get(i);
+
+            if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+              selected = true;
+              idx = i;
+              break;
+            }
           }
         }
         if (selected) {
@@ -1809,34 +1852,17 @@ public class RawStoreImp implements RawStore {
           for (int i = 0; i < sfl.size(); i++) {
             if (i != idx) {
               SFileLocation x = sfl.get(i);
-              // mark it as OFFLINE
-              x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-              this.updateSFileLocation(x);
-              toOffline.add(x);
+              // BUG-XXX: delete the SFL, cause SFL not found exception for incomming REP_DONE
+              this.delSFileLocation(x.getDevid(), x.getLocation());
             }
           }
+          SFile nf = this.getSFile(file.getFid());
+          nf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
+          this.updateSFile(nf);
         }
       }
       if (selected) {
         changed = true;
-      }
-
-      if (changed) {
-        // ok, send msgs
-        HashMap<String, Object> old_params = new HashMap<String, Object>();
-        old_params.put("f_id", file.getFid());
-        old_params.put("new_status", MetaStoreConst.MFileStoreStatus.INCREATE);
-        MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, null, sf, old_params));
-        if (toOffline.size() > 0) {
-          for (SFileLocation y : toOffline) {
-            HashMap<String, Object> params = new HashMap<String, Object>();
-            params.put("f_id", file.getFid());
-            params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-            params.put("devid", y.getDevid());
-            params.put("location", y.getLocation());
-            MsgServer.addMsg(MsgServer.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, null, y, params));
-          }
-        }
       }
     }
 		return changed;

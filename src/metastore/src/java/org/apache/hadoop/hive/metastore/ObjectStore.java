@@ -1499,6 +1499,30 @@ public class ObjectStore implements RawStore, Configurable {
     return s;
   }
 
+  public void createDevice(Device device) throws MetaException, NoSuchObjectException, InvalidObjectException {
+  	MDevice md = this.getMDevice(device.getDevid());
+
+  	if (md == null) {
+  		MNode mn = this.getMNode(device.getNode_name());
+  		MNodeGroup mng = null;
+  		try {
+  			mng = this.getMNodeGroup(device.getNg_name());
+  		} catch (NoSuchObjectException e) {
+  		}
+  		md = new MDevice(mn, mng, device.getDevid(), device.getProp(), device.getStatus());
+  		createDevice(md);
+  	} else {
+  		// update
+  		Node n = null;
+  		try {
+				n = this.getNode(device.getNode_name());
+			} catch (MetaException e) {
+			}
+
+  		this.modifyDevice(device, n);
+  	}
+  }
+
   public void createDevice(MDevice md) throws InvalidObjectException, MetaException {
     boolean commited = false;
 
@@ -1506,6 +1530,11 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       pm.makePersistent(md);
       commited = commitTransaction();
+      if(commited) {
+      	HashMap<String, Object> old_params = new HashMap<String, Object>();
+    		old_params.put("devid", md.getDev_name());
+    		MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_DEVICE, -1l, -1l, pm, md, old_params));
+      }
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -1735,23 +1764,34 @@ public class ObjectStore implements RawStore, Configurable {
       return null;
     }
   }
-  
+
   /**
    * 与createfile方法功能基本一致，区别在于不会重新设置参数的fid，不发消息
    * @param file
-   * @throws InvalidObjectException 
+   * @throws InvalidObjectException
    */
   public boolean persistFile(SFile file) throws InvalidObjectException
   {
   	boolean commited = false;
   	MFile f = getMFile(file.getFid());
-  	if(f != null)
-  		throw new InvalidObjectException("file(fid="+file.getFid()+") already exists.");
+  	if(f != null) {
+      throw new InvalidObjectException("file(fid="+file.getFid()+") already exists.");
+    }
     try {
       openTransaction();
       MFile mfile = convertToMFile(file);
       pm.makePersistent(mfile);
       commited = commitTransaction();
+
+      HashMap<String, Object> old_params = new HashMap<String, Object>();
+      old_params.put("f_id", mfile.getFid());
+      old_params.put("db_name", file.getDbName());
+      old_params.put("table_name", file.getTableName());
+//      long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mfile.getTable().getDatabase()).toString()));
+
+      if(commited) {
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_FILE, -1l, -1l, pm, mfile, old_params));
+      }
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -1782,7 +1822,7 @@ public class ObjectStore implements RawStore, Configurable {
           dbName = mfloc.getFile().getTable().getDatabase().getName();
         }
       } else {
-        throw new InvalidObjectException("FID" + location.getFid() + " create Loc " + location.getLocation() + " failed.");
+        throw new InvalidObjectException("FID " + location.getFid() + " create Loc " + location.getLocation() + " failed.");
       }
       commited = commitTransaction();
     } finally {
@@ -2102,7 +2142,7 @@ public class ObjectStore implements RawStore, Configurable {
       }
     }
   }
-  private void deleteBusiTypeCol(MBusiTypeColumn mbc) 
+  private void deleteBusiTypeCol(MBusiTypeColumn mbc)
   {
   	boolean commited = false;
   	MTable mtbl = mbc.getTable();
@@ -2125,7 +2165,7 @@ public class ObjectStore implements RawStore, Configurable {
       }
     }
   }
-  private void insertBusiTypeCol(MBusiTypeColumn mbc) 
+  private void insertBusiTypeCol(MBusiTypeColumn mbc)
   {
   	boolean commited = false;
   	MTable mtbl = mbc.getTable();
@@ -2549,6 +2589,7 @@ public class ObjectStore implements RawStore, Configurable {
 
     try {
       List<MFileLocation> toOffline = new ArrayList<MFileLocation>();
+      List<String> devList = new ArrayList<String>();
 
       // TODO: FIXME: there might be one bug: on recv file rep report, dm change sfl vstatus
       // to online if file's storestatus is NOT in INCREATE. thus, we should commit
@@ -2593,9 +2634,12 @@ public class ObjectStore implements RawStore, Configurable {
               if (i != idx) {
                 MFileLocation x = mfl.get(i);
                 // mark it as OFFLINE
-                x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-                pm.makePersistent(x);
+                //x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+                //pm.makePersistent(x);
+                // BUG-XXX: delete the SFL, cause SFL not found exception for incomming REP_DONE
+                pm.deletePersistent(x);
                 toOffline.add(x);
+                devList.add(x.getDev().getDev_name());
               }
             }
           }
@@ -2612,11 +2656,16 @@ public class ObjectStore implements RawStore, Configurable {
         old_params.put("new_status", MetaStoreConst.MFileStoreStatus.INCREATE);
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, pm, mf, old_params));
         if (toOffline.size() > 0) {
-          for (MFileLocation y : toOffline) {
+          for (int i = 0; i < toOffline.size(); i++) {
+            MFileLocation y = toOffline.get(i);
             HashMap<String, Object> params = new HashMap<String, Object>();
             params.put("f_id", file.getFid());
-            params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, pm, y, params));
+            params.put("devid", devList.get(i));
+            params.put("location", y.getLocation());
+            params.put("db_name", file.getDbName());
+            params.put("table_name", file.getTableName());
+            params.put("op", "del");
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, y, params));
           }
         }
       }
@@ -5004,7 +5053,7 @@ public class ObjectStore implements RawStore, Configurable {
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
       }
-      
+
       //alter comment
       {
       	 List<MFieldSchema> oldCols = new ArrayList<MFieldSchema>();
@@ -5028,13 +5077,13 @@ public class ObjectStore implements RawStore, Configurable {
         			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
         			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
 							 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, mf.getName()));
-        			 
+
         		 }
         	 }
          }
          oldCols.clear();
          oldCols.addAll( oldt.getSd().getCD().getCols());
-         
+
          newCols.removeAll(oldCols);
          for(MFieldSchema mf : newCols)		//add col, insert busitype
          {
@@ -5061,14 +5110,14 @@ public class ObjectStore implements RawStore, Configurable {
          }
          newCols.clear();
          newCols.addAll(newt.getSd().getCD().getCols());
-        
-         
+
+
          oldCols.retainAll(newCols);			//留下的是两者的交集
          newCols.retainAll(oldCols);
          for(MFieldSchema omf : oldCols)
          {
         	 for(MFieldSchema nmf : newCols)
-        	 { 
+        	 {
         		 if(omf.equals(nmf))
         		 {
         			 if(nmf.getComment() == null && omf.getComment() == null)
@@ -5113,7 +5162,7 @@ public class ObjectStore implements RawStore, Configurable {
               			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
               			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
 										 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
-              			 
+
               		 }
               	 }
         			 }
@@ -5147,14 +5196,14 @@ public class ObjectStore implements RawStore, Configurable {
 	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
 	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
 											 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, omf.getName()));
-      	        	 
+
         					 }
         				 }
         			 }
-        			 
+
         		 }
         	 }
-        	 
+
          }
       }
     //MSG_ALT_TALBE_PARTITIONING
@@ -9329,6 +9378,12 @@ public MUser getMUser(String userName) {
         pm.deletePersistent(md);
       }
       success = commitTransaction();
+      if(success)
+      {
+      	HashMap<String, Object> old_params = new HashMap<String, Object>();
+  			old_params.put("devid", devid);
+  			MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_DEL_DEVICE, -1l, -1l, pm, md, old_params));
+      }
     } finally {
       if (!success) {
         rollbackTransaction();

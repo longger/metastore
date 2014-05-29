@@ -692,7 +692,7 @@ public class HiveConf extends Configuration {
 
     //added by liulichao
     HIVE_USER("hive.username", "root"),
-    HIVE_USERPWD("hive.hive.userpassword", "111111"),
+    HIVE_USERPWD("hive.userpassword", "fakepasswd"),
 
     // Datacenter
     IS_TOP_ATTRIBUTION("hive.attribution.is_top", false),
