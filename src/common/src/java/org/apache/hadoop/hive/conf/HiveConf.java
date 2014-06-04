@@ -284,7 +284,7 @@ public class HiveConf extends Configuration {
     // testing only.
     HMSHANDLERFORCERELOADCONF("hive.hmshandler.force.reload.conf", false),
     METASTORESERVERMINTHREADS("hive.metastore.server.min.threads", 200),
-    METASTORESERVERMAXTHREADS("hive.metastore.server.max.threads", 100000),
+    METASTORESERVERMAXTHREADS("hive.metastore.server.max.threads", 20000),
     METASTORE_TCP_KEEP_ALIVE("hive.metastore.server.tcp.keepalive", true),
     // Intermediate dir suffixes used for archiving. Not important what they
     // are, as long as collisions are avoided
