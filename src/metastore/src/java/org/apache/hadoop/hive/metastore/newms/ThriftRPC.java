@@ -265,6 +265,9 @@ public class ThriftRPC extends FacebookBase implements
       __cli.set(MsgProcessing.createMetaStoreClient());
       if (__cli.get() != null) {
         success = true;
+        // BUG-XXX: we have to set client timeout here, otherwise, more and more queries
+        // will send to OldMS.
+        __cli.get().setTimeout(120);
       }
     } catch (MetaException e) {
     }
