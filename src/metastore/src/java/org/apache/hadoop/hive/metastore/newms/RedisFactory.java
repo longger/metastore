@@ -2,7 +2,6 @@ package org.apache.hadoop.hive.metastore.newms;
 
 
 import org.apache.hadoop.hive.conf.HiveConf;
-//import org.apache.hadoop.hive.conf.HiveConf.RedisMode;
 
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
