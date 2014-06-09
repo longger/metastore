@@ -106,7 +106,7 @@ public final class MetaDataFormatUtils {
       {
         keyString.append(", ");
       }
-      keyString.append(key.getName() + "  " + key.getType());
+      keyString.append(key.getName() + "\t" + key.getType());
       first = false;
     }
 
