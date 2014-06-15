@@ -1537,6 +1537,30 @@ public class ObjectStore implements RawStore, Configurable {
     return s;
   }
 
+  public void createDevice(Device device) throws MetaException, NoSuchObjectException, InvalidObjectException {
+  	MDevice md = this.getMDevice(device.getDevid());
+
+  	if (md == null) {
+  		MNode mn = this.getMNode(device.getNode_name());
+  		MNodeGroup mng = null;
+  		try {
+  			mng = this.getMNodeGroup(device.getNg_name());
+  		} catch (NoSuchObjectException e) {
+  		}
+  		md = new MDevice(mn, mng, device.getDevid(), device.getProp(), device.getStatus());
+  		createDevice(md);
+  	} else {
+  		// update
+  		Node n = null;
+  		try {
+				n = this.getNode(device.getNode_name());
+			} catch (MetaException e) {
+			}
+
+  		this.modifyDevice(device, n);
+  	}
+  }
+
   public void createDevice(MDevice md) throws InvalidObjectException, MetaException {
     boolean commited = false;
 
@@ -1544,6 +1568,11 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       pm.makePersistent(md);
       commited = commitTransaction();
+      if(commited) {
+      	HashMap<String, Object> old_params = new HashMap<String, Object>();
+    		old_params.put("devid", md.getDev_name());
+    		MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_DEVICE, -1l, -1l, pm, md, old_params));
+      }
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -1791,6 +1820,16 @@ public class ObjectStore implements RawStore, Configurable {
       MFile mfile = convertToMFile(file);
       pm.makePersistent(mfile);
       commited = commitTransaction();
+
+      HashMap<String, Object> old_params = new HashMap<String, Object>();
+      old_params.put("f_id", mfile.getFid());
+      old_params.put("db_name", file.getDbName());
+      old_params.put("table_name", file.getTableName());
+//      long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mfile.getTable().getDatabase()).toString()));
+
+      if(commited) {
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_FILE, -1l, -1l, pm, mfile, old_params));
+      }
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -1821,7 +1860,7 @@ public class ObjectStore implements RawStore, Configurable {
           dbName = mfloc.getFile().getTable().getDatabase().getName();
         }
       } else {
-        throw new InvalidObjectException("FID" + location.getFid() + " create Loc " + location.getLocation() + " failed.");
+        throw new InvalidObjectException("FID " + location.getFid() + " create Loc " + location.getLocation() + " failed.");
       }
       commited = commitTransaction();
     } finally {
@@ -2659,6 +2698,7 @@ public class ObjectStore implements RawStore, Configurable {
 
     try {
       List<MFileLocation> toOffline = new ArrayList<MFileLocation>();
+      List<String> devList = new ArrayList<String>();
 
       // TODO: FIXME: there might be one bug: on recv file rep report, dm change sfl vstatus
       // to online if file's storestatus is NOT in INCREATE. thus, we should commit
@@ -2703,9 +2743,12 @@ public class ObjectStore implements RawStore, Configurable {
               if (i != idx) {
                 MFileLocation x = mfl.get(i);
                 // mark it as OFFLINE
-                x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-                pm.makePersistent(x);
+                //x.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+                //pm.makePersistent(x);
+                // BUG-XXX: delete the SFL, cause SFL not found exception for incomming REP_DONE
+                pm.deletePersistent(x);
                 toOffline.add(x);
+                devList.add(x.getDev().getDev_name());
               }
             }
           }
@@ -2722,11 +2765,16 @@ public class ObjectStore implements RawStore, Configurable {
         old_params.put("new_status", MetaStoreConst.MFileStoreStatus.INCREATE);
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_STA_FILE_CHANGE, -1l, -1l, pm, mf, old_params));
         if (toOffline.size() > 0) {
-          for (MFileLocation y : toOffline) {
+          for (int i = 0; i < toOffline.size(); i++) {
+            MFileLocation y = toOffline.get(i);
             HashMap<String, Object> params = new HashMap<String, Object>();
             params.put("f_id", file.getFid());
-            params.put("new_status", MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
-            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_ONOFF, -1l, -1l, pm, y, params));
+            params.put("devid", devList.get(i));
+            params.put("location", y.getLocation());
+            params.put("db_name", file.getDbName());
+            params.put("table_name", file.getTableName());
+            params.put("op", "del");
+            MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_REP_FILE_CHANGE, -1l, -1l, pm, y, params));
           }
         }
       }
@@ -9447,6 +9495,12 @@ public MUser getMUser(String userName) {
         pm.deletePersistent(md);
       }
       success = commitTransaction();
+      if(success)
+      {
+      	HashMap<String, Object> old_params = new HashMap<String, Object>();
+  			old_params.put("devid", devid);
+  			MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_DEL_DEVICE, -1l, -1l, pm, md, old_params));
+      }
     } finally {
       if (!success) {
         rollbackTransaction();

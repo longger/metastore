@@ -264,5 +264,6 @@ public class MSGType {
   public static final int MSG_REVOKE_PARTITION_COLUMN = 5206;
   public static final int MSG_REVOKE_TABLE_COLUMN = 5207;
 
-
+  public static final int MSG_CREATE_DEVICE = 6001;
+  public static final int MSG_DEL_DEVICE = 6002;
 }

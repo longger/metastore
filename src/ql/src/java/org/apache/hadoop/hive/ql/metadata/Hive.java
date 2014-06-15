@@ -804,8 +804,8 @@ public class Hive {
         }
 
         if( !params.containsKey(Constants.META_LUCENE_ANALYZE)
-            || !params.containsKey(Constants.META_LUCENE_ANALYZE)
-            || !params.containsKey(Constants.META_LUCENE_ANALYZE)){
+            || !params.containsKey(Constants.META_LUCENE_INDEX)
+            || !params.containsKey(Constants.META_LUCENE_STORE)){
           throw new HiveException("Lucene properties have to be setted.");
         }
       }

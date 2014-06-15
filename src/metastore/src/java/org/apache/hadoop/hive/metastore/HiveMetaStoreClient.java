@@ -47,6 +47,7 @@ import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
+import org.apache.hadoop.hive.metastore.api.BusiTypeSchemaColumn;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
@@ -95,7 +96,6 @@ import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.metastore.zk.ServerName;
 import org.apache.hadoop.hive.metastore.zk.ZKUtil;
 import org.apache.hadoop.hive.metastore.zk.ZooKeeperWatcher;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
@@ -122,6 +122,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
   private String tokenStrForm;
   private final boolean localMetaStore;
   private final HashMap<String,HiveMetaStoreClient> remore_dc_map = new HashMap<String,HiveMetaStoreClient>();
+  private boolean isAuthed = false;
 
   // for thrift connects
   private int retries = 5;
@@ -354,17 +355,19 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
       // connection has died and the default connection is likely to be the first array element.
       promoteRandomMetaStoreURI();
       open();
-      // must re-authenticated here!
-      String user_name = conf.getVar(HiveConf.ConfVars.HIVE_USER);
-      String passwd = conf.getVar(HiveConf.ConfVars.HIVE_USERPWD);
-      try {
-        this.authentication(user_name, passwd);
-      } catch (NoSuchObjectException e) {
-        e.printStackTrace();
-        throw new MetaException(e.getMessage());
-      } catch (TException e) {
-        e.printStackTrace();
-        throw new MetaException(e.getMessage());
+      if (isAuthed) {
+        // must re-authenticated here!
+        String user_name = conf.getVar(HiveConf.ConfVars.HIVE_USER);
+        String passwd = conf.getVar(HiveConf.ConfVars.HIVE_USERPWD);
+        try {
+          this.authentication(user_name, passwd);
+        } catch (NoSuchObjectException e) {
+          e.printStackTrace();
+          throw new MetaException(e.getMessage());
+        } catch (TException e) {
+          e.printStackTrace();
+          throw new MetaException(e.getMessage());
+        }
       }
     }
   }
@@ -486,6 +489,9 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
         if (isConnected) {
           break;
         }
+      }
+      if (isConnected) {
+        break;
       }
       // Wait before launching the next round of connection retries.
       if (retryDelaySeconds > 0) {
@@ -1738,7 +1744,8 @@ public List<String> list_users(Database db) throws MetaException, TException {
 @Override
 public boolean authentication(String user_name, String passwd)
     throws NoSuchObjectException, MetaException, TException {
-  return client.authentication(user_name, passwd);
+  isAuthed = client.authentication(user_name, passwd);
+  return isAuthed;
 }
 //added by liulichao
 
@@ -2466,5 +2473,16 @@ public boolean authentication(String user_name, String passwd)
   public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException {
     assert devids != null;
     return client.listFilesByDevs(devids);
+  }
+
+  @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols() throws MetaException, TException {
+    return client.get_busi_type_schema_cols();
+  }
+
+  @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols_by_name(String schemaName)
+      throws InvalidObjectException, MetaException, TException {
+    return client.get_busi_type_schema_cols_by_name(schemaName);
   }
 }

@@ -61,7 +61,8 @@ public class RedisFactory {
 			if (jsp != null) {
         r = jsp.getResource();
       } else {
-				jsp = new JedisSentinelPool("mymaster", conf.getSentinel(), config);
+        // BUG-XXX: set redis request timeout to 120 sec
+				jsp = new JedisSentinelPool("mymaster", conf.getSentinel(), config, 120 * 1000);
 				r = jsp.getResource();
 			}
 			return r;

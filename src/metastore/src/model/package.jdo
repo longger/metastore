@@ -1429,7 +1429,7 @@
       </field>
     </class>
     
-    <class name="MBusitype" table="busi_types" detachable="true">
+    <class name="MBusiType" table="busi_types" detachable="true">
       <index name="UniqueBusitype" unique="true">
         <column name="name"/>
       </index>

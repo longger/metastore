@@ -1,7 +1,5 @@
 package org.apache.hadoop.hive.metastore.msg;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
@@ -62,30 +60,25 @@ public class MetaMsgServer {
 //		}
   }
 
-
-  private  static void initalize() throws MetaClientException{
+  private  static void initalize() throws MetaClientException {
     server = new MetaMsgServer();
     producer.config(zkAddr);
     producer = Producer.getInstance();
     initalized = true;
     zkfailed = false;
-
   }
-  private static void reconnect() throws MetaClientException
-  {
+
+  private static void reconnect() throws MetaClientException {
     producer.config(zkAddr);
     producer = Producer.getInstance();
     initalized = true;
     zkfailed = false;
   }
 
-
   public static void start() throws MetaClientException{
-    if(!initalized){
+    if (!initalized){
       initalize();
-
     }
-
   }
 
   public static void sendMsg(DDLMsg msg) {
@@ -99,56 +92,49 @@ public class MetaMsgServer {
     send.release();
   }
 
-
   public static class SendThread extends Thread{
     private static final int MSG_SEND_BATCH=0;
     Semaphore sem  = new Semaphore(MSG_SEND_BATCH);
+
     @Override
     public void run() {
-      // TODO Auto-generated method stub
-
       while(true ){
         try{
           if(queue.isEmpty()){
             LOG.debug("---in sendThread before ac");
             sem.acquire();
             LOG.debug("---in sendThread after ac");
-            if(queue.isEmpty()){
+            if (queue.isEmpty()) {
               continue;
             }
           }
 
-          if(zkfailed)
-          {
-            try{
-              Thread.sleep(sleepSeconds*1000l);
+          if (zkfailed) {
+            try {
+              Thread.sleep(sleepSeconds * 1000l);
               reconnect();
-            }catch(InterruptedException e)
-            {
-
-            }catch(MetaClientException e){
+            } catch(InterruptedException e) {
+            } catch(MetaClientException e){
               zkfailed = true;
             }
-
           }
           DDLMsg msg = queue.peek();
           boolean succ = sendDDLMsg(msg);
-          if(!succ){
-            if(!failed_queue.contains(msg)) {
+          if (!succ) {
+            if (!failed_queue.contains(msg)) {
               failed_queue.add(msg);
             }
-          }else{
-
+          } else{
             failed_queue.remove(queue.poll());
 
-            if(!failed_queue.isEmpty()){
-              int i=0;
+            if (!failed_queue.isEmpty()) {
+              int i = 0;
 //              while(i++ < MSG_SEND_BATCH && !failed_queue.isEmpty()){//retry send faild msg
               while( !failed_queue.isEmpty()){//retry send faild msg,old msg should send as soon as possible.
                 DDLMsg retry_msg =failed_queue.peek();
-                if(!sendDDLMsg(retry_msg)){
+                if (!sendDDLMsg(retry_msg)) {
                   break;
-                }else{
+                } else {
                   failed_queue.poll();
                 }
               }
@@ -158,20 +144,17 @@ public class MetaMsgServer {
           LOG.error(e,e);
         }
       }
-
     }
 
     public void release(){
       sem.release();
     }
-
   }
 
 
   public static String getZkAddr() {
     return zkAddr;
   }
-
 
   public static void setZkAddr(String zkAddr) {
     MetaMsgServer.zkAddr = zkAddr;
@@ -211,13 +194,12 @@ public class MetaMsgServer {
     return success;
   }
 
-
   public static class AsyncConsumer {
     final MetaClientConfig metaClientConfig = new MetaClientConfig();
     final ZKConfig zkConfig = new ZKConfig();
     private ThriftHiveMetastore.Client client = null;
-    private HiveConf hiveConf = new HiveConf(HiveMetaTool.class);
-    private ObjectStore ob;
+    private final HiveConf hiveConf = new HiveConf(HiveMetaTool.class);
+    private final ObjectStore ob;
     final String topic ;
     final String group ;
     public AsyncConsumer(String topic, String group) {
@@ -231,12 +213,12 @@ public class MetaMsgServer {
     	String[] uri =hiveConf.get("newms.rpc.uri").split(":");
     	TTransport tt = new TSocket(uri[0], Integer.parseInt(uri[1]));
     	tt.open();
-    	TProtocol protocol = new TBinaryProtocol(tt);  
+    	TProtocol protocol = new TBinaryProtocol(tt);
     	client = new ThriftHiveMetastore.Client(protocol);
-    	
+
     	return client;
     }
-    
+
     public void consume() throws MetaClientException{
       //设置zookeeper地址
       zkConfig.zkConnect = MetaMsgServer.zkAddr;
@@ -244,7 +226,7 @@ public class MetaMsgServer {
       metaClientConfig.setZkConfig(zkConfig);
       // New session factory,强烈建议使用单例
       MessageSessionFactory sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
-      
+
       // create consumer,强烈建议使用单例
 
       //生成处理线程
@@ -262,8 +244,9 @@ public class MetaMsgServer {
         @Override
         public void recieveMessages(final Message message) {
           try {
-          	if(client == null)
-          		client  = createNewMSClient();
+          	if(client == null) {
+              client  = createNewMSClient();
+            }
 					} catch (TTransportException e) {
 						LOG.error(e, e);
 						client = null;
@@ -273,7 +256,7 @@ public class MetaMsgServer {
           LOG.info("---zy--consume msg: " + data);
 //          System.out.println(data);
           DDLMsg msg = DDLMsg.fromJson(data);
-          
+
           int event_id = (int) msg.getEvent_id();
           switch(event_id){
 	          case MSGType.MSG_REP_FILE_CHANGE:
@@ -297,7 +280,7 @@ public class MetaMsgServer {
 								LOG.error(e,e);
 								throw new RuntimeException(e.getMessage());
 							}
-	          	
+
 	          	break;
 	          }
 	          case MSGType.MSG_DEL_FILE:
@@ -305,11 +288,14 @@ public class MetaMsgServer {
 	          	long fid = Long.parseLong(msg.getMsg_data().get("f_id").toString());
 	          	try {
 	          		SFile sf = ob.getSFile(fid);
-	          		if(sf == null)
-	          			break;
-	          		if(sf.getLocations() != null)
-	          			for(SFileLocation sfl : sf.getLocations())
-	          				ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+	          		if(sf == null) {
+                  break;
+                }
+	          		if(sf.getLocations() != null) {
+                  for(SFileLocation sfl : sf.getLocations()) {
+                    ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+                  }
+                }
 								ob.delSFile(fid);
 							} catch (MetaException e) {
 								LOG.error(e,e);
@@ -317,7 +303,7 @@ public class MetaMsgServer {
 							}
 	          	break;
 	          }
-	          
+
 	          default:
 	          {
 	          	LOG.warn("unhandled msg:"+msg.getEvent_id());
@@ -337,11 +323,10 @@ public class MetaMsgServer {
       }
       );
       consumer.completeSubscribe();
-      
+
       LOG.info("---zy-- consumer start at "+zkConfig.zkConnect);
     }
   }
-
 
   public static class Producer {
     private static Producer instance= null;
@@ -367,26 +352,25 @@ public class MetaMsgServer {
         connect();
     }
 
-    private void connect(){
-      try{
+    private void connect() {
+      try {
         sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
         producer = sessionFactory.createProducer();
         producer.publish(topic);
-      }
-      catch(MetaClientException e){
+      } catch(MetaClientException e){
         LOG.error(e.getMessage());
       }
       LOG.info("Topic '" + topic + "' has been published.");
     }
 
     public static Producer getInstance() throws MetaClientException {
-      if(instance == null){
+      if (instance == null){
         instance = new Producer();
       }
       return instance;
     }
 
-    boolean sendMsg(String msg) throws MetaClientException, InterruptedException{
+    boolean sendMsg(String msg) throws MetaClientException, InterruptedException {
         LOG.debug("in send msg:"+msg);
 
         if(producer == null){
@@ -410,8 +394,5 @@ public class MetaMsgServer {
   }
 
   public static void main(String[] args){
-
   }
-
-
 }

@@ -13,7 +13,6 @@ import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
-import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
 import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.thrift.TProcessor;
@@ -26,8 +25,6 @@ import org.apache.thrift.transport.TTransportFactory;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.exceptions.JedisException;
-
-import com.taobao.metamorphosis.exception.MetaClientException;
 
 public class NewMS {
 	public static Log LOG = LogFactory.getLog(NewMS.class);
@@ -101,12 +98,12 @@ public class NewMS {
         TServerTransport serverTransport = tcpKeepAlive ?
             new TServerSocketKeepAlive(port) : new TServerSocket(port);
 			  //TProcessor tprocessor = new ThriftHiveMetastore.Processor<ThriftHiveMetastore.Iface>(new ThriftRPC(conf));
-			  TProcessor tprocessor = new TSetIpAddressProcessor<Iface>(new ThriftRPC().newProxy());
+			  TProcessor tprocessor = new NewMSTSetIpAddressProcessor<Iface>(new ThriftRPC().newProxy());
 
 			  TThreadPoolServer.Args sargs = new TThreadPoolServer.Args(serverTransport)
+			  .processor(tprocessor)
 			  .transportFactory(new TTransportFactory())
 			  .protocolFactory(new TBinaryProtocol.Factory())
-			  .processor(tprocessor)
 			  .minWorkerThreads(minWorkerThreads)
 			  .maxWorkerThreads(maxWorkerThreads);
 
@@ -206,10 +203,10 @@ public class NewMS {
         }
 
         rpc.stop();
-        LOG.info("stop RPCServer.");
+        LOG.info("Stop RPCServer.");
 
-        while(!MsgServer.isQueueEmpty()){
-        	LOG.info("waiting for queues in MsgServer to be empty...");
+        while (!MsgServer.isQueueEmpty()) {
+        	LOG.info("Waiting for queues in MsgServer to be empty...");
         	try {
 						Thread.sleep(100);
 					} catch (InterruptedException e) {
@@ -248,9 +245,9 @@ public class NewMS {
     try {
       try {
         MsgServer.startConsumer(conf.getVar(ConfVars.ZOOKEEPERADDRESS), "meta-test", "newms");
-        MsgServer.startProducer();
+//        MsgServer.startProducer();
         MsgServer.startLocalConsumer();
-      } catch (MetaClientException e) {
+      } catch (Exception e) {
         LOG.error(e, e);
         throw new IOException("Start MsgServer failed: " + e.getMessage());
       }
