@@ -139,6 +139,7 @@ public class AuthorizationPreEventListener extends MetaStorePreEventListener {
     MSSessionState msss = new MSSessionState();
     HiveMetaStoreServerContext serverContext = HiveMetaStoreServerEventHandler.getServerContext(msss.getSessionId());
     if (!serverContext.isAuthenticated()) {
+      LOG.info("---zjw--" + serverContext.getUserName()+"-"+serverContext.getPassword()+"-"+ msss.getUserName());
       throw new MetaException("Current Session has NOT been authenticated yet, please call authenticate() on this connection.");
     } else {
       msss.setUserName(serverContext.getUserName());

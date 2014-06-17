@@ -6302,3 +6302,24 @@ warning(105): Hive.g:598:35: no lexer rule corresponding to token: LPAREN
 
 warning(105): Hive.g:1373:7: no lexer rule corresponding to token: Identifier
 
+Exception in thread "AWT-EventQueue-2" java.lang.NullPointerException
+	at javax.swing.SwingUtilities.getWindowAncestor(SwingUtilities.java:137)
+	at javax.swing.SwingUtilities.windowForComponent(SwingUtilities.java:455)
+	at javax.swing.ToolTipManager.showTipWindow(ToolTipManager.java:309)
+	at javax.swing.ToolTipManager$insideTimerAction.actionPerformed(ToolTipManager.java:629)
+	at javax.swing.Timer.fireActionPerformed(Timer.java:313)
+	at javax.swing.Timer$DoPostEvent.run(Timer.java:244)
+	at java.awt.event.InvocationEvent.dispatch(InvocationEvent.java:226)
+	at java.awt.EventQueue.dispatchEventImpl(EventQueue.java:673)
+	at java.awt.EventQueue.access$300(EventQueue.java:96)
+	at java.awt.EventQueue$2.run(EventQueue.java:634)
+	at java.awt.EventQueue$2.run(EventQueue.java:632)
+	at java.security.AccessController.doPrivileged(Native Method)
+	at java.security.AccessControlContext$1.doIntersectionPrivilege(AccessControlContext.java:108)
+	at java.awt.EventQueue.dispatchEvent(EventQueue.java:643)
+	at java.awt.EventDispatchThread.pumpOneEventForFilters(EventDispatchThread.java:275)
+	at java.awt.EventDispatchThread.pumpEventsForFilter(EventDispatchThread.java:200)
+	at java.awt.EventDispatchThread.pumpEventsForHierarchy(EventDispatchThread.java:190)
+	at java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:185)
+	at java.awt.EventDispatchThread.pumpEvents(EventDispatchThread.java:177)
+	at java.awt.EventDispatchThread.run(EventDispatchThread.java:138)

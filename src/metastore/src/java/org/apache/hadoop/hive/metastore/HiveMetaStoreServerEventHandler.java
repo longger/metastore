@@ -51,7 +51,7 @@ public class HiveMetaStoreServerEventHandler implements TServerEventHandler {
     HiveMetaStoreServerContext sc = new HiveMetaStoreServerContext();
     sessions.put(sc.getSessionId(), sc);
     DMProfile.newConn.incrementAndGet();
-    LOG.debug("Receive a new connection, set its sessionId to " + sc.getSessionId());
+    LOG.info("Receive a new connection, set its sessionId to " + sc.getSessionId());
     return sc;
   }
 

@@ -254,36 +254,61 @@ public class ObjectStore implements RawStore, Configurable {
     return g_fid;
   }
 
-  public void initBusiType() throws MetaException , TException{
+  /**
+   * name prefixed by @ => type
+   * @param bts
+   */
+  private void loadBusiTypes(List<Busitype> bts)
+  {
+    try {
+      bts = showBusitypes();
+    } catch (MetaException e) {
+      LOG.error(e,e);
+    } catch (TException e) {
+      LOG.error(e,e);
+    }
+    if(bts != null || bts.size() != 0 ){
+      for(Busitype type : bts){
+        if(!busiTypes.contains("@"+type.getName())){
+          busiTypes.put("@"+type.getName(), type);
+        }
+      }
+    }
+  }
 
+  private void insertInitBusiTypes()
+  {
     boolean commited = false;
-
-    List<Busitype> bts = showBusitypes();
-    for(Busitype type : bts){
-      if(!busiTypes.contains(type.getName())){
-        busiTypes.put(type.getName(), type);
+    List<MBusiType> mbts = new ArrayList<MBusiType>();
+    for(String type : MetaStoreUtils.BUSI_TYPES){
+      if(!busiTypes.containsKey(type)){
+        MBusiType mBusiType = new MBusiType(type.substring(1),type);
+        mbts.add(mBusiType);
       }
     }
 
-    if(bts.size() == 0){
-      List<MBusiType> mbts = new ArrayList<MBusiType>();
-      for(String type : MetaStoreUtils.BUSI_TYPES){
-        if(!busiTypes.containsKey(type)){
-          MBusiType mBusiType = new MBusiType(type,type);
-          mbts.add(mBusiType);
-        }
+    try {
+      openTransaction();
+      LOG.debug("---zjw-- insert init BusiTypes :" + mbts.size() );
+      pm.makePersistentAll(mbts);
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
       }
+    }
+  }
 
-      try {
-        openTransaction();
-        LOG.debug("---zjw-- insert init BusiTypes :" + bts.size() );
-        pm.makePersistentAll(mbts);
-        commited = commitTransaction();
-      } finally {
-        if (!commited) {
-          rollbackTransaction();
-        }
-      }
+  public void initBusiType() {
+
+    List<Busitype> bts = null;
+    loadBusiTypes(bts);
+    if(bts != null && bts.size() != 0){
+      return;
+    }
+    else{
+      insertInitBusiTypes();
+      loadBusiTypes(bts);
     }
   }
 
@@ -388,6 +413,12 @@ public class ObjectStore implements RawStore, Configurable {
         g_fid_inited = true;
         restoreFID();
       }
+
+      if (!busi_type_inited) {
+        busi_type_inited = true;
+        initBusiType();
+      }
+
     }
 
     //add by zjw for messge queue
@@ -2187,14 +2218,17 @@ public class ObjectStore implements RawStore, Configurable {
   private void createBusiTypeSchemaCol(MSchema mSchema, List<MBusiTypeSchemaColumn> bcs) throws MetaException {
     for(MFieldSchema f : mSchema.getSd().getCD().getCols()){
       String cmet = f.getComment();
+      LOG.info("--zjw check BusiType " + f.getName()+":"+f.getComment());
       if(cmet != null && cmet.indexOf(MetaStoreUtils.BUSI_TYPES_PREFIX)>=0){
         int pos = cmet.indexOf(MetaStoreUtils.BUSI_TYPES_PREFIX);// ip/tel/time/content
         //for(String type : MetaStoreUtils.BUSI_TYPES){
         for(String type : busiTypes.keySet()){
 
+          LOG.info("--zjw BusiType num  " +busiTypes.keySet().size()+"=="+ type);
           if( cmet.length() - pos >= type.length()
               && type.equals(cmet.substring(pos,type.length()).toLowerCase())){
-            MBusiType mType = getMBusitype(type);
+            MBusiType mType = getMBusitype(type.substring(1));
+            LOG.info("--zjw add BusiType " + mType.getBusiTypeName());
             if(mType == null){
               continue;
             }
@@ -10033,12 +10067,22 @@ public MUser getMUser(String userName) {
     boolean commited = false;
     try {
       openTransaction();
+      LOG.debug("---zjw-- busiTypeName:"+busiTypeName);
       String _busiTypeName = busiTypeName.toLowerCase().trim();//.toLowerCase()
-      Query query = pm.newQuery(MNodeGroup.class, "businame == businame");
-      query.declareParameters("java.lang.String businame");
+      Query query = pm.newQuery(MBusiType.class, "businame == businame_string");
+      query.declareParameters("java.lang.String businame_string");
       query.setUnique(true);
       mbt = (MBusiType) query.execute(_busiTypeName);
       pm.retrieve(mbt);
+
+
+//      List<MBusiType> mers = (List<MBusiType>) query.execute();
+//      pm.retrieveAll(mers);
+//      for (Iterator i = mers.iterator(); i.hasNext();) {
+//        mbt = (MBusiType)i.next();
+//        LOG.debug("---zjw-- getBusiTypeName:"+mbt.getBusiTypeName());
+//      }
+
       commited = commitTransaction();
     } finally {
       if (!commited) {

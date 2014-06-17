@@ -2345,7 +2345,9 @@ public class DiskManager {
         if ((ni.toDelete.size() == 0 && ni.toRep.size() == 0) || (cts - ni.lastRptTs > 1800000)) {
           ni = ndmap.remove(node);
           if (ni.toDelete.size() > 0 || ni.toRep.size() > 0) {
-            LOG.error("Might miss entries here ... toDelete {" + ni.toDelete.toString() + "}, toRep {" + ni.toRep.toString() + "}");
+            LOG.error("Might miss entries here ... toDelete {" + ni.toDelete.toString() + "}, toRep {" +
+                ni.toRep.toString() + "}, toVYR {" +
+                ni.toVerify.toString() + "}.");
           }
           // update Node status here
           try {
@@ -2358,7 +2360,8 @@ public class DiskManager {
             LOG.error(e, e);
           }
         } else {
-          LOG.warn("Inactive node " + node + " with pending operations: toDelete " + ni.toDelete.size() + ", toRep " + ni.toRep.size());
+          LOG.warn("Inactive node " + node + " with pending operations: toDelete " + ni.toDelete.size() + ", toRep " +
+              ni.toRep.size() + ", toVerify " + ni.toVerify.size());
         }
       }
       try {
