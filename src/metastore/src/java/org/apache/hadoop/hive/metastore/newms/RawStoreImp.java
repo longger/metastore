@@ -465,7 +465,9 @@ public class RawStoreImp implements RawStore {
 
 		try {
 			// update index here
-			if (!sf.getDigest().equals(newfile.getDigest())) {
+		  if ((sf.getDigest() == null) ||
+		      (!sf.getDigest().equals(newfile.getDigest()))) {
+		    // BUG-XXX: if sf.getDigest() is null, we can't call function equal!
         cs.removeLfbdValue(sf.getDigest(), sf.getFid() + "");
       }
 			if (stat_changed) {
