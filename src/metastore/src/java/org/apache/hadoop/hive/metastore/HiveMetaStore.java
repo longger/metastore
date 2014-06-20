@@ -4597,6 +4597,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
       FileOperationException e = null;
       SFile saved = getMS().getSFile(file.getFid());
+      String devid = "FDev", loc = "FLoc";
 
       try {
         if (saved == null) {
@@ -4617,6 +4618,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           for (SFileLocation sfl : file.getLocations()) {
             if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
               valid_nr++;
+              devid = sfl.getDevid();
+              loc = sfl.getLocation();
             }
           }
           if (valid_nr > 1) {
@@ -4643,6 +4646,20 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           // BUG-XXX: trunc offline sfls
           if (sflToDel.size() > 0) {
             file.getLocations().removeAll(sflToDel);
+          }
+          // BUG-XXX: if client didn't call online_sfilelocation, then file and saved are inconsistent.
+          // So, we have to check saved sfile here
+          for (SFileLocation sfl : saved.getLocations()) {
+            // double check and delete invalid SFLs, this might result in false warnings in SFL delete
+            if (sfl.getVisit_status() != MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+              if (sfl.getDevid().equals(devid) && sfl.getLocation().equals(loc)) {
+                // this is the master SFL, warn on it
+                LOG.warn("Master copy is not in ONLINE state: fid " + file.getFid() + " sfl devid "
+                    + sfl.getDevid() + " loc " + sfl.getLocation() + " state " + sfl.getVisit_status());
+              } else {
+                dm.asyncDelSFL(sfl);
+              }
+            }
           }
         } else {
           LOG.error("Too little file locations provided, expect 1 provided " + file.getLocationsSize() + " [CLOSED] " + file.getFid());

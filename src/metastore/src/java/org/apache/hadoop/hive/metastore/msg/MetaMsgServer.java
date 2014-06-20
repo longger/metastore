@@ -191,6 +191,7 @@ public class MetaMsgServer {
       LOG.error(e,e);
       return retrySendMsg(jsonMsg,times-1);
     }
+    // FIXME: BUG-XXX: handle timeout exception here !
     return success;
   }
 
@@ -237,7 +238,6 @@ public class MetaMsgServer {
 
         @Override
         public Executor getExecutor() {
-          // TODO Auto-generated method stub
           return null;
         }
 
@@ -356,6 +356,7 @@ public class MetaMsgServer {
       try {
         sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
         producer = sessionFactory.createProducer();
+        producer.setTransactionTimeout(30 * 1000);
         producer.publish(topic);
       } catch(MetaClientException e){
         LOG.error(e.getMessage());
