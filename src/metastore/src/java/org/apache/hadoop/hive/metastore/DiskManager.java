@@ -65,6 +65,10 @@ public class DiskManager {
     public static enum RsStatus{
       NEWMS, OLDMS;
     }
+    public static enum Role {
+      MASTER, SLAVE,
+    }
+    public Role role;
 
     public Log LOG;
     private final HiveConf hiveConf;
@@ -1858,9 +1862,19 @@ public class DiskManager {
     public DiskManager(HiveConf conf, Log LOG) throws IOException, MetaException {
       this(conf, LOG, RsStatus.OLDMS);
     }
+
     public DiskManager(HiveConf conf, Log LOG, RsStatus rsType) throws IOException, MetaException {
       this.hiveConf = conf;
       this.LOG = LOG;
+
+      String roleStr = conf.getVar(HiveConf.ConfVars.DM_ROLE);
+      if (roleStr.equalsIgnoreCase("master")) {
+        this.role = Role.MASTER;
+      } else if (roleStr.equalsIgnoreCase("slave")) {
+        this.role = Role.SLAVE;
+      } else {
+        this.role = Role.SLAVE;
+      }
 
       if (rsType == RsStatus.NEWMS){
         rs = new RawStoreImp();
@@ -1885,7 +1899,8 @@ public class DiskManager {
     public void init() throws IOException, MetaException {
       int listenPort = hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
 
-      LOG.info("Starting DiskManager on port " + listenPort + ", multicast enabled=" +
+      LOG.info("Starting DiskManager Role " + hiveConf.getVar(HiveConf.ConfVars.DM_ROLE) +
+          " on port " + listenPort + ", multicast enabled=" +
           hiveConf.getVar(HiveConf.ConfVars.DM_USE_MCAST));
 
       if (hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_MCAST)) {
@@ -2026,6 +2041,8 @@ public class DiskManager {
       r += "Timestamp " + System.currentTimeMillis() / 1000 + "\n";
       r += "MetaStore Server Disk Manager listening @ " + hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
       r += "\nSafeMode: " + safeMode + "\n";
+      r += "Multicast: " + hiveConf.getVar(HiveConf.ConfVars.DM_USE_MCAST) + "\n";
+      r += "Role: " + role + "\n";
       r += "Per-IP-Connections: {\n";
       for (Map.Entry<String, AtomicLong> e : HiveMetaStoreServerEventHandler.perIPConns.entrySet()) {
         r += " " + e.getKey() + " -> " + e.getValue().get() + "\n";
@@ -3769,8 +3786,18 @@ public class DiskManager {
                 e.printStackTrace();
                 continue;
               }
+
               String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
-              //LOG.debug("RECV: " + recvStr);
+
+              // Check if we are in slave role
+              switch (role) {
+              default:
+              case SLAVE:
+                LOG.debug("RECV: " + recvStr);
+                continue;
+              case MASTER:
+                //LOG.debug("RECV: " + recvStr);
+              }
 
               DMReport report = parseReport(recvStr);
 
