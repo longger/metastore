@@ -4191,7 +4191,9 @@ public class DiskManager {
                           SFileLocation sfl = rs.getSFileLocation(args[1], args[2]);
                           if (sfl != null) {
                             SFile file = rs.getSFile(sfl.getFid());
-                            toCheckDel.add(file);
+                            if (file != null) {
+                              toCheckDel.add(file);
+                            }
                             rs.delSFileLocation(args[1], args[2]);
                           }
                         }
