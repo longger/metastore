@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.MulticastSocket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1883,8 +1884,19 @@ public class DiskManager {
 
     public void init() throws IOException, MetaException {
       int listenPort = hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
-      LOG.info("Starting DiskManager on port " + listenPort);
-      server = new DatagramSocket(listenPort);
+
+      LOG.info("Starting DiskManager on port " + listenPort + ", multicast enabled=" +
+          hiveConf.getVar(HiveConf.ConfVars.DM_USE_MCAST));
+
+      if (hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_MCAST)) {
+        server = new MulticastSocket(listenPort);
+        ((MulticastSocket)server).setTimeToLive(5);
+        ((MulticastSocket)server).joinGroup(InetAddress.getByName(
+            hiveConf.getVar(HiveConf.ConfVars.DM_MCAST_GROUP_IP)));
+      } else {
+        server = new DatagramSocket(listenPort);
+      }
+
       dmt = new DMThread("DiskManagerThread");
       dmct = new DMCleanThread("DiskManagerCleanThread");
       dmrt = new DMRepThread("DiskManagerRepThread");
@@ -4448,6 +4460,47 @@ public class DiskManager {
           } catch (Exception e) {
             LOG.error(e, e);
           }
+        }
+      }
+    }
+
+    public static void main(String[] args) throws Exception {
+      HiveConf hiveConf = new HiveConf();
+
+      MulticastSocket server = new MulticastSocket(hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT));
+      server.setTimeToLive(5);
+      server.joinGroup(InetAddress.getByName(
+            hiveConf.getVar(HiveConf.ConfVars.DM_MCAST_GROUP_IP)));
+
+      while (true) {
+        try {
+          byte[] recvBuf = new byte[65536];
+          DatagramPacket recvPacket = new DatagramPacket(recvBuf , recvBuf.length);
+          try {
+            server.receive(recvPacket);
+          } catch (IOException e) {
+            e.printStackTrace();
+            continue;
+          }
+
+          String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
+          System.out.println("RECV: " + recvStr);
+
+          String sendStr = "+OK\n";
+
+          // send back the reply
+          int port = recvPacket.getPort();
+          byte[] sendBuf;
+          sendBuf = sendStr.getBytes();
+          DatagramPacket sendPacket = new DatagramPacket(sendBuf , sendBuf.length ,
+              recvPacket.getAddress() , port );
+          try {
+            server.send(sendPacket);
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
         }
       }
     }

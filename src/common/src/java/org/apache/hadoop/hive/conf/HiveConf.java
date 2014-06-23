@@ -701,6 +701,8 @@ public class HiveConf extends Configuration {
 
     // Disk Manager
     DISKMANAGERLISTENPORT("hive.diskmanager.listen.port", 20202),
+    DM_MCAST_GROUP_IP("hive.diskmanager.mcast.group.ip", "239.122.75.227"),
+    DM_USE_MCAST("hive.diskmanager.mcast.enable", false),
 
     // change it to 30 min
     DM_BACKUP_TIMEOUT("hive.diskmanager.backup.timeout", 1 * 60 * 1000),
