@@ -1055,7 +1055,7 @@ public class DiskManager {
         Set<String> spec_node = new TreeSet<String>();
 
         if (init_size <= 0) {
-          LOG.error("Not valid locations for file " + f.getFid());
+          LOG.error("No valid locations for file " + f.getFid());
           // FIXME: this means we should clean this file?
           if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
               f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
@@ -1116,7 +1116,8 @@ public class DiskManager {
           // FIXME: this means we should clean this file?
           if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
               f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
-            LOG.warn("FID " + f.getFid() + " will be deleted(reason: no locations), however it's status is " + f.getStore_status());
+            boolean should_delete = true;
+
             if (f.getLocationsSize() == 0) {
               synchronized (trs) {
                 try {
@@ -1127,8 +1128,19 @@ public class DiskManager {
                 }
               }
             } else {
-              do_delete(f, f.getLocationsSize());
+              // BUG-XXX: do NOT delete a file when some SFL is in SUSPECT status
+              for (SFileLocation sfl : f.getLocations()) {
+                if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE ||
+                    sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
+                  should_delete = false;
+                }
+              }
+              if (should_delete) {
+                do_delete(f, f.getLocationsSize());
+              }
             }
+            LOG.warn("FID " + f.getFid() + " deleted=" + should_delete +
+                " (reason: no locations), however it's status is " + f.getStore_status());
           }
           return;
         }
@@ -1628,7 +1640,7 @@ public class DiskManager {
                 sd.add(f);
                 continue;
               }
-              boolean do_clean = false;
+              boolean do_clean = false, ngsize_exceeded = false;
 
               if (f.getDbName() != null && f.getTableName() != null) {
                 try {
@@ -1643,6 +1655,7 @@ public class DiskManager {
                   if (ngsize <= f.getLocationsSize()) {
                     // this means we should do cleanups
                     do_clean = true;
+                    ngsize_exceeded = true;
                   }
                   if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
                     // this means we should clean up the OFFLINE locs
@@ -1665,7 +1678,9 @@ public class DiskManager {
                 // we set the timeout to 30 days.
                 if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
                   // if this SUSPECT sfl exist too long or we do exceed the ng'size limit
-                  if (do_clean || fl.getUpdate_time() + suspectDelTimeout < System.currentTimeMillis()) {
+                  // BUG-XXX: if the file had been replicated yet, do_clean always be true! thus, we
+                  // should ignore do_clean flag here!
+                  if (ngsize_exceeded || fl.getUpdate_time() + suspectDelTimeout < System.currentTimeMillis()) {
                     s.add(fl);
                   }
                 }
