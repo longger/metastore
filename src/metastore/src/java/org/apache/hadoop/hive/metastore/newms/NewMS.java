@@ -247,6 +247,7 @@ public class NewMS {
         MsgServer.startConsumer(conf.getVar(ConfVars.ZOOKEEPERADDRESS), "meta-test", "newms");
 //        MsgServer.startProducer();
         MsgServer.startLocalConsumer();
+        
       } catch (Exception e) {
         LOG.error(e, e);
         throw new IOException("Start MsgServer failed: " + e.getMessage());

@@ -17,7 +17,9 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.api.Device;
+import org.apache.hadoop.hive.metastore.api.InvalidObjectException;
 import org.apache.hadoop.hive.metastore.api.MetaException;
+import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Node;
 import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SFileLocation;
@@ -96,6 +98,12 @@ public class MsgServer {
 		c.startMsgProcessing();
 	}
 
+	public static void startHandleMsg(String zkaddr, String topic, String group) throws Exception
+  {
+	  HandleMsg hm = new HandleMsg(zkaddr, topic, group);
+	  hm.handle();
+  }
+	
 	public static void startLocalConsumer()
 	{
 		new Thread(lc).start();
@@ -230,7 +238,15 @@ public class MsgServer {
         // New session factory,强烈建议使用单例
         connect();
     }
+    private Producer(String topic) {
 
+      //设置zookeeper地址
+      zkConfig.zkConnect = zkAddr;
+      metaClientConfig.setZkConfig(zkConfig);
+      this.topic = topic;
+      // New session factory,强烈建议使用单例
+      connect();
+    }
     private void connect(){
       try{
         sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
@@ -272,8 +288,30 @@ public class MsgServer {
         }
         return success;
     }
-	}
+    
+    boolean sendMsg(String msg,String tp) throws MetaClientException, InterruptedException{
+//    LOG.debug("in send msg:"+msg);
 
+      if(producer == null){
+        connect();
+        if(producer == null){
+          return false;
+        }
+      }
+      SendResult sendResult = producer.sendMessage(new Message(tp, msg.getBytes()));
+      // check result
+  
+      boolean success = sendResult.isSuccess();
+      if (!success) {
+          LOG.debug("Send oraclefailed-message failed,error message:" + sendResult.getErrorMessage());
+      }
+      else {
+          LOG.debug("Send oraclefailed-message successfully,sent to " + sendResult.getPartition());
+      }
+      return success;
+    }
+	}
+	
 
 	public static class Consumer {
 		final MetaClientConfig metaClientConfig = new MetaClientConfig();
@@ -390,6 +428,182 @@ public class MsgServer {
 		}
 
 	}
+	
+	public static class HandleMsg {
+    final MetaClientConfig metaClientConfig = new MetaClientConfig();
+    final ZKConfig zkConfig = new ZKConfig();
+    private String localhost_name;
+    private final String zkaddr;
+    private final String topic;
+    private final String group;
+    private final ConcurrentLinkedQueue<DDLMsg> failedq = new ConcurrentLinkedQueue<DDLMsg>();
+    private ObjectStore ob;
+    private boolean isNotified = false;
+
+    public HandleMsg(String zkaddr, String topic, String group) throws MetaException, IOException {
+      this.zkaddr = zkaddr;
+      this.topic = topic;
+      this.group = group;
+      try {
+        localhost_name = InetAddress.getLocalHost().getHostName();
+      } catch (UnknownHostException e) {
+        LOG.error(e,e);
+      }
+      ob = new ObjectStore();
+    }
+
+    public void handle() throws MetaClientException {
+      // 设置zookeeper地址
+      zkConfig.zkConnect = zkaddr;
+      metaClientConfig.setZkConfig(zkConfig);
+      // New session factory,强烈建议使用单例
+      MessageSessionFactory sessionFactory = new MetaMessageSessionFactory(metaClientConfig);
+      // create consumer,强烈建议使用单例
+
+      // 生成处理线程
+      ConsumerConfig cc = new ConsumerConfig(group);
+      MessageConsumer consumer = sessionFactory.createConsumer(cc);
+
+      // 订阅事件，MessageListener是事件处理接口
+      consumer.subscribe(topic, 1024, new MessageListener() {
+
+        @Override
+        public Executor getExecutor() {
+          return null;
+        }
+
+        @Override
+        public void recieveMessages(final Message message) {
+          
+          String data = new String(message.getData());
+          LOG.info("Consume msg from metaq: " + data);
+          int time = 0;
+          DDLMsg msg = DDLMsg.fromJson(data);
+          int event_id = (int) msg.getEvent_id();
+          switch (event_id) {
+            case MSGType.MSG_REP_FILE_CHANGE:
+            {
+              String op = msg.getMsg_data().get("op").toString();
+              SFileLocation sfl = (SFileLocation) msg.getEventObject();
+              if (op.equals("add")) {
+                try {
+                  ob.createFileLocation(sfl);
+                } catch (Exception e) {
+                  LOG.error(e,e);
+                  LOG.error("handle msg failed: " + msg.toJson());
+                }
+              }
+              if (op.equals("del")) {
+                try {
+                  ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+                } catch (MetaException e) {
+                  LOG.error(e,e);
+                  LOG.error("handle msg failed: " + msg.toJson());
+                }
+              }
+              break;
+            }
+            case MSGType.MSG_FILE_USER_SET_REP_CHANGE:
+            case MSGType.MSG_STA_FILE_CHANGE:
+            {
+              SFile sf = (SFile) msg.getEventObject();
+              try {
+                ob.updateSFile(sf);
+              } catch (MetaException e) {
+                LOG.error(e,e);
+                LOG.error("handle msg failed: " + msg.toJson());
+              }
+
+              break;
+            }
+            case MSGType.MSG_REP_FILE_ONOFF:
+            {
+              SFileLocation sfl = (SFileLocation) msg.getEventObject();
+              try {
+                ob.updateSFileLocation(sfl);
+              } catch (MetaException e) {
+                LOG.error(e,e);
+                LOG.error("handle msg failed: " + msg.toJson());
+              }
+              break;
+            }
+            case MSGType.MSG_CREATE_FILE:
+            {
+              try {
+                SFile sf = (SFile) msg.getEventObject();
+                ob.persistFile(sf);
+              } catch (Exception e) {
+                LOG.error(e,e);
+                LOG.error("handle msg failed: " + msg.toJson());
+              }
+              break;
+            }
+            case MSGType.MSG_DEL_FILE:
+            {
+              try {
+                SFile sf = (SFile) msg.getEventObject();
+                if (sf.getLocations() != null) {
+                  for (SFileLocation sfl : sf.getLocations()) {
+                    ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
+                  }
+                }
+                ob.delSFile(sf.getFid());
+              } catch (MetaException e) {
+                LOG.error(e,e);
+                LOG.error("handle msg failed: " + msg.toJson());
+              }
+              break;
+            }
+            case MSGType.MSG_FAIL_NODE:
+            case MSGType.MSG_BACK_NODE:
+            {
+              Node n = (Node) msg.getEventObject();
+              try {
+                ob.updateNode(n);
+              } catch (MetaException e) {
+                LOG.error(e,e);
+                LOG.error("handle msg failed: " + msg.toJson());
+              }
+              break;
+            }
+
+            case MSGType.MSG_CREATE_DEVICE:
+            {
+              Device d = (Device) msg.getEventObject();
+              try {
+                try {
+                  ob.createDevice(d);
+                } catch (NoSuchObjectException e) {
+                  e.printStackTrace();
+                } catch (InvalidObjectException e) {
+                  e.printStackTrace();
+                }
+              } catch (MetaException e){
+                LOG.error(e,e);
+                LOG.error("handle msg failed: " + msg.toJson());
+              }
+              break;
+            }
+            case MSGType.MSG_DEL_DEVICE:
+            {
+              String devid = msg.getMsg_data().get("devid").toString();
+              try {
+                ob.delDevice(devid);
+              } catch (MetaException e){
+                LOG.error(e,e);
+                LOG.error("handle msg failed: " + msg.toJson());
+              }
+              break;
+            }
+          }//end of switch
+         
+        }
+
+      });
+      consumer.completeSubscribe();
+    }
+
+  }
 
 	public static DDLMsg generateDDLMsg(long event_id,long db_id,long node_id ,PersistenceManager pm , Object eventObject,HashMap<String,Object> old_object_params){
     Long id = -1l;
@@ -413,13 +627,14 @@ public class MsgServer {
 		@Override
 		public void run() {
 			while (true) {
+			  DDLMsg msg = null;
 			  try {
           try {
 						lcsem.acquire();
 					} catch (InterruptedException e1) {
 						e1.printStackTrace();
 					}
-          DDLMsg msg = localQueue.poll();
+          msg = localQueue.poll();
           if (msg == null) {
               continue;
           }
@@ -544,6 +759,15 @@ public class MsgServer {
 			    ob = new ObjectStore();
 			    ob.setConf(new HiveConf());
 			    } catch (Exception e1) {
+			      String jsonMsg = MSGFactory.getMsgData(msg);
+			      try {
+              producer.sendMsg(jsonMsg,"fail-msgs");
+            } catch (MetaClientException e2) {
+              e2.printStackTrace();
+            } catch (InterruptedException e2) {
+              e2.printStackTrace();
+            }
+			      LOG.info("---zqh-- send ddl msg:" + jsonMsg);
 			      LOG.error(e1, e1);
 			      LOG.error("Exception in exception handling, BAD!");
 			    }
@@ -551,6 +775,14 @@ public class MsgServer {
 			}
 		}
 
+	}
+	
+	public void oracleFailHandle(){
+	  try {
+      startHandleMsg(conf.getVar(ConfVars.ZOOKEEPERADDRESS), "fail-msgs", "failedmsg");
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
 	}
 
 	public static void main(String[] args) {
