@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.MulticastSocket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,6 +65,10 @@ public class DiskManager {
     public static enum RsStatus{
       NEWMS, OLDMS;
     }
+    public static enum Role {
+      MASTER, SLAVE,
+    }
+    public Role role;
 
     public Log LOG;
     private final HiveConf hiveConf;
@@ -1857,9 +1862,19 @@ public class DiskManager {
     public DiskManager(HiveConf conf, Log LOG) throws IOException, MetaException {
       this(conf, LOG, RsStatus.OLDMS);
     }
+
     public DiskManager(HiveConf conf, Log LOG, RsStatus rsType) throws IOException, MetaException {
       this.hiveConf = conf;
       this.LOG = LOG;
+
+      String roleStr = conf.getVar(HiveConf.ConfVars.DM_ROLE);
+      if (roleStr.equalsIgnoreCase("master")) {
+        this.role = Role.MASTER;
+      } else if (roleStr.equalsIgnoreCase("slave")) {
+        this.role = Role.SLAVE;
+      } else {
+        this.role = Role.SLAVE;
+      }
 
       if (rsType == RsStatus.NEWMS){
         rs = new RawStoreImp();
@@ -1883,8 +1898,20 @@ public class DiskManager {
 
     public void init() throws IOException, MetaException {
       int listenPort = hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
-      LOG.info("Starting DiskManager on port " + listenPort);
-      server = new DatagramSocket(listenPort);
+
+      LOG.info("Starting DiskManager Role " + hiveConf.getVar(HiveConf.ConfVars.DM_ROLE) +
+          " on port " + listenPort + ", multicast enabled=" +
+          hiveConf.getVar(HiveConf.ConfVars.DM_USE_MCAST));
+
+      if (hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_MCAST)) {
+        server = new MulticastSocket(listenPort);
+        ((MulticastSocket)server).setTimeToLive(5);
+        ((MulticastSocket)server).joinGroup(InetAddress.getByName(
+            hiveConf.getVar(HiveConf.ConfVars.DM_MCAST_GROUP_IP)));
+      } else {
+        server = new DatagramSocket(listenPort);
+      }
+
       dmt = new DMThread("DiskManagerThread");
       dmct = new DMCleanThread("DiskManagerCleanThread");
       dmrt = new DMRepThread("DiskManagerRepThread");
@@ -2014,6 +2041,8 @@ public class DiskManager {
       r += "Timestamp " + System.currentTimeMillis() / 1000 + "\n";
       r += "MetaStore Server Disk Manager listening @ " + hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
       r += "\nSafeMode: " + safeMode + "\n";
+      r += "Multicast: " + hiveConf.getVar(HiveConf.ConfVars.DM_USE_MCAST) + "\n";
+      r += "Role: " + role + "\n";
       r += "Per-IP-Connections: {\n";
       for (Map.Entry<String, AtomicLong> e : HiveMetaStoreServerEventHandler.perIPConns.entrySet()) {
         r += " " + e.getKey() + " -> " + e.getValue().get() + "\n";
@@ -3757,8 +3786,18 @@ public class DiskManager {
                 e.printStackTrace();
                 continue;
               }
+
               String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
-              //LOG.debug("RECV: " + recvStr);
+
+              // Check if we are in slave role
+              switch (role) {
+              default:
+              case SLAVE:
+                LOG.debug("RECV: " + recvStr);
+                continue;
+              case MASTER:
+                //LOG.debug("RECV: " + recvStr);
+              }
 
               DMReport report = parseReport(recvStr);
 
@@ -4191,7 +4230,9 @@ public class DiskManager {
                           SFileLocation sfl = rs.getSFileLocation(args[1], args[2]);
                           if (sfl != null) {
                             SFile file = rs.getSFile(sfl.getFid());
-                            toCheckDel.add(file);
+                            if (file != null) {
+                              toCheckDel.add(file);
+                            }
                             rs.delSFileLocation(args[1], args[2]);
                           }
                         }
@@ -4446,6 +4487,47 @@ public class DiskManager {
           } catch (Exception e) {
             LOG.error(e, e);
           }
+        }
+      }
+    }
+
+    public static void main(String[] args) throws Exception {
+      HiveConf hiveConf = new HiveConf();
+
+      MulticastSocket server = new MulticastSocket(hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT));
+      server.setTimeToLive(5);
+      server.joinGroup(InetAddress.getByName(
+            hiveConf.getVar(HiveConf.ConfVars.DM_MCAST_GROUP_IP)));
+
+      while (true) {
+        try {
+          byte[] recvBuf = new byte[65536];
+          DatagramPacket recvPacket = new DatagramPacket(recvBuf , recvBuf.length);
+          try {
+            server.receive(recvPacket);
+          } catch (IOException e) {
+            e.printStackTrace();
+            continue;
+          }
+
+          String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
+          System.out.println("RECV: " + recvStr);
+
+          String sendStr = "+OK\n";
+
+          // send back the reply
+          int port = recvPacket.getPort();
+          byte[] sendBuf;
+          sendBuf = sendStr.getBytes();
+          DatagramPacket sendPacket = new DatagramPacket(sendBuf , sendBuf.length ,
+              recvPacket.getAddress() , port );
+          try {
+            server.send(sendPacket);
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
         }
       }
     }

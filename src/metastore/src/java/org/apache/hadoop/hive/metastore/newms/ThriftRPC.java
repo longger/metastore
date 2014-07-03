@@ -694,6 +694,10 @@ public class ThriftRPC extends FacebookBase implements
     String devid = "FDev", loc = "FLoc";
 
     try {
+      if (file.getDigest() == null) {
+        LOG.warn("File " + file.getFid() + " contains NULL digest.");
+        file.setDigest("DETECT_NULL_DIGEST");
+      }
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID" + file.getFid(),
             FOFailReason.INVALID_FILE);

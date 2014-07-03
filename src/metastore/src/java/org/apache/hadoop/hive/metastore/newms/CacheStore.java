@@ -164,7 +164,7 @@ public class CacheStore {
 	      		p.sadd(k2, sfi.getFid() + "");
 	      	}
 	      	// update index for listFilesByDegist
-	      	if (sfi.getDigest() != null) {
+	      	if (updateIndex) {
 	      		String k = generateLfbdKey(sfi.getDigest());
 	      		p.sadd(k, sfi.getFid() + "");
 	      	}
