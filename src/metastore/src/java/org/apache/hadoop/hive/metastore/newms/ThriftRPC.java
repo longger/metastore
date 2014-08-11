@@ -704,7 +704,7 @@ public class ThriftRPC extends FacebookBase implements
       }
 
       if (saved.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
-        LOG.error("File StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").");
+        LOG.error("File " + file.getFid() + " StoreStatus is not in INCREATE (vs " + saved.getStore_status() + ").");
         throw new FileOperationException("File StoreStatus is not in INCREATE (vs "
             + saved.getStore_status() + ").",
             FOFailReason.INVALID_STATE);
@@ -723,13 +723,13 @@ public class ThriftRPC extends FacebookBase implements
           }
         }
         if (valid_nr > 1) {
-          LOG.error("Too many file locations provided, expect 1 provided " + valid_nr
+          LOG.error("File " + file.getFid() + " Too many file locations provided, expect 1 provided " + valid_nr
               + " [NOT CLOSED]");
           throw new FileOperationException("Too many file locations provided, expect 1 provided "
               + valid_nr + " [NOT CLOSED]",
               FOFailReason.INVALID_FILE);
         } else if (valid_nr < 1) {
-          LOG.error("Too little file locations provided, expect 1 provided " + valid_nr
+          LOG.error("File " + file.getFid() + " Too little file locations provided, expect 1 provided " + valid_nr
               + " [CLOSED]");
           e = new FileOperationException("Too little file locations provided, expect 1 provided "
               + valid_nr + " [CLOSED]",
@@ -766,7 +766,7 @@ public class ThriftRPC extends FacebookBase implements
           }
         }
       } else {
-        LOG.error("Too little file locations provided, expect 1 provided "
+        LOG.error("File " + file.getFid() + " Too little file locations provided, expect 1 provided "
             + file.getLocationsSize() + " [CLOSED]");
         e = new FileOperationException("Too little file locations provided, expect 1 provided "
             + file.getLocationsSize() + " [CLOSED]",
