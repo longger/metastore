@@ -30,12 +30,16 @@ public class MetaStoreConst {
   }
 
   public class MDeviceProp {
-    public static final int ALONE = 0;  // exist only in one node
-    public static final int SHARED = 1; // might attached to many nodes
+    public static final int GENERAL = 0;  // L2: e.g. SAS
+    public static final int SHARED = 1; // L4: might attached to many nodes, e.g. NAS
     public static final int BACKUP = 2; // this means it's special SHARED device for backup use
     public static final int BACKUP_ALONE = 3; // special ALONE device for backup use
-    public static final int CACHE = 4;  // fast cache device
-    public static final int __MAX__ = 5;
+    public static final int CACHE = 4;  // L1: fast cache device, e.g. SSD
+    public static final int MASS = 5; // L3: e.g. SATA
+    public static final int __MAX__ = 6;
+
+    public static final int __TYPE_MASK__ = 0x0f;
+    public static final int __QUOTA_SHIFT__ = 4;
   }
 
   public class MDeviceStatus {

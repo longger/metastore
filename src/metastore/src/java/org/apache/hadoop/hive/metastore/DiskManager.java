@@ -537,6 +537,40 @@ public class DiskManager {
         isOffline = false;
       }
 
+      public int getType() {
+        return prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__;
+      }
+
+      public String getTypeStr() {
+        switch (prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__) {
+        case MetaStoreConst.MDeviceProp.CACHE:
+          return "L1";
+        case MetaStoreConst.MDeviceProp.GENERAL:
+          return "L2";
+        case MetaStoreConst.MDeviceProp.MASS:
+          return "L3";
+        case MetaStoreConst.MDeviceProp.SHARED:
+          return "L4";
+        default:
+          return "X" + getType();
+        }
+      }
+
+      public static int getType(int prop) {
+        return prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__;
+      }
+
+      // Note that, the quota we save is -quota
+      public int getQuota() {
+        int keep = prop >> MetaStoreConst.MDeviceProp.__QUOTA_SHIFT__;
+        return keep > 100 ? 0 : (100 - keep);
+      }
+
+      public static int getQuota(int prop) {
+        int keep = prop >> MetaStoreConst.MDeviceProp.__QUOTA_SHIFT__;
+        return keep > 100 ? 0 : (100 - keep);
+      }
+
       public DeviceInfo(DeviceInfo old) {
         dev = old.dev;
         mp = old.mp;
@@ -1277,7 +1311,7 @@ public class DiskManager {
         synchronized (admap) {
           for (Map.Entry<String, DeviceInfo> entry : admap.entrySet()) {
             // Note: only calculate the alone and non-offline device stdev
-            if (entry.getValue().prop == MetaStoreConst.MDeviceProp.ALONE && !entry.getValue().isOffline) {
+            if (entry.getValue().getType() == MetaStoreConst.MDeviceProp.GENERAL && !entry.getValue().isOffline) {
               avg += entry.getValue().free;
               nr++;
               vals.add(entry.getValue().free);
@@ -1345,8 +1379,8 @@ public class DiskManager {
   	          truefree += e.getValue().free;
   	          truetotal += (e.getValue().free + e.getValue().used);
   	        }
-  	        if (e.getValue().prop == MetaStoreConst.MDeviceProp.SHARED ||
-  	            e.getValue().prop == MetaStoreConst.MDeviceProp.BACKUP) {
+  	        if (e.getValue().getType() == MetaStoreConst.MDeviceProp.SHARED ||
+  	            e.getValue().getType() == MetaStoreConst.MDeviceProp.BACKUP) {
   	          sharedfree += e.getValue().free;
   	        }
   	      }
@@ -2073,13 +2107,16 @@ public class DiskManager {
           synchronized (e.getValue()) {
             if (e.getValue().dis != null) {
               for (DeviceInfo di : e.getValue().dis) {
-                r += (di.isOffline ? "OF" : "ON") + ":" + di.prop + ":" + di.dev + ",";
-                switch (di.prop) {
-                case MetaStoreConst.MDeviceProp.ALONE:
+                r += (di.isOffline ? "OF" : "ON") + ":" + di.getTypeStr() +
+                    ":" + di.getQuota() + ":" + di.dev + ",";
+                switch (di.getType()) {
+                case MetaStoreConst.MDeviceProp.GENERAL:
                 case MetaStoreConst.MDeviceProp.BACKUP:
                 case MetaStoreConst.MDeviceProp.SHARED:
                 case MetaStoreConst.MDeviceProp.BACKUP_ALONE:
-                  devnr[di.prop]++;
+                case MetaStoreConst.MDeviceProp.MASS:
+                case MetaStoreConst.MDeviceProp.CACHE:
+                  devnr[di.getType()]++;
                 case -1:
                   break;
                 }
@@ -2143,7 +2180,7 @@ public class DiskManager {
       synchronized (rs) {
         r += "Total devices " + rs.countDevice() + ", active {offline " +
             offlinenr + ", alone " +
-            devnr[MetaStoreConst.MDeviceProp.ALONE] + ", backup " +
+            devnr[MetaStoreConst.MDeviceProp.GENERAL] + ", backup " +
             devnr[MetaStoreConst.MDeviceProp.BACKUP] + " on " +
             adevnr[MetaStoreConst.MDeviceProp.BACKUP] + ", shared " +
             devnr[MetaStoreConst.MDeviceProp.SHARED] + " on " +
@@ -2271,7 +2308,7 @@ public class DiskManager {
               }
               if (d == null ||
                   (d.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT && di.mp != null) ||
-                  (!d.getNode_name().equals(node.getNode_name()) && d.getProp() == MetaStoreConst.MDeviceProp.ALONE)) {
+                  (!d.getNode_name().equals(node.getNode_name()) && d.getProp() == MetaStoreConst.MDeviceProp.GENERAL)) {
                 rs_s1.createOrUpdateDevice(di, node, null);
                 d = rs_s1.getDevice(di.dev);
               }
@@ -2453,13 +2490,13 @@ public class DiskManager {
     public boolean isSharedDevice(String devid) throws MetaException, NoSuchObjectException {
       DeviceInfo di = admap.get(devid);
       if (di != null) {
-        return (di.prop == MetaStoreConst.MDeviceProp.SHARED ||
-            di.prop == MetaStoreConst.MDeviceProp.BACKUP);
+        return (di.getType() == MetaStoreConst.MDeviceProp.SHARED ||
+            di.getType() == MetaStoreConst.MDeviceProp.BACKUP);
       } else {
         synchronized (rs) {
           Device d = rs.getDevice(devid);
-          if (d.getProp() == MetaStoreConst.MDeviceProp.SHARED ||
-              d.getProp() == MetaStoreConst.MDeviceProp.BACKUP) {
+          if (DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.SHARED ||
+              DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.BACKUP) {
             return true;
           } else {
             return false;
@@ -2699,8 +2736,8 @@ public class DiskManager {
       Set<String> r = new TreeSet<String>();
 
       for (DeviceInfo di : devs) {
-        if (di.prop == MetaStoreConst.MDeviceProp.SHARED ||
-            di.prop == MetaStoreConst.MDeviceProp.BACKUP) {
+        if (di.getType() == MetaStoreConst.MDeviceProp.SHARED ||
+            di.getType() == MetaStoreConst.MDeviceProp.BACKUP) {
           r.add(di.dev);
         }
       }
@@ -2725,7 +2762,7 @@ public class DiskManager {
           NodeInfo ni = e.getValue();
           if (ni.dis != null && ni.dis.size() > 0) {
             for (DeviceInfo di : ni.dis) {
-              if (di.prop == MetaStoreConst.MDeviceProp.CACHE && !di.isOffline) {
+              if (di.getType() == MetaStoreConst.MDeviceProp.CACHE && !di.isOffline) {
                 // ok, this node is a candidate
                 Long oldfree = candidate.get(e.getKey());
                 if (oldfree == null) {
@@ -2856,10 +2893,10 @@ public class DiskManager {
           }
           for (DeviceInfo di : dis) {
             // Do not calculate cache device's space
-            if (di.prop == MetaStoreConst.MDeviceProp.CACHE) {
+            if (di.getType() == MetaStoreConst.MDeviceProp.CACHE) {
               continue;
             }
-            if (!(ignoreShared && (di.prop == MetaStoreConst.MDeviceProp.SHARED || di.prop == MetaStoreConst.MDeviceProp.BACKUP))) {
+            if (!(ignoreShared && (di.getType() == MetaStoreConst.MDeviceProp.SHARED || di.getType() == MetaStoreConst.MDeviceProp.BACKUP))) {
               thisfree += di.free;
             }
           }
@@ -2882,7 +2919,7 @@ public class DiskManager {
             if (di.isOffline || di.free < 1024 * 1024) {
               continue;
             }
-            if (di.prop == MetaStoreConst.MDeviceProp.BACKUP || di.prop == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
+            if (di.getType() == MetaStoreConst.MDeviceProp.BACKUP || di.getType() == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
               dev.add(di.dev);
               node.add(e.getKey());
             }
@@ -2900,7 +2937,7 @@ public class DiskManager {
             if (di.isOffline || di.free < 1024 * 1024) {
               continue;
             }
-            if (di.prop == MetaStoreConst.MDeviceProp.BACKUP || di.prop == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
+            if (di.getType() == MetaStoreConst.MDeviceProp.BACKUP || di.getType() == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
               dev.add(di.dev);
               node.add(e.getKey());
             }
@@ -2935,7 +2972,7 @@ public class DiskManager {
           if (di.isOffline) {
             continue;
           }
-          if (di.prop == MetaStoreConst.MDeviceProp.ALONE) {
+          if (di.getType() == MetaStoreConst.MDeviceProp.GENERAL) {
             r.add(di);
           }
         }
@@ -3106,7 +3143,7 @@ public class DiskManager {
       } else if (flp.dev_mode == FileLocatingPolicy.USE_CACHE) {
         if (ni.dis != null) {
           for (DeviceInfo di : ni.dis) {
-            if (di.prop == MetaStoreConst.MDeviceProp.CACHE) {
+            if (di.getType() == MetaStoreConst.MDeviceProp.CACHE) {
               dilist.add(di);
             }
           }
