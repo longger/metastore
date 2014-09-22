@@ -34,9 +34,12 @@ import org.apache.hadoop.hive.metastore.DiskManager;
 import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DMRequest;
 import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
+import org.apache.hadoop.hive.metastore.DiskManager.FLSelector.FLS_Policy;
 import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
+import org.apache.hadoop.hive.metastore.DiskManager.ReplicateRequest;
 import org.apache.hadoop.hive.metastore.DiskManager.RsStatus;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
+import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler;
 import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler.MSSessionState;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerContext;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
@@ -128,7 +131,7 @@ public class ThriftRPC extends FacebookBase implements
 
   private static final Log LOG = LogFactory.getLog(ThriftRPC.class);
   private static final ScheduledExecutorService schedule = Executors.newScheduledThreadPool(1);
-  private static DiskManager dm;
+  public static DiskManager dm;
   private final Random rand = new Random();
   public static Long file_creation_lock = 0L;
   private List<MetaStoreEndFunctionListener> endFunctionListeners;
@@ -254,6 +257,27 @@ public class ThriftRPC extends FacebookBase implements
     } catch (MetaException e) {
       LOG.error(e, e);
       throw new IOException(e.getMessage());
+    }
+    // ok, call FLSelector Framework here!
+    if (dm != null) {
+      try {
+        String intbls = hiveConf.getVar(HiveConf.ConfVars.FLSELECTOR_WATCH_NONE);
+
+        if (intbls != null && !intbls.equals("")) {
+          DiskManager.flselector.initWatchedTables(rs, intbls.split(";"), FLS_Policy.NONE);
+        }
+        intbls = hiveConf.getVar(HiveConf.ConfVars.FLSELECTOR_WATCH_FAIR_NODES);
+        if (intbls != null && !intbls.equals("")) {
+          DiskManager.flselector.initWatchedTables(rs, intbls.split(";"), FLS_Policy.FAIR_NODES);
+        }
+        intbls = hiveConf.getVar(HiveConf.ConfVars.FLSELECTOR_WATCH_ORDERED_ALLOC);
+        if (intbls != null && !intbls.equals("")) {
+          DiskManager.flselector.initWatchedTables(rs, intbls.split(";"), FLS_Policy.ORDERED_ALLOC_DEVS);
+        }
+      } catch (Exception e) {
+        LOG.error("Init FLSelector Framework failed!");
+        LOG.error(e, e);
+      }
     }
   }
 
@@ -881,26 +905,33 @@ public class ThriftRPC extends FacebookBase implements
     return __cli.get().createDevice(devId, prop, nodeName);
   }
 
+  private int validate_file_repnr(int repnr) {
+      if (repnr <= 0) {
+        repnr = 1;
+      }
+      if (repnr > 5) {
+        repnr = 5;
+      }
+      return repnr;
+    }
+
   @Override
   public SFile create_file(String node_name, int repnr, String db_name, String table_name,
       List<SplitValue> values)
       throws FileOperationException, TException {
     DMProfile.fcreate1R.incrementAndGet();
+
+    startFunction("create_file_v1:", "node " + node_name + " db:" + db_name +
+          " table: " + table_name + " values: " + values);
     if (!fileSplitValuesCheck(values)) {
       throw new FileOperationException(
           "Invalid File Split Values: inconsistent version among values?",
           FOFailReason.INVALID_FILE);
     }
-    // TODO: if repnr less than 1, we should increase it to replicate to BACKUP-STORE
-    if (repnr <= 1) {
-      repnr++;
-    }
+    repnr = validate_file_repnr(repnr);
 
-    Set<String> excl_node = new TreeSet<String>();
-    Set<String> excl_dev = new TreeSet<String>();
+    Set<String> excl_dev = dm.disabledDevs;
     Set<String> spec_node = new TreeSet<String>();
-
-    dm.findBackupDevice(excl_dev, excl_node);
 
     // check if we should create in table's node group
     if (node_name == null && db_name != null && table_name != null) {
@@ -933,6 +964,8 @@ public class ThriftRPC extends FacebookBase implements
 
     SFile rf = create_file(flp, node_name, repnr, db_name, table_name, values);
     DMProfile.fcreate1SuccR.incrementAndGet();
+    LOG.info("create_file_v1: db=" + db_name + " tbl=" + table_name +
+          " node=" + node_name + " -> " + rf.getFid());
 
     return rf;
   }
@@ -970,23 +1003,46 @@ public class ThriftRPC extends FacebookBase implements
       // this means we should select Best Available Node and Best Available Device;
       // FIXME: add FLSelector here, filter already used nodes, update will used nodes;
       try {
-        if (db_name != null && table_name != null && values.size() == 3) {
-          try {
-            String l2keys[] = values.get(2).getValue().split("-");
-            if (l2keys.length == 2) {
-              node_name = DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
-                  Long.parseLong(values.get(0).getValue()), Long.parseLong(l2keys[1]));
-              repnr = DiskManager.flselector.updateRepnr(db_name + "." + table_name, repnr);
-              LOG.info("FLSelector choose " + node_name +
-                  " for " + db_name + "." + table_name +
-                  " L1Key=" + values.get(0).getValue() +
-                  " L2Key=" + l2keys[1] + ", repnr=" + repnr);
+        repnr = DiskManager.flselector.updateRepnr(db_name + "." + table_name, repnr);
+        // call FLSelector's main function
+        switch (DiskManager.flselector.FLSelector_switch(db_name + "." + table_name)) {
+        default:
+        case NONE:
+          node_name = dm.findBestNode(flp);
+          break;
+        case FAIR_NODES:{
+          if (db_name != null && table_name != null && values.size() == 3) {
+            try {
+              String l2keys[] = values.get(2).getValue().split("-");
+              if (l2keys.length == 2) {
+                node_name = DiskManager.flselector.findBestNode(dm, flp, db_name + "." + table_name,
+                    Long.parseLong(values.get(0).getValue()), Long.parseLong(l2keys[1]));
+                LOG.info("FLSelector choose " + node_name +
+                    " for " + db_name + "." + table_name +
+                    " L1Key=" + values.get(0).getValue() +
+                    " L2Key=" + l2keys[1] + ", repnr=" + repnr);
+              }
+            }
+            catch (NumberFormatException nfe) {
+              LOG.error(nfe, nfe);
+            }
+            // NOTE-XXX: if user has set type order, use it!
+            if (DiskManager.flselector.isTableOrdered(db_name + "." + table_name)) {
+              flp.dev_mode = FileLocatingPolicy.ORDERED_ALLOC;
+              flp.accept_types = DiskManager.flselector.getDevTypeList(db_name + "." + table_name);
             }
           }
-          catch (NumberFormatException nfe) {
-            LOG.error(nfe, nfe);
-          }
+          break;
         }
+        case ORDERED_ALLOC_DEVS:
+          // NOTE-XXX: in order_alloc node mode, we use specified device type to filter nodes, and
+          // random select in 5 freest nodes.
+          flp.node_mode = FileLocatingPolicy.ORDERED_ALLOC;
+          flp.dev_mode = FileLocatingPolicy.ORDERED_ALLOC;
+          flp.accept_types = DiskManager.flselector.getDevTypeList(db_name + "." + table_name);
+          break;
+        }
+
         if (node_name == null) {
           node_name = dm.findBestNode(flp);
         }
@@ -1081,6 +1137,8 @@ public class ThriftRPC extends FacebookBase implements
 
     startFunction("create_file_by_policy:", "CP " + policy.getOperation() +
         " db: " + db_name + " table: " + table_name + " values: " + values);
+    repnr = validate_file_repnr(repnr);
+
     // Step 1: parse the policy and check arguments
     switch (policy.getOperation()) {
     case CREATE_NEW_IN_NODEGROUPS:
@@ -1303,7 +1361,7 @@ public class ThriftRPC extends FacebookBase implements
       // do not select the backup/shared device for the first entry
       switch (policy.getOperation()) {
       case CREATE_NEW_IN_NODEGROUPS:
-        flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES,
+        flp = new FileLocatingPolicy(ngnodes, dm.disabledDevs, FileLocatingPolicy.SPECIFY_NODES,
             FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
         break;
       case CREATE_NEW:
@@ -1320,17 +1378,17 @@ public class ThriftRPC extends FacebookBase implements
           }
           if (policy.getOperation() == CreateOperation.CREATE_NEW_RANDOM) {
             // TODO: Do we need random dev selection here?
-            flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.RANDOM_NODES,
+            flp = new FileLocatingPolicy(ngnodes, dm.disabledDevs, FileLocatingPolicy.RANDOM_NODES,
                 FileLocatingPolicy.RANDOM_DEVS, false);
           } else {
-            flp = new FileLocatingPolicy(ngnodes, dm.backupDevs, FileLocatingPolicy.SPECIFY_NODES,
+            flp = new FileLocatingPolicy(ngnodes, dm.disabledDevs, FileLocatingPolicy.SPECIFY_NODES,
                 FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
           }
         }
         break;
       case CREATE_AUX_IDX_FILE:
         // use all available ndoes
-        flp = new FileLocatingPolicy(null, dm.backupDevs, FileLocatingPolicy.EXCLUDE_NODES,
+        flp = new FileLocatingPolicy(null, dm.disabledDevs, FileLocatingPolicy.EXCLUDE_NODES,
             FileLocatingPolicy.EXCLUDE_DEVS_SHARED, false);
         break;
       default:
@@ -1995,14 +2053,32 @@ public class ThriftRPC extends FacebookBase implements
       DeviceInfo di = dm.getDeviceInfo(sfl.getDevid());
       if (di == null || di.prop < 0) {
         Device d = rs.getDevice(sfl.getDevid());
-        if (d.getProp() == MetaStoreConst.MDeviceProp.SHARED ||
-            d.getProp() == MetaStoreConst.MDeviceProp.BACKUP) {
-          sfl.setNode_name("");
+        if (DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.SHARED ||
+            DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.BACKUP) {
+          if (DiskManager.identify_shared_device) {
+            StringBuilder sb = new StringBuilder();
+            for (String node : dm.getNodesByDevice(d.getDevid())) {
+              sb.append(node);
+              sb.append(";");
+            }
+            sfl.setNode_name(sb.toString());
+          } else {
+            sfl.setNode_name("");
+          }
         }
       } else {
-        if (di.prop == MetaStoreConst.MDeviceProp.SHARED ||
-            di.prop == MetaStoreConst.MDeviceProp.BACKUP) {
-          sfl.setNode_name("");
+        if (di.getType() == MetaStoreConst.MDeviceProp.SHARED ||
+            di.getType() == MetaStoreConst.MDeviceProp.BACKUP) {
+          if (DiskManager.identify_shared_device) {
+            StringBuilder sb = new StringBuilder();
+            for (String node : dm.getNodesByDevice(di.dev)) {
+              sb.append(node);
+              sb.append(";");
+            }
+            sfl.setNode_name(sb.toString());
+          } else {
+            sfl.setNode_name("");
+          }
         }
       }
     }
@@ -3147,7 +3223,7 @@ public class ThriftRPC extends FacebookBase implements
 
       if (saved == null) {
         throw new FileOperationException("Can not find SFile by FID " + fid,
-            FOFailReason.INVALID_FILE);
+            FOFailReason.NOTEXIST);
       }
       // check if this file is in REPLICATED state, otherwise, complain about that.
       switch (saved.getStore_status()) {
@@ -3497,17 +3573,25 @@ public class ThriftRPC extends FacebookBase implements
 
   @Override
   public boolean flSelectorWatch(String table, int op) throws MetaException, TException {
+    // OP => |8bits|  8bits  |  8bits  | 8bits |
+    //                          repnr     OP=3
+    //                          policy    OP=0
+    //         L?L? -> L?L?  ->  L?L?     OP=4
     int true_op = op & 0xff;
 
   	switch (true_op) {
     case 0:
-      return DiskManager.flselector.watched(table);
+      return DiskManager.flselector.watched(table,
+          HMSHandler.intToFLS_Policy((op & 0xff00) >>> 8));
     case 1:
       return DiskManager.flselector.unWatched(table);
     case 2:
       return DiskManager.flselector.flushWatched(table);
     case 3:
-      return DiskManager.flselector.repnrWatched(table, op >> 8);
+        return DiskManager.flselector.repnrWatched(table, (op & 0xff00) >>> 8);
+    case 4:
+      return DiskManager.flselector.orderWatched(table,
+          HMSHandler.parseOrderList(op >>> 8));
     default:
       return false;
     }
@@ -3543,5 +3627,56 @@ public class ThriftRPC extends FacebookBase implements
 			TException {
 		return rs.listFilesByDevs(devids);
 	}
+
+  @Override
+  public int replicate(long fid, int dtype) throws MetaException, FileOperationException,
+      TException {
+    DMProfile.replicate.incrementAndGet();
+    startFunction("replicate ", "fid: " + fid + " to DEV " + DeviceInfo.getTypeStr(dtype));
+
+    SFile saved = rs.getSFile(fid);
+
+    if (saved == null) {
+      throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.NOTEXIST);
+    }
+    if (dm != null) {
+      dm.submitReplicateRequest(new ReplicateRequest(fid, dtype));
+    }
+    return 0;
+  }
+
+  @Override
+  public boolean update_ms_service(int status) throws MetaException, TException {
+    if (dm != null) {
+      switch (status) {
+      default:
+      case 0:
+        LOG.warn("Change service role to SLAVE.");
+        dm.role = DiskManager.Role.SLAVE;
+        break;
+      case 1:
+      {
+        LOG.warn("Change service role to MASTER.");
+        dm.role = DiskManager.Role.MASTER;
+        // reload the memory hash map
+        if (dm.rs instanceof CacheStore) {
+          CacheStore cs = (CacheStore)dm.rs;
+          cs.reloadHashMap();
+        }
+        break;
+      }
+      }
+    }
+    return __cli.get().update_ms_service(status);
+  }
+
+  @Override
+  public String get_ms_uris() throws MetaException, TException {
+    if (dm != null) {
+      return dm.alternateURI;
+    } else {
+      return "";
+    }
+  }
 
 }

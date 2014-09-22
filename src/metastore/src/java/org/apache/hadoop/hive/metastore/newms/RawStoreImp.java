@@ -239,7 +239,7 @@ public class RawStoreImp implements RawStore {
 	        de.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
 	      }
 	      if (!de.getNode_name().equals(node.getNode_name()) &&
-            de.getProp() == MetaStoreConst.MDeviceProp.GENERAL){
+            DeviceInfo.getType(de.getProp()) == MetaStoreConst.MDeviceProp.GENERAL){
 	        Node n = getNode(node.getNode_name());
 	        if (n == null) {
 	          throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
@@ -1830,8 +1830,8 @@ public class RawStoreImp implements RawStore {
           }
 
           if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE &&
-              (d != null && (d.getProp() == MetaStoreConst.MDeviceProp.GENERAL ||
-              d.getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE))) {
+              (d != null && (DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.GENERAL ||
+              DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.BACKUP_ALONE))) {
             selected = true;
             idx = i;
             break;

@@ -38,8 +38,36 @@ public class MetaStoreConst {
     public static final int MASS = 5; // L3: e.g. SATA
     public static final int __MAX__ = 6;
 
+    // Leveling of devices
+    public static final int L1 = 4;
+    public static final int L2 = 0;
+    public static final int L3 = 5;
+    public static final int L4 = 1;
+
     public static final int __TYPE_MASK__ = 0x0f;
     public static final int __QUOTA_SHIFT__ = 4;
+
+  }
+
+  // return if type1 BEFORE OR EQUAL type2
+  public static boolean checkDeviceOrder(int type1, int type2) {
+    // type order is 4>0>5>1
+    if (type1 == type2) {
+      return true;
+    }
+    if (type1 == MDeviceProp.CACHE && type2 == MDeviceProp.GENERAL) {
+      return true;
+    }
+    if ((type1 == MDeviceProp.CACHE || type1 == MDeviceProp.GENERAL) &&
+        (type2 == MDeviceProp.MASS)) {
+      return true;
+    }
+    if ((type1 == MDeviceProp.CACHE || type1 == MDeviceProp.GENERAL ||
+        type1 == MDeviceProp.MASS) &&
+        (type2 == MDeviceProp.SHARED)) {
+      return true;
+    }
+    return false;
   }
 
   public class MDeviceStatus {
@@ -50,9 +78,6 @@ public class MetaStoreConst {
   }
 
   public class MEquipRoomStatus {
-//    public enum Status{
-//      0,1,2;
-//    }
     public static final int ONLINE = 0;
     public static final int OFFLINE = 1;
     public static final int SUSPECT = 2;

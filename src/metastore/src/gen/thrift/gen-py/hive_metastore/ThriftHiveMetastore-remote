@@ -168,6 +168,8 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '  bool del_filelocation(SFileLocation slf)'
   print '  bool set_loadstatus_bad(i64 fid)'
   print '  bool toggle_safemode()'
+  print '  bool update_ms_service(i32 status)'
+  print '  string get_ms_uris()'
   print '  SFile get_file_by_id(i64 fid)'
   print '   get_files_by_ids( fids)'
   print '  SFile get_file_by_name(string node, string devid, string location)'
@@ -194,6 +196,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '  bool migrate2_in(Table tbl,  parts,  idxs, string from_db, string to_nas_devid,  fileMap)'
   print '   migrate2_stage1(string dbName, string tableName,  partNames, string to_db)'
   print '  bool migrate2_stage2(string dbName, string tableName,  partNames, string from_db, string to_db, string to_nas_devid)'
+  print '  i32 replicate(i64 fid, i32 dtype)'
   print '  string getMP(string node_name, string devid)'
   print '  i64 getSessionId()'
   print '  bool createSchema(GlobalSchema schema)'
@@ -1144,6 +1147,18 @@ elif cmd == 'toggle_safemode':
     sys.exit(1)
   pp.pprint(client.toggle_safemode())
 
+elif cmd == 'update_ms_service':
+  if len(args) != 1:
+    print 'update_ms_service requires 1 args'
+    sys.exit(1)
+  pp.pprint(client.update_ms_service(eval(args[0]),))
+
+elif cmd == 'get_ms_uris':
+  if len(args) != 0:
+    print 'get_ms_uris requires 0 args'
+    sys.exit(1)
+  pp.pprint(client.get_ms_uris())
+
 elif cmd == 'get_file_by_id':
   if len(args) != 1:
     print 'get_file_by_id requires 1 args'
@@ -1299,6 +1314,12 @@ elif cmd == 'migrate2_stage2':
     print 'migrate2_stage2 requires 6 args'
     sys.exit(1)
   pp.pprint(client.migrate2_stage2(args[0],args[1],eval(args[2]),args[3],args[4],args[5],))
+
+elif cmd == 'replicate':
+  if len(args) != 2:
+    print 'replicate requires 2 args'
+    sys.exit(1)
+  pp.pprint(client.replicate(eval(args[0]),eval(args[1]),))
 
 elif cmd == 'getMP':
   if len(args) != 2:

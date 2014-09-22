@@ -1155,6 +1155,8 @@ public interface IMetaStoreClient {
   public boolean migrate2_stage2(String dbName, String tableName, List<String> partNames,
       String to_dc, String to_db, String to_nas_devid) throws MetaException, TException;
 
+  public int replicate(long fid, int dtype) throws MetaException, FileOperationException, TException;
+
   public String getMP(String node_name, String devid) throws MetaException, TException;
 
   public List<BusiTypeColumn> get_all_busi_type_cols() throws MetaException, TException;
@@ -1300,4 +1302,8 @@ public interface IMetaStoreClient {
   public List<String> listDevsByNode(String nodeName) throws MetaException, TException;
 
   public List<Long> listFilesByDevs(List<String> devids) throws MetaException, TException;
+
+  public boolean update_ms_service(int status) throws MetaException, TException;
+
+  public String get_ms_uris() throws MetaException, TException;
 }

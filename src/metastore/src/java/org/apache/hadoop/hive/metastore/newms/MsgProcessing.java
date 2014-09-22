@@ -544,6 +544,8 @@ public class MsgProcessing {
 		  {
 		  	String devid = msg.getMsg_data().get("devid").toString();
 		  	cs.removeObject(ObjectType.DEVICE, devid);
+		  	// BUG-XXX: we should clear the admap entry
+		  	ThriftRPC.dm.removeFromADMap(devid, null);
 		  	break;
 		  }
 		  default:

@@ -704,6 +704,7 @@ public class HiveConf extends Configuration {
     DM_MCAST_GROUP_IP("hive.diskmanager.mcast.group.ip", "239.122.75.227"),
     DM_USE_MCAST("hive.diskmanager.mcast.enable", false),
     DM_ROLE("hive.diskmanager.role", "master"),
+    DM_ALTERNATE_URI("hive.diskmanager.alternate.uri", ""),
 
     // change it to 30 min
     DM_BACKUP_TIMEOUT("hive.diskmanager.backup.timeout", 1 * 60 * 1000),
@@ -727,6 +728,13 @@ public class HiveConf extends Configuration {
     DM_FIX_REP_LIMIT("hive.diskmanager.fixrep.limit", 500L),
     DM_REPORT_DIR("hive.diskmanager.report.dir", null),
     DM_FF_RANGE("hive.diskmanager.ff.range", 1000),
+    DM_USE_QUOTA("hive.diskmanager.use.quota", false),
+    DM_IDENTIFY_SHARED_DEV("hive.diskmanager.identify.shared.dev", true),
+
+    // FLSelector
+    FLSELECTOR_WATCH_NONE("flselector.watch.none", null),
+    FLSELECTOR_WATCH_FAIR_NODES("flselector.watch.fair_nodes", null),
+    FLSELECTOR_WATCH_ORDERED_ALLOC("flselector.watch.ordered_alloc", null),
 
     //add by zy
     NEWMS_IS_USE_METASTORE_CLIENT("newms.isUseMetaStoreClient", true),

@@ -10,7 +10,6 @@ import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -28,6 +27,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.jdo.JDOObjectNotFoundException;
@@ -38,6 +38,7 @@ import net.sf.json.JSONObject;
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.DiskManager.DMThread.DMReport;
+import org.apache.hadoop.hive.metastore.DiskManager.FLSelector.FLS_Policy;
 import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
@@ -69,6 +70,7 @@ public class DiskManager {
       MASTER, SLAVE,
     }
     public Role role;
+    public String alternateURI;
 
     public Log LOG;
     private final HiveConf hiveConf;
@@ -91,11 +93,13 @@ public class DiskManager {
     public final Map<String, Long> toUnspc = new ConcurrentHashMap<String, Long>();
     public final Map<String, MigrateEntry> rrmap = new ConcurrentHashMap<String, MigrateEntry>();
 
+    public final ConcurrentLinkedQueue<ReplicateRequest> rrq = new ConcurrentLinkedQueue<ReplicateRequest>();
+
     // TODO: fix me: change it to 30 min
     public long backupTimeout = 1 * 60 * 1000;
     public long backupQTimeout = 5 * 3600 * 1000; // 5 hour
     public long fileSizeThreshold = 64 * 1024 * 1024;
-    public Set<String> backupDevs = new TreeSet<String>();
+    public Set<String> disabledDevs = new TreeSet<String>();
 
     // TODO: REP limiting for low I/O bandwidth env
     public AtomicLong closeRepLimit = new AtomicLong(0L);
@@ -103,15 +107,46 @@ public class DiskManager {
 
     public static long dmsnr = 0;
     public static FLSelector flselector = new FLSelector();
+    public static List<Integer> default_orders = new ArrayList<Integer>();
+
+    public static boolean identify_shared_device;
+
+    static {
+      // Default do not replicate to L1 devices
+      default_orders.add(MetaStoreConst.MDeviceProp.GENERAL);
+      default_orders.add(MetaStoreConst.MDeviceProp.MASS);
+      default_orders.add(MetaStoreConst.MDeviceProp.SHARED);
+    }
+
+    public static class ReplicateRequest {
+      public long fid;
+      public int dtype;
+
+      public ReplicateRequest(long fid, int dtype) {
+        this.fid = fid;
+        this.dtype = dtype;
+      }
+
+      @Override
+      public String toString() {
+        return "fid " + fid + " TO " + DeviceInfo.getTypeStr(dtype);
+      }
+    }
+
+    public void submitReplicateRequest(ReplicateRequest rr) {
+      rrq.add(rr);
+    }
 
     public static class FLEntry {
       // single entry for one table
       public String table;
+      public FLS_Policy policy = FLS_Policy.NONE;
       public int repnr = -1;
       public long l1Key;
       public long l2KeyMax;
       public TreeMap<Long, String> distribution;
       public TreeMap<String, Long> statis;
+      public List<Integer> accept_types;
 
       public FLEntry(String table, long l1Key, long l2KeyMax) {
         this.table = table;
@@ -119,6 +154,7 @@ public class DiskManager {
         this.l2KeyMax = l2KeyMax;
         distribution = new TreeMap<Long, String>();
         statis = new TreeMap<String, Long>();
+        accept_types = new ArrayList<Integer>();
       }
 
       public void updateStatis(String node) {
@@ -154,14 +190,38 @@ public class DiskManager {
       }
     }
 
+    // FLSelector stands before any file location allocations
+    //
+    // --> FLSelector --> make FLP -> find_best_node -> find_best_device ...
+    //
     public static class FLSelector {
       // considering node load and tables' first file locations
       // Note that the following table should be REGULAR table name as DB.TABLE
       public final Set<String> tableWatched = Collections.synchronizedSet(new HashSet<String>());
       public final Map<String, FLEntry> context = new ConcurrentHashMap<String, FLEntry>();
 
-      public boolean watched(String table) {
-        return tableWatched.add(table);
+      public enum FLS_Policy {
+        NONE, FAIR_NODES, ORDERED_ALLOC_DEVS,
+      }
+
+      public void initWatchedTables(RawStore rs, String[] tables, FLS_Policy policy) throws MetaException {
+        for (String table : tables) {
+          watched(table, policy);
+        }
+      }
+
+      public boolean watched(String table, FLS_Policy policy) {
+        boolean r = tableWatched.add(table);
+        FLEntry e = new FLEntry(table, -1, -1);
+        e.policy = policy;
+        synchronized (context) {
+          if (!context.containsKey(table)) {
+            context.put(table, e);
+          } else {
+            context.get(table).policy = policy;
+          }
+        }
+        return r;
       }
 
       public boolean unWatched(String table) {
@@ -196,6 +256,18 @@ public class DiskManager {
         return false;
       }
 
+      public boolean orderWatched(String table, List<Integer> accept_types) {
+        FLEntry fle = context.get(table);
+        if (fle != null) {
+          synchronized (fle) {
+            fle.accept_types.clear();
+            fle.accept_types.addAll(accept_types);
+          }
+          return true;
+        }
+        return false;
+      }
+
       public String printWatched() {
         String r = "";
 
@@ -209,6 +281,8 @@ public class DiskManager {
           for (Map.Entry<String, FLEntry> e : context.entrySet()) {
             r += "Table '" + e.getKey() + "' -> {\n";
             r += "\trepnr=" + e.getValue().repnr + ", ";
+            r += "policy=" + e.getValue().policy + ", ";
+            r += "order='" + e.getValue().accept_types + "', ";
             r += "l1Key=" + e.getValue().l1Key + ", l2KeyMax?=" + e.getValue().l2KeyMax + "\n";
             synchronized (e.getValue()) {
               r += "\t" + e.getValue().distribution + "\n";
@@ -233,6 +307,79 @@ public class DiskManager {
         }
       }
 
+      // PLEASE USE REGULAR TABLE NAME HERE
+      // filter the accept_types by cur_level, all types that BEFORE cur_level are filtered
+      public List<Integer> getDevTypeListAfterIncludeHint(String table, int cur_level) {
+        List<Integer> r = new ArrayList<Integer>();
+        r.addAll(default_orders);
+
+        if (!tableWatched.contains(table)) {
+          return r;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null && fle.accept_types != null) {
+          r.clear();
+          // BUG-XXX: if FLE order size is ZERO, use default orders!
+          List<Integer> orders = new ArrayList<Integer>(fle.accept_types);
+          if (orders.size() == 0) {
+            orders.addAll(default_orders);
+          }
+          for (Integer lvl : orders) {
+            if (MetaStoreConst.checkDeviceOrder(cur_level, lvl)) {
+              r.add(lvl);
+            }
+          }
+          if (r.size() == 0) {
+            r.addAll(default_orders);
+          }
+        }
+
+        return r;
+      }
+
+      // PLEASE USE REGULAR TABLE NAME HERE
+      public boolean isTableOrdered(String table) {
+        if (!tableWatched.contains(table)) {
+          return false;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null && fle.accept_types != null && fle.accept_types.size() > 0) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+
+      // PLEASE USE REGULAR TABLE NAME HERE
+      public List<Integer> getDevTypeList(String table) {
+        List<Integer> r = new ArrayList<Integer>();
+        r.addAll(default_orders);
+
+        if (!tableWatched.contains(table)) {
+          return r;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null && fle.accept_types != null && fle.accept_types.size() > 0) {
+          return fle.accept_types;
+        } else {
+          return r;
+        }
+      }
+
+      // User should switch on return value: it is policy!
+      public FLS_Policy FLSelector_switch(String table) {
+        FLEntry e = context.get(table);
+        if (e == null) {
+          return FLS_Policy.NONE;
+        } else {
+          return e.policy;
+        }
+      }
+
+      // This is used by FLSelector framework
+      //
+      // findBestNode use FLS_Policy: FAIR_NODES
+      //
       // PLEASE USE REGULAR TABLE NAME HERE
       public String findBestNode(DiskManager dm, FileLocatingPolicy flp, String table,
           long l1Key, long l2Key) throws IOException {
@@ -313,6 +460,7 @@ public class DiskManager {
       public static AtomicLong newConn = new AtomicLong(0);
       public static AtomicLong delConn = new AtomicLong(0);
       public static AtomicLong query = new AtomicLong(0);
+      public static AtomicLong replicate = new AtomicLong(0);
     }
 
     public static class SFLTriple implements Comparable<SFLTriple> {
@@ -438,7 +586,7 @@ public class DiskManager {
 
     public static class DMReply {
       public enum DMReplyType {
-        DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY, INFO,
+        DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY, INFO, SLAVE,
       }
       DMReplyType type;
       String args;
@@ -556,18 +704,33 @@ public class DiskManager {
         }
       }
 
+      public static String getTypeStr(int prop) {
+        switch (prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__) {
+        case MetaStoreConst.MDeviceProp.CACHE:
+          return "L1";
+        case MetaStoreConst.MDeviceProp.GENERAL:
+          return "L2";
+        case MetaStoreConst.MDeviceProp.MASS:
+          return "L3";
+        case MetaStoreConst.MDeviceProp.SHARED:
+          return "L4";
+        default:
+          return "X" + (prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__);
+        }
+      }
+
       public static int getType(int prop) {
         return prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__;
       }
 
       // Note that, the quota we save is -quota
       public int getQuota() {
-        int keep = prop >> MetaStoreConst.MDeviceProp.__QUOTA_SHIFT__;
+        int keep = prop >>> MetaStoreConst.MDeviceProp.__QUOTA_SHIFT__;
         return keep > 100 ? 0 : (100 - keep);
       }
 
       public static int getQuota(int prop) {
-        int keep = prop >> MetaStoreConst.MDeviceProp.__QUOTA_SHIFT__;
+        int keep = prop >>> MetaStoreConst.MDeviceProp.__QUOTA_SHIFT__;
         return keep > 100 ? 0 : (100 - keep);
       }
 
@@ -643,6 +806,8 @@ public class DiskManager {
     private final ConcurrentHashMap<String, NodeInfo> ndmap;
     // Active Device Map
     private final ConcurrentHashMap<String, DeviceInfo> admap;
+    // Device -> Node Map
+    private final ConcurrentHashMap<String, Set<String>> dnmap;
 
     public class BackupTimerTask extends TimerTask {
       private long last_backupTs = System.currentTimeMillis();
@@ -730,7 +895,7 @@ public class DiskManager {
                 LOG.error(e, e);
               }
             }
-            if (device != null && (device.getProp() == MetaStoreConst.MDeviceProp.BACKUP)) {
+            if (device != null && (DeviceInfo.getType(device.getProp()) == MetaStoreConst.MDeviceProp.BACKUP)) {
               content += sfl.getLocation().substring(sfl.getLocation().lastIndexOf('/') + 1);
               if (ftp.isPart) {
                 content += "\tADD\t" + ftp.part.getDbName() + "\t" + ftp.part.getTableName() + "\t";
@@ -807,7 +972,7 @@ public class DiskManager {
                 LOG.error(e, e);
               }
             }
-            if (device != null && (device.getProp() == MetaStoreConst.MDeviceProp.BACKUP)) {
+            if (device != null && (DeviceInfo.getType(device.getProp()) == MetaStoreConst.MDeviceProp.BACKUP)) {
               content += sfl.getLocation() + "\tRemove\t" + ftp.part.getDbName() + "\t" + ftp.part.getTableName() + "\t";
               for (int i = 0; i < ftp.part.getValuesSize(); i++) {
                 content += ftp.part.getValues().get(i);
@@ -1024,6 +1189,7 @@ public class DiskManager {
         offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
         suspectDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_SUSPECT_DEL_TIMEOUT);
         ff_range = hiveConf.getLongVar(HiveConf.ConfVars.DM_FF_RANGE);
+        DiskManager.identify_shared_device = hiveConf.getBoolVar(HiveConf.ConfVars.DM_IDENTIFY_SHARED_DEV);
 
         if (rst == RsStatus.NEWMS){
           try {
@@ -1041,8 +1207,27 @@ public class DiskManager {
 
       }
 
+      private boolean __do_delete(SFileLocation loc, int flocsize) {
+        NodeInfo ni = ndmap.get(loc.getNode_name());
+
+        if (ni == null) {
+          return false;
+        }
+        synchronized (ni.toDelete) {
+          ni.toDelete.add(loc);
+          LOG.info("----> Add to Node " + loc.getNode_name() + "'s toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", " + flocsize);
+        }
+        return true;
+      }
+
+      // NOTE-XXX: for scruber Version 2.
+      //
+      // do_delete() try to understand how to leveling replicas. It try delete ONE highest replica
+      // and many(or one) lowest replicas.
       public void do_delete(SFile f, int nr) {
         int i = 0;
+        LinkedList<SFileLocation> inTypeOrder = null;
+        LinkedList<Integer> types = null;
 
         if (nr < 0) {
           return;
@@ -1061,28 +1246,71 @@ public class DiskManager {
               LOG.error(e, e);
             }
           }
+          inTypeOrder = new LinkedList<SFileLocation>();
+          types = new LinkedList<Integer>();
+
           for (SFileLocation loc : f.getLocations()) {
-            if (i >= nr) {
-              break;
+            DeviceInfo di = admap.get(loc.getDevid());
+            if (di != null) {
+              boolean inserted = false;
+              int btype = di.getType();
+
+              for (int j = 0; j < inTypeOrder.size(); j++) {
+                int atype = types.get(j);
+
+                if (MetaStoreConst.checkDeviceOrder(btype, atype)) {
+                  // insert before it
+                  inTypeOrder.add(j, loc);
+                  types.add(j, btype);
+                  inserted = true;
+                  break;
+                }
+              }
+              if (!inserted) {
+                inTypeOrder.addLast(loc);
+                types.addLast(btype);
+              }
             }
-            NodeInfo ni = ndmap.get(loc.getNode_name());
-            if (ni == null) {
-              continue;
-            }
-            synchronized (ni.toDelete) {
-              ni.toDelete.add(loc);
+          }
+          for (int x = 0; x < inTypeOrder.size(); x++) {
+            LOG.debug(" -> do_delete() on " + DeviceInfo.getTypeStr(types.get(x)) +
+                " Dev: " + inTypeOrder.get(x).getDevid());
+          }
+
+          // delete policy:
+          // 1. try to remove highest L? loc;
+          // 2. delete other loc randomized.
+          if (types.size() - 1 < nr) {
+            // this means we should change nr to types.size() - 1
+            nr = types.size() - 1;
+          }
+          if (inTypeOrder.size() > 0) {
+            if (__do_delete(inTypeOrder.get(0), f.getLocationsSize())) {
               i++;
-              LOG.info("----> Add to Node " + loc.getNode_name() + "'s toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", " + f.getLocationsSize());
+              inTypeOrder.remove(0);
+            }
+          }
+          Random r = new Random();
+          Set<Integer> idxs = new HashSet<Integer>();
+
+          if (nr - i > 0) {
+            for (int j = 0; j < nr - i; j++) {
+              idxs.add(r.nextInt(inTypeOrder.size()));
+            }
+            for (Integer idx : idxs) {
+              // ignore any error,
+              // because if ni == null, we don't known whether this loc is valid.
+              __do_delete(inTypeOrder.get(idx), f.getLocationsSize());
             }
           }
         }
       }
 
-      public void do_replicate(SFile f, int nr) {
+      public void do_replicate(SFile f, int nr, int dtype) {
         int init_size = f.getLocationsSize();
         int valid_idx = 0;
         boolean master_marked = false;
-        FileLocatingPolicy flp, flp_backup, flp_default;
+        FileLocatingPolicy flp, flp_default;
         Set<String> excludes = new TreeSet<String>();
         Set<String> excl_dev = new TreeSet<String>();
         Set<String> spec_dev = new TreeSet<String>();
@@ -1109,14 +1337,11 @@ public class DiskManager {
           }
           return;
         }
-        // find the backup devices
-        findBackupDevice(spec_dev, spec_node);
-        LOG.debug("Try to write to backup device firstly: N <" + Arrays.toString(spec_node.toArray()) +
-            ">, D <" + Arrays.toString(spec_dev.toArray()) + ">");
 
         // find the valid entry
         for (int i = 0; i < init_size; i++) {
           try {
+            // NOTE-XXX: we allow replicate to L4 device in do_replicate
             if (!isSharedDevice(f.getLocations().get(i).getDevid())) {
               excludes.add(f.getLocations().get(i).getNode_name());
             }
@@ -1135,6 +1360,14 @@ public class DiskManager {
           if (!master_marked && f.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
             valid_idx = i;
             master_marked = true;
+            DeviceInfo di = admap.get(f.getLocations().get(i).getDevid());
+            if (di != null) {
+              // FIXME: we do NOT allow replicate to higher level device
+              if (MetaStoreConst.checkDeviceOrder(dtype, di.getType())) {
+                //dtype = di.getType();
+                LOG.debug("dtype <= di.getType()");
+              }
+            }
             if (f.getLocations().get(i).getNode_name().equals("")) {
               try {
                 f.getLocations().get(i).setNode_name(getAnyNode(f.getLocations().get(i).getDevid()));
@@ -1179,15 +1412,15 @@ public class DiskManager {
           return;
         }
 
-        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, false);
-        flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
-        flp_backup.origNode = f.getLocations().get(valid_idx).getNode_name();
+        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev,
+            FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM,
+            FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, false);
 
         for (int i = init_size; i < (init_size + nr); i++, flp = flp_default) {
           if (i == init_size) {
-            if (spec_dev.size() > 0) {
-              flp = flp_backup;
-            }
+            // FIXME: Use FLSelector framework here?
+            String table = f.getDbName() + "." + f.getTableName();
+            flp.accept_types = flselector.getDevTypeListAfterIncludeHint(table, dtype);
           }
           try {
             String node_name = findBestNode(flp);
@@ -1362,6 +1595,7 @@ public class DiskManager {
         //47 [alonediskFrees],
         //48 ds.qrep,ds.hrep,ds.drep,ds.qdel,ds.hdel,ds.ddel,ds.tver,ds.tvyr,
         //56 [ds.uptime],[ds.load1],truetotal,truefree,offlinefree,sharedfree,
+        //62 replicate,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -1503,6 +1737,7 @@ public class DiskManager {
         sb.append(truefree + ",");
         sb.append(offlinefree + ",");
         sb.append(sharedfree + ",");
+        sb.append(DMProfile.replicate.get() + ",");
         sb.append("\n");
 
         // generate report file
@@ -1524,6 +1759,14 @@ public class DiskManager {
 
       @Override
       public void run() {
+        // check if we are in slave role
+        switch (role) {
+        default:
+        case SLAVE:
+          return;
+        case MASTER:;
+        }
+
         try {
           times++;
           useVoidCheck = hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_VOID_CHECK);
@@ -1543,6 +1786,23 @@ public class DiskManager {
             synchronized (ndmap) {
               removeFromNDMapWTO(node, System.currentTimeMillis());
             }
+          }
+          // FIXME: ReplicateRequestQueue handling!!
+          int xnr = 0;
+          while (xnr < 50) {
+            ReplicateRequest rr = rrq.poll();
+
+            if (rr == null) {
+              break;
+            }
+            xnr++;
+            SFile sf = trs.getSFile(rr.fid);
+            if (sf == null) {
+              LOG.warn("Replicate request " + rr + " ERROR: file not exists.");
+              continue;
+            }
+            do_replicate(sf, 1, rr.dtype);
+            LOG.info("Replicate request " + rr + " OK: submitted.");
           }
 
           synchronized (syncIsRunning) {
@@ -1629,7 +1889,7 @@ public class DiskManager {
             }
 
             for (Map.Entry<SFile, Integer> entry : munder.entrySet()) {
-              do_replicate(entry.getKey(), entry.getValue().intValue());
+              do_replicate(entry.getKey(), entry.getValue().intValue(), MetaStoreConst.MDeviceProp.GENERAL);
             }
 
             // handle over replicated files
@@ -1940,9 +2200,50 @@ public class DiskManager {
       this.rst = rsType;
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
+      dnmap = new ConcurrentHashMap<String, Set<String>>();
       closeRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT));
       fixRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT));
       init();
+    }
+
+    private void addToDNMap(String dev, String node) {
+      Set<String> s = dnmap.get(dev);
+      if (s == null) {
+        final Set<String> n = new ConcurrentSkipListSet<String>();
+        s = dnmap.putIfAbsent(dev, n);
+        if (s == null) {
+          s = n;
+        }
+      }
+      s.add(node);
+    }
+
+    private void removeFromDNMap(String dev, String node) {
+      if (node == null) {
+        dnmap.remove(dev);
+      } else {
+        Set<String> s = dnmap.get(dev);
+        if (s == null) {
+          final Set<String> n = new ConcurrentSkipListSet<String>();
+          s = dnmap.putIfAbsent(dev, n);
+          if (s == null) {
+            s = n;
+          }
+        }
+        s.remove(node);
+      }
+    }
+
+    public List<String> getNodesByDevice(String dev) {
+      List<String> r = new ArrayList<String>();
+      Set<String> s = dnmap.get(dev);
+
+      if (s == null) {
+        return r;
+      }
+      r.addAll(s);
+
+      return r;
     }
 
     public void init() throws IOException, MetaException {
@@ -1960,6 +2261,8 @@ public class DiskManager {
       } else {
         server = new DatagramSocket(listenPort);
       }
+
+      alternateURI = hiveConf.getVar(HiveConf.ConfVars.DM_ALTERNATE_URI);
 
       dmt = new DMThread("DiskManagerThread");
       dmct = new DMCleanThread("DiskManagerCleanThread");
@@ -2091,6 +2394,8 @@ public class DiskManager {
       r += "MetaStore Server Disk Manager listening @ " + hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
       r += "\nSafeMode: " + safeMode + "\n";
       r += "Multicast: " + hiveConf.getVar(HiveConf.ConfVars.DM_USE_MCAST) + "\n";
+      r += "Quota: " + (hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_QUOTA) ? "enabled" : "disabled") + "\n";
+      r += "IdentifySD: " + identify_shared_device + "\n";
       r += "Role: " + role + "\n";
       r += "Per-IP-Connections: {\n";
       for (Map.Entry<String, AtomicLong> e : HiveMetaStoreServerEventHandler.perIPConns.entrySet()) {
@@ -2151,8 +2456,8 @@ public class DiskManager {
 	        }
 	        free += e.getValue().free;
 	        used += e.getValue().used;
-	        if (e.getValue().prop >= 0) {
-            adevnr[e.getValue().prop]++;
+	        if (e.getValue().getType() >= 0) {
+            adevnr[e.getValue().getType()]++;
           }
 	        if (e.getValue().isOffline) {
 	          offlinenr++;
@@ -2178,14 +2483,17 @@ public class DiskManager {
         }
 	    }
       synchronized (rs) {
-        r += "Total devices " + rs.countDevice() + ", active {offline " +
-            offlinenr + ", alone " +
-            devnr[MetaStoreConst.MDeviceProp.GENERAL] + ", backup " +
-            devnr[MetaStoreConst.MDeviceProp.BACKUP] + " on " +
-            adevnr[MetaStoreConst.MDeviceProp.BACKUP] + ", shared " +
-            devnr[MetaStoreConst.MDeviceProp.SHARED] + " on " +
-            adevnr[MetaStoreConst.MDeviceProp.SHARED] + ", backup_alone " +
-            devnr[MetaStoreConst.MDeviceProp.BACKUP_ALONE] + "}.\n";
+        r += "Total devices " + rs.countDevice() +
+            ", active {offline " + offlinenr +
+            ", L1 " + devnr[MetaStoreConst.MDeviceProp.CACHE] +
+            ", L2 " + devnr[MetaStoreConst.MDeviceProp.GENERAL] +
+            ", L3 " + devnr[MetaStoreConst.MDeviceProp.MASS] +
+            ", backup " + devnr[MetaStoreConst.MDeviceProp.BACKUP] + " on " +
+              adevnr[MetaStoreConst.MDeviceProp.BACKUP] +
+            ", shared " + devnr[MetaStoreConst.MDeviceProp.SHARED] + " on " +
+              adevnr[MetaStoreConst.MDeviceProp.SHARED] +
+            ", backup_alone " + devnr[MetaStoreConst.MDeviceProp.BACKUP_ALONE] +
+            "}.\n";
       }
       r += "Inactive nodes list: {\n";
       synchronized (rs) {
@@ -2243,6 +2551,15 @@ public class DiskManager {
       }
       r += "}\n";
 
+      r += "RRQ: ";
+      synchronized (rrq) {
+        r += rrq.size() + "{\n";
+        for (ReplicateRequest req : rrq) {
+          r += "\t" + req.toString() + "\n";
+        }
+      }
+      r += "}\n";
+
       r += "RRMAP: {\n";
       synchronized (rrmap) {
         for (Map.Entry<String, MigrateEntry> e : rrmap.entrySet()) {
@@ -2286,6 +2603,12 @@ public class DiskManager {
       return admap.get(devid);
     }
 
+    public void removeFromADMap(String devid, String node) {
+      admap.remove(devid);
+      // remove it from device-node map
+      removeFromDNMap(devid, node);
+    }
+
     // Return old devs
     public NodeInfo addToNDMap(long ts, Node node, List<DeviceInfo> ndi) {
       NodeInfo ni = ndmap.get(node.getNode_name());
@@ -2308,13 +2631,17 @@ public class DiskManager {
               }
               if (d == null ||
                   (d.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT && di.mp != null) ||
-                  (!d.getNode_name().equals(node.getNode_name()) && d.getProp() == MetaStoreConst.MDeviceProp.GENERAL)) {
+                  (!d.getNode_name().equals(node.getNode_name()) && DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.GENERAL)) {
                 rs_s1.createOrUpdateDevice(di, node, null);
                 d = rs_s1.getDevice(di.dev);
               }
               di.prop = d.getProp();
               if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE) {
                 di.isOffline = true;
+              }
+              // FIXME: set quota here!
+              if (hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_QUOTA)) {
+                di.free = Math.min(di.free, (di.free + di.used) * di.getQuota() / 100);
               }
             }
           } catch (InvalidObjectException e) {
@@ -2324,8 +2651,9 @@ public class DiskManager {
           } catch (NoSuchObjectException e) {
             LOG.error(e, e);
           }
-          // ok, update it to admap
+          // ok, update it to admap and dnmap
           admap.put(di.dev, di);
+          addToDNMap(di.dev, node.getNode_name());
         }
       }
 
@@ -2376,7 +2704,7 @@ public class DiskManager {
           synchronized (toReRep) {
             if (!toReRep.containsKey(di.dev)) {
               toReRep.put(di.dev, System.currentTimeMillis());
-              admap.remove(di.dev);
+              removeFromADMap(di.dev, node.getNode_name());
               toUnspc.remove(di.dev);
             }
           }
@@ -2521,7 +2849,7 @@ public class DiskManager {
           continue;
         }
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(node, ni.dis);
+          List<DeviceInfo> dis = filterTypeDevice(null, ni.dis);
           long thisfree = 0;
 
           if (dis == null) {
@@ -2570,7 +2898,7 @@ public class DiskManager {
       for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
         NodeInfo ni = entry.getValue();
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(entry.getKey(), ni.dis);
+          List<DeviceInfo> dis = filterTypeDevice(null, ni.dis);
           long thisfree = 0;
 
           if (dis == null) {
@@ -2620,7 +2948,7 @@ public class DiskManager {
       for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
         NodeInfo ni = entry.getValue();
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(entry.getKey(), ni.dis);
+          List<DeviceInfo> dis = filterTypeDevice(null, ni.dis);
 
           if (dis == null) {
             continue;
@@ -2658,6 +2986,14 @@ public class DiskManager {
       String mp;
       if (node_name == null || node_name.equals("")) {
         node_name = getAnyNode(devid);
+      } else if (node_name.contains(";")) {
+        List<String> nodes = getNodesByDevice(devid);
+        if (nodes.size() > 0) {
+          Random r = new Random();
+          node_name = (String) nodes.toArray()[r.nextInt(nodes.size())];
+        } else {
+          throw new MetaException("Can't find DEV '" + devid + "' in Node '" + node_name + "'.");
+        }
       }
       NodeInfo ni = ndmap.get(node_name);
       if (ni == null) {
@@ -2682,12 +3018,13 @@ public class DiskManager {
       public static final int RANDOM_DEVS = 6;
       public static final int EXCLUDE_DEVS_AND_RANDOM = 7;
       public static final int EXCLUDE_NODES_AND_RANDOM = 8;
-      public static final int USE_CACHE = 9;  // active both on node and dev mode
+      public static final int ORDERED_ALLOC = 9;  // active both on node and dev mode
 
       Set<String> nodes;
       Set<String> devs;
-      int node_mode;
-      int dev_mode;
+      public int node_mode;
+      public int dev_mode;
+      public List<Integer> accept_types; // try to alloc in list order
       boolean canIgnore;
 
       public String origNode;
@@ -2699,6 +3036,7 @@ public class DiskManager {
         this.dev_mode = dev_mode;
         this.canIgnore = canIgnore;
         this.origNode = null;
+        this.accept_types = null;
       }
 
       @Override
@@ -2732,7 +3070,7 @@ public class DiskManager {
       return canFind;
     }
 
-    private Set<String> findSharedDevs(List<DeviceInfo> devs) {
+    public Set<String> filterSharedDevs(List<DeviceInfo> devs) {
       Set<String> r = new TreeSet<String>();
 
       for (DeviceInfo di : devs) {
@@ -2744,53 +3082,60 @@ public class DiskManager {
       return r;
     }
 
+    // findBestNode()
+    //
+    // return largest free node based on FLP.
     public String findBestNode(FileLocatingPolicy flp) throws IOException {
       boolean isExclude = true;
 
       if (flp == null) {
-        return findBestNode(false);
+        return findBestNode_L123(false);
       }
       if (safeMode) {
         throw new IOException("Disk Manager is in Safe Mode, waiting for disk reports ...\n");
       }
       switch (flp.node_mode) {
-      case FileLocatingPolicy.USE_CACHE:
+      case FileLocatingPolicy.ORDERED_ALLOC:
       {
         TreeMap<String, Long> candidate = new TreeMap<String, Long>();
 
-        for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
-          NodeInfo ni = e.getValue();
-          if (ni.dis != null && ni.dis.size() > 0) {
-            for (DeviceInfo di : ni.dis) {
-              if (di.getType() == MetaStoreConst.MDeviceProp.CACHE && !di.isOffline) {
-                // ok, this node is a candidate
-                Long oldfree = candidate.get(e.getKey());
-                if (oldfree == null) {
-                  candidate.put(e.getKey(), di.free);
-                } else {
-                  candidate.put(e.getKey(), oldfree + di.free);
+        for (Integer dtype : flp.accept_types) {
+          candidate.clear();
+          for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
+            NodeInfo ni = e.getValue();
+            if (ni.dis != null && ni.dis.size() > 0) {
+              for (DeviceInfo di : ni.dis) {
+                if (di.getType() == dtype && !di.isOffline) {
+                  // ok, this node is a candidate
+                  Long oldfree = candidate.get(e.getKey());
+                  if (oldfree == null) {
+                    candidate.put(e.getKey(), di.free);
+                  } else {
+                    candidate.put(e.getKey(), oldfree + di.free);
+                  }
                 }
               }
             }
           }
-        }
-        // find the LARGEST 3 nodes, and random select one
-        if (candidate.size() == 0) {
-          return null;
-        } else {
-          Random r = new Random();
-          __trim_candidate(candidate, 3);
-          String[] a = candidate.keySet().toArray(new String[0]);
-          if (a.length > 0) {
-            return a[r.nextInt(a.length)];
+          // find the LARGEST 5 nodes, and random select one
+          if (candidate.size() == 0) {
+            continue;
           } else {
-            return null;
+            Random r = new Random();
+            __trim_candidate(candidate, 5);
+            String[] a = candidate.keySet().toArray(new String[0]);
+            if (a.length > 0) {
+              return a[r.nextInt(a.length)];
+            } else {
+              continue;
+            }
           }
         }
+        return null;
       }
       case FileLocatingPolicy.EXCLUDE_NODES:
         if (flp.nodes == null || flp.nodes.size() == 0) {
-          return findBestNode(false);
+          return findBestNode_L123(false);
         }
         break;
       case FileLocatingPolicy.SPECIFY_NODES:
@@ -2813,11 +3158,12 @@ public class DiskManager {
           }
         }
       case FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM:
-        // random select one node from largest node set
+        // random select one node from largest node set or specified type list
         Random r = new Random();
         List<String> nodes = new ArrayList<String>();
-        __select_some_nodes(nodes, Math.min(ndmap.size() / 5 + 1, 3), flp.nodes);
-        LOG.debug("Random select in nodes: " + nodes);
+        __select_some_nodes(nodes, Math.min(ndmap.size() / 5 + 1, 3),
+            flp.nodes, flp.accept_types);
+        LOG.debug("Random select in nodes: " + nodes + ", excl: " + flp.nodes);
         if (nodes.size() > 0) {
           return nodes.get(r.nextInt(nodes.size()));
         } else {
@@ -2845,7 +3191,7 @@ public class DiskManager {
             }
             if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED ||
                 flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
-              excludeDevs.addAll(findSharedDevs(dis));
+              excludeDevs.addAll(filterSharedDevs(dis));
             }
             if (!canFindDevices(ni, excludeDevs)) {
               ignore = true;
@@ -2869,13 +3215,16 @@ public class DiskManager {
       }
       if (largestNode == null && flp.canIgnore) {
         // FIXME: replicas ignore NODE GROUP settings?
-        return findBestNode(false);
+        return findBestNode_L123(false);
       }
 
       return largestNode;
     }
 
-    public String findBestNode(boolean ignoreShared) throws IOException {
+    // findBestNode_L123()
+    //
+    // return largest free nodes(count for L1,L2,L3(if false) devices).
+    public String findBestNode_L123(boolean ignoreShared) throws IOException {
       if (safeMode) {
         throw new IOException("Disk Manager is in Safe Mode, waiting for disk reports ...\n");
       }
@@ -2910,42 +3259,6 @@ public class DiskManager {
       return largestNode;
     }
 
-    public void findBackupDevice(Set<String> dev, Set<String> node) {
-      for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
-        List<DeviceInfo> dis = e.getValue().dis;
-        if (dis != null) {
-          for (DeviceInfo di : dis) {
-            // Note: ignore almost full backup device here
-            if (di.isOffline || di.free < 1024 * 1024) {
-              continue;
-            }
-            if (di.getType() == MetaStoreConst.MDeviceProp.BACKUP || di.getType() == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
-              dev.add(di.dev);
-              node.add(e.getKey());
-            }
-          }
-        }
-      }
-    }
-
-    public void findCacheDevice(Set<String> dev, Set<String> node) {
-      for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
-        List<DeviceInfo> dis = e.getValue().dis;
-        if (dis != null) {
-          for (DeviceInfo di : dis) {
-            // Note: ignore almost full cache device here
-            if (di.isOffline || di.free < 1024 * 1024) {
-              continue;
-            }
-            if (di.getType() == MetaStoreConst.MDeviceProp.BACKUP || di.getType() == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
-              dev.add(di.dev);
-              node.add(e.getKey());
-            }
-          }
-        }
-      }
-    }
-
     // filter offline device either
     private List<DeviceInfo> filterOfflineDevice(String node_name, List<DeviceInfo> orig) {
       List<DeviceInfo> r = new ArrayList<DeviceInfo>();
@@ -2963,21 +3276,58 @@ public class DiskManager {
       return r;
     }
 
-    // filter backup device and offline device both, and cache device either
-    private List<DeviceInfo> filterSharedOfflineCacheDevice(String node_name, List<DeviceInfo> orig) {
+    private List<DeviceInfo> generalDeviceFilter(List<DeviceInfo> orig, Set<Integer> accept_types, boolean filter_offline) {
       List<DeviceInfo> r = new ArrayList<DeviceInfo>();
 
       if (orig != null) {
         for (DeviceInfo di : orig) {
-          if (di.isOffline) {
+          if ((filter_offline && di.isOffline) || di.free < 1024 * 1024) {
             continue;
           }
-          if (di.getType() == MetaStoreConst.MDeviceProp.GENERAL) {
+          if (accept_types.contains(di.getType())) {
             r.add(di);
           }
         }
       }
+      return r;
+    }
 
+    // filter backup device and offline device both, and cache device either
+    private List<DeviceInfo> filterTypeDevice(List<Integer> accept_types_list,
+        List<DeviceInfo> orig) {
+      Set<Integer> accept_types = new HashSet<Integer>();
+      if (accept_types_list == null || accept_types_list.size() == 0) {
+        accept_types.add(MetaStoreConst.MDeviceProp.GENERAL);
+      } else {
+        accept_types.addAll(accept_types_list);
+      }
+      return generalDeviceFilter(orig, accept_types, true);
+    }
+
+    public Set<String> findSharedDevs() {
+      Set<Integer> accept_types = new HashSet<Integer>();
+      Set<String> r = new HashSet<String>();
+
+      accept_types.add(MetaStoreConst.MDeviceProp.SHARED);
+      accept_types.add(MetaStoreConst.MDeviceProp.BACKUP);
+
+      for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
+        NodeInfo ni = entry.getValue();
+        synchronized (ni) {
+          List<DeviceInfo> dis = ni.dis;
+
+          if (ni.dis == null) {
+            continue;
+          }
+          dis = generalDeviceFilter(ni.dis, accept_types, false);
+          if (dis == null || dis.size() == 0) {
+            continue;
+          }
+          for (DeviceInfo di : dis) {
+            r.add(di.dev);
+          }
+        }
+      }
       return r;
     }
 
@@ -2993,48 +3343,65 @@ public class DiskManager {
       }
     }
 
-    private void __select_some_nodes(List<String> nodes, int nr, Set<String> excl) {
+    // BUG-XXX: we have to preserve the accept types order here!
+    //
+    // Try to select in higher level order
+    private void __select_some_nodes(List<String> nodes, int nr, Set<String> excl,
+        List<Integer> accept_types) {
       if (nr <= 0) {
         return;
       }
-      TreeMap<Long, String> m = new TreeMap<Long, String>();
 
-      for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
-        if (excl != null && excl.contains(entry.getKey())) {
-          continue;
-        }
+      if (accept_types == null || accept_types.size() == 0) {
+        accept_types.addAll(default_orders);
+      }
 
-        NodeInfo ni = entry.getValue();
-        synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(entry.getKey(), ni.dis);
-          long thisfree = 0;
+      for (Integer dtype : accept_types) {
+        List<Integer> stype = new ArrayList<Integer>();
+        TreeMap<Long, String> m = new TreeMap<Long, String>();
 
-          if (dis == null) {
+        stype.add(dtype);
+
+        for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
+          if (excl != null && excl.contains(entry.getKey())) {
             continue;
           }
-          for (DeviceInfo di : dis) {
-            thisfree += di.free;
-          }
-          if (thisfree > 0) {
-            m.put(thisfree, entry.getKey());
+
+          NodeInfo ni = entry.getValue();
+          synchronized (ni) {
+            List<DeviceInfo> dis = filterTypeDevice(stype, ni.dis);
+            long thisfree = 0;
+
+            if (dis == null) {
+              continue;
+            }
+            for (DeviceInfo di : dis) {
+              thisfree += di.free;
+            }
+            if (thisfree > 0) {
+              m.put(thisfree, entry.getKey());
+            }
           }
         }
-      }
-      int i = 0;
-      for (Long key : m.descendingKeySet()) {
-        if (i >= nr) {
-          break;
-        }
-        // NOTE-XXX: if this node's load1 is too large, reject to select it
-        NodeInfo ni = ndmap.get(m.get(key));
-        if (ni != null) {
-          if (ni.load1 < 100) {
+        int i = 0;
+        for (Long key : m.descendingKeySet()) {
+          if (i >= nr) {
+            break;
+          }
+          // NOTE-XXX: if this node's load1 is too large, reject to select it
+          NodeInfo ni = ndmap.get(m.get(key));
+          if (ni != null) {
+            if (ni.load1 < 50) {
+              nodes.add(m.get(key));
+              i++;
+            }
+          } else {
             nodes.add(m.get(key));
             i++;
           }
-        } else {
-          nodes.add(m.get(key));
-          i++;
+        }
+        if (nodes.size() > 0) {
+          break;
         }
       }
     }
@@ -3138,24 +3505,29 @@ public class DiskManager {
           flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
         // this two mode only used in selecting primary replica!
         synchronized (ni) {
-          dilist = filterSharedOfflineCacheDevice(node, ni.dis);
+          dilist = filterTypeDevice(flp.accept_types, ni.dis);
         }
-      } else if (flp.dev_mode == FileLocatingPolicy.USE_CACHE) {
-        if (ni.dis != null) {
+      } else if (flp.dev_mode == FileLocatingPolicy.ORDERED_ALLOC) {
+        if (ni.dis == null) {
+          return null;
+        }
+        for (Integer dtype : flp.accept_types) {
+          dilist.clear();
           for (DeviceInfo di : ni.dis) {
-            if (di.getType() == MetaStoreConst.MDeviceProp.CACHE) {
+            if (di.getType() == dtype) {
               dilist.add(di);
             }
           }
+          // find the LARGEST 3 devices in current type, and random select one
+          __trim_dilist(dilist, 3, null);
+          Random r = new Random();
+          if (dilist.size() > 0) {
+            return dilist.get(r.nextInt(dilist.size())).dev;
+          } else {
+            continue;
+          }
         }
-        // find the LARGEST 3 devices, and random select one
-        __trim_dilist(dilist, 3, null);
-        Random r = new Random();
-        if (dilist.size() > 0) {
-          return dilist.get(r.nextInt(dilist.size())).dev;
-        } else {
-          return null;
-        }
+        return null;
       } else {
         // ignore offline device
         dilist = filterOfflineDevice(node, ni.dis);
@@ -3194,7 +3566,7 @@ public class DiskManager {
             }
           }
         } else if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM) {
-          // random select a device and exclude used devs
+          // random select a device (in some types) and exclude used devs
           if (dilist == null) {
             return null;
           } else {
@@ -3380,7 +3752,7 @@ public class DiskManager {
           }
           // BUG-XXX: we should wait a moment to passively update the state.
           if (r.op == DMRequest.DMROperation.REPLICATE) {
-            FileLocatingPolicy flp, flp_default, flp_backup;
+            FileLocatingPolicy flp, flp_default;
             Set<String> excludes = new TreeSet<String>();
             Set<String> excl_dev = new TreeSet<String>();
             Set<String> spec_dev = new TreeSet<String>();
@@ -3395,10 +3767,6 @@ public class DiskManager {
               release_rep_limit();
               continue;
             }
-            // find backup device
-            findBackupDevice(spec_dev, spec_node);
-            LOG.debug("Try to write to backup device firstly: N <" + Arrays.toString(spec_node.toArray()) +
-                ">, D <" + Arrays.toString(spec_dev.toArray()) + ">");
 
             // exclude old file locations
             for (int i = 0; i < r.begin_idx; i++) {
@@ -3450,25 +3818,35 @@ public class DiskManager {
               continue;
             }
 
-            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, true);
-            flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
-            flp_backup.origNode = r.file.getLocations().get(master).getNode_name();
+            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev,
+                FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM,
+                FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, true);
 
             for (int i = r.begin_idx; i < r.file.getRep_nr(); i++, flp = flp_default) {
               if (i == r.begin_idx) {
                 // TODO: Use FLSelector here to decide whether we need replicate it to CACHE device
-                if (spec_dev.size() > 0) {
-                  flp = flp_backup;
-                }
+                String table = r.file.getDbName() + "." + r.file.getTableName();
+                flp.accept_types = flselector.getDevTypeListAfterIncludeHint(table,
+                    MetaStoreConst.MDeviceProp.GENERAL);
               }
               try {
                 String node_name = findBestNode(flp);
                 if (node_name == null) {
                   LOG.warn("Could not find any best node to replicate file " + r.file.getFid());
+                  r.failnr++;
                   r.begin_idx = i;
-                  // insert back to the queue;
-                  synchronized (repQ) {
-                    repQ.add(r);
+                  if (r.failnr <= 50) {
+                    // insert back to the queue;
+                    synchronized (repQ) {
+                      repQ.add(r);
+                      repQ.notify();
+                    }
+                  } else {
+                    LOG.error("[FLP] Drop REP request: fid " + r.file.getFid() + ", faield " + r.failnr);
+                  }
+                  try {
+                    Thread.sleep(500);
+                  } catch (InterruptedException el) {
                   }
                   release_rep_limit();
                   break;
@@ -3600,7 +3978,7 @@ public class DiskManager {
                     repQ.notify();
                   }
                 } else {
-                  LOG.error("Drop REP request: fid " + r.file.getFid() + ", failed " + r.failnr);
+                  LOG.error("[DEV] Drop REP request: fid " + r.file.getFid() + ", failed " + r.failnr);
                 }
                 try {
                   Thread.sleep(500);
@@ -3826,6 +4204,20 @@ public class DiskManager {
           runner.start();
         }
 
+        // if we have detected one SLAVE cmd, just ignore other cms.
+        private boolean __handle_slave_report(DMReport report) {
+          if (report.replies != null && report.replies.size() > 0) {
+            for (DMReply dmr : report.replies) {
+              if (dmr.type == DMReply.DMReplyType.SLAVE) {
+                LOG.info("Detect one MS slave at " + dmr.args);
+                alternateURI = dmr.args;
+                return true;
+              }
+            }
+          }
+          return false;
+        }
+
         @Override
         public void run() {
           while (true) {
@@ -3840,16 +4232,6 @@ public class DiskManager {
               }
 
               String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
-
-              // Check if we are in slave role
-              switch (role) {
-              default:
-              case SLAVE:
-                LOG.debug("RECV: " + recvStr);
-                continue;
-              case MASTER:
-                //LOG.debug("RECV: " + recvStr);
-              }
 
               DMReport report = parseReport(recvStr);
 
@@ -3870,6 +4252,10 @@ public class DiskManager {
                   LOG.error(e, e);
                 }
               } else {
+                // NOTE-XXX: handle SLAVE report here!
+                if (__handle_slave_report(report)) {
+                  continue;
+                }
                 try {
                   synchronized (rs_s1) {
                     reportNode = rs_s1.getNode(report.node);
@@ -3985,6 +4371,17 @@ public class DiskManager {
                 // 2. update NDMap
                 synchronized (ndmap) {
                   addToNDMap(System.currentTimeMillis(), reportNode, report.dil);
+                }
+
+                // 3.0- Check if we are in slave role.
+                // Only do report handling in master role.
+                switch (role) {
+                default:
+                case SLAVE:
+                  LOG.debug("SLAVE  RECV: " + recvStr);
+                  continue;
+                case MASTER:
+                  LOG.debug("MASTER RECV: " + recvStr);
                 }
 
                 // 3. finally, add this report entry to queue
@@ -4131,6 +4528,10 @@ public class DiskManager {
           } else if (cmds[i].startsWith("+VERIFY:")) {
             dmr.type = DMReply.DMReplyType.VERIFY;
             dmr.args = cmds[i].substring(8);
+            r.add(dmr);
+          } else if (cmds[i].startsWith("+SLAVE:")) {
+            dmr.type = DMReply.DMReplyType.SLAVE;
+            dmr.args = cmds[i].substring(7);
             r.add(dmr);
           }
         }
@@ -4319,7 +4720,7 @@ public class DiskManager {
                               LOG.error(e, e);
                             }
                             LOG.info("Verify change dev: " + args[1] + " loc: " + args[2] + " sfl state from SUSPECT to ONLINE.");
-                          }
+                          }	//
                         }
                       }
                     }

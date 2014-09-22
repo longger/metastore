@@ -139,6 +139,49 @@ public class CacheStore {
     }
   }
 
+  private void cleanHashMap() {
+    databaseHm.clear();
+    privilegeBagHm.clear();
+    partitionHm.clear();
+    nodeHm.clear();
+    nodeGroupHm.clear();
+    globalSchemaHm.clear();
+    tableHm.clear();
+    indexHm.clear();
+    deviceHm.clear();
+    // ignore sFileHm and sflHm
+  }
+
+  public boolean reloadHashMap() {
+    LOG.info("Flushing memory cache ...");
+    cleanHashMap();
+    LOG.info("Begin reloading objects ...");
+    long start = System.currentTimeMillis();
+    try {
+      readAll(ObjectType.DATABASE);
+      readAll(ObjectType.GLOBALSCHEMA);
+      readAll(ObjectType.INDEX);
+      readAll(ObjectType.NODE);
+      readAll(ObjectType.NODEGROUP);
+      readAll(ObjectType.PARTITION);
+      readAll(ObjectType.PRIVILEGE);
+      readAll(ObjectType.TABLE);
+      readAll(ObjectType.DEVICE);
+      readAll(ObjectType.SFILE);
+      readAll(ObjectType.SFILELOCATION);
+    } catch (ClassNotFoundException e) {
+      LOG.error(e, e);
+    } catch (JedisException e) {
+      LOG.error(e, e);
+    } catch (IOException e) {
+      LOG.error(e, e);
+    }
+    long end = System.currentTimeMillis();
+	  LOG.info("Reloading objects from redis into cache takes " + (end - start) + " ms.");
+
+	  return true;
+  }
+
   public void writeObject(ObjectType.TypeDesc key, String field, Object o,
       boolean updateIndex) throws JedisException, IOException {
     int err = 0;

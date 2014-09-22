@@ -1964,7 +1964,7 @@ public class ObjectStore implements RawStore, Configurable {
         doCreate = true;
       }
       if (!md.getNode().getNode_name().equals(node.getNode_name()) &&
-          md.getProp() == MetaStoreConst.MDeviceProp.GENERAL) {
+          DeviceInfo.getType(md.getProp()) == MetaStoreConst.MDeviceProp.GENERAL) {
         LOG.info("Saved " + md.getNode().getNode_name() + ", this " + node.getNode_name());
         // should update it.
         MNode mn = getMNode(node.getNode_name());
@@ -2609,8 +2609,8 @@ public class ObjectStore implements RawStore, Configurable {
             MFileLocation x = mfl.get(i);
 
             if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE &&
-                (x.getDev().getProp() == MetaStoreConst.MDeviceProp.GENERAL ||
-                x.getDev().getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE)) {
+                (DeviceInfo.getType(x.getDev().getProp()) == MetaStoreConst.MDeviceProp.GENERAL ||
+                DeviceInfo.getType(x.getDev().getProp()) == MetaStoreConst.MDeviceProp.BACKUP_ALONE)) {
               selected = true;
               idx = i;
               break;

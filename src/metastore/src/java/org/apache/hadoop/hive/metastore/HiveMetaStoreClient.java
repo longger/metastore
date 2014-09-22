@@ -2381,4 +2381,20 @@ public boolean authentication(String user_name, String passwd)
     assert devids != null;
     return client.listFilesByDevs(devids);
   }
+
+  @Override
+  public int replicate(long fid, int dtype) throws MetaException, FileOperationException,
+      TException {
+    return client.replicate(fid, dtype);
+  }
+
+  @Override
+  public boolean update_ms_service(int status) throws MetaException, TException {
+    return client.update_ms_service(status);
+  }
+
+  @Override
+  public String get_ms_uris() throws MetaException, TException {
+    return client.get_ms_uris();
+  }
 }
