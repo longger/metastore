@@ -1306,4 +1306,6 @@ public interface IMetaStoreClient {
   public boolean update_ms_service(int status) throws MetaException, TException;
 
   public String get_ms_uris() throws MetaException, TException;
+
+  public boolean update_sfile_nrs(long fid, long rec_nr, long all_rec_nr, long length) throws MetaException, FileOperationException, TException;
 }

@@ -1370,6 +1370,16 @@ class Iface(fb303.FacebookService.Iface):
     """
     pass
 
+  def update_sfile_nrs(self, fid, rec_nr, all_rec_nr, length):
+    """
+    Parameters:
+     - fid
+     - rec_nr
+     - all_rec_nr
+     - length
+    """
+    pass
+
   def getMP(self, node_name, devid):
     """
     Parameters:
@@ -7675,6 +7685,46 @@ class Client(fb303.FacebookService.Client, Iface):
       raise result.o2
     raise TApplicationException(TApplicationException.MISSING_RESULT, "replicate failed: unknown result");
 
+  def update_sfile_nrs(self, fid, rec_nr, all_rec_nr, length):
+    """
+    Parameters:
+     - fid
+     - rec_nr
+     - all_rec_nr
+     - length
+    """
+    self.send_update_sfile_nrs(fid, rec_nr, all_rec_nr, length)
+    return self.recv_update_sfile_nrs()
+
+  def send_update_sfile_nrs(self, fid, rec_nr, all_rec_nr, length):
+    self._oprot.writeMessageBegin('update_sfile_nrs', TMessageType.CALL, self._seqid)
+    args = update_sfile_nrs_args()
+    args.fid = fid
+    args.rec_nr = rec_nr
+    args.all_rec_nr = all_rec_nr
+    args.length = length
+    args.write(self._oprot)
+    self._oprot.writeMessageEnd()
+    self._oprot.trans.flush()
+
+  def recv_update_sfile_nrs(self, ):
+    (fname, mtype, rseqid) = self._iprot.readMessageBegin()
+    if mtype == TMessageType.EXCEPTION:
+      x = TApplicationException()
+      x.read(self._iprot)
+      self._iprot.readMessageEnd()
+      raise x
+    result = update_sfile_nrs_result()
+    result.read(self._iprot)
+    self._iprot.readMessageEnd()
+    if result.success is not None:
+      return result.success
+    if result.o1 is not None:
+      raise result.o1
+    if result.o2 is not None:
+      raise result.o2
+    raise TApplicationException(TApplicationException.MISSING_RESULT, "update_sfile_nrs failed: unknown result");
+
   def getMP(self, node_name, devid):
     """
     Parameters:
@@ -8817,6 +8867,7 @@ class Processor(fb303.FacebookService.Processor, Iface, TProcessor):
     self._processMap["migrate2_stage1"] = Processor.process_migrate2_stage1
     self._processMap["migrate2_stage2"] = Processor.process_migrate2_stage2
     self._processMap["replicate"] = Processor.process_replicate
+    self._processMap["update_sfile_nrs"] = Processor.process_update_sfile_nrs
     self._processMap["getMP"] = Processor.process_getMP
     self._processMap["getSessionId"] = Processor.process_getSessionId
     self._processMap["createSchema"] = Processor.process_createSchema
@@ -11532,6 +11583,22 @@ class Processor(fb303.FacebookService.Processor, Iface, TProcessor):
     except FileOperationException as o2:
       result.o2 = o2
     oprot.writeMessageBegin("replicate", TMessageType.REPLY, seqid)
+    result.write(oprot)
+    oprot.writeMessageEnd()
+    oprot.trans.flush()
+
+  def process_update_sfile_nrs(self, seqid, iprot, oprot):
+    args = update_sfile_nrs_args()
+    args.read(iprot)
+    iprot.readMessageEnd()
+    result = update_sfile_nrs_result()
+    try:
+      result.success = self._handler.update_sfile_nrs(args.fid, args.rec_nr, args.all_rec_nr, args.length)
+    except MetaException as o1:
+      result.o1 = o1
+    except FileOperationException as o2:
+      result.o2 = o2
+    oprot.writeMessageBegin("update_sfile_nrs", TMessageType.REPLY, seqid)
     result.write(oprot)
     oprot.writeMessageEnd()
     oprot.trans.flush()
@@ -39316,6 +39383,180 @@ class replicate_result:
     if self.success is not None:
       oprot.writeFieldBegin('success', TType.I32, 0)
       oprot.writeI32(self.success)
+      oprot.writeFieldEnd()
+    if self.o1 is not None:
+      oprot.writeFieldBegin('o1', TType.STRUCT, 1)
+      self.o1.write(oprot)
+      oprot.writeFieldEnd()
+    if self.o2 is not None:
+      oprot.writeFieldBegin('o2', TType.STRUCT, 2)
+      self.o2.write(oprot)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class update_sfile_nrs_args:
+  """
+  Attributes:
+   - fid
+   - rec_nr
+   - all_rec_nr
+   - length
+  """
+
+  thrift_spec = None
+  def __init__(self, fid=None, rec_nr=None, all_rec_nr=None, length=None,):
+    self.fid = fid
+    self.rec_nr = rec_nr
+    self.all_rec_nr = all_rec_nr
+    self.length = length
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 1:
+        if ftype == TType.I64:
+          self.fid = iprot.readI64();
+        else:
+          iprot.skip(ftype)
+      elif fid == -1:
+        if ftype == TType.I64:
+          self.rec_nr = iprot.readI64();
+        else:
+          iprot.skip(ftype)
+      elif fid == -2:
+        if ftype == TType.I64:
+          self.all_rec_nr = iprot.readI64();
+        else:
+          iprot.skip(ftype)
+      elif fid == -3:
+        if ftype == TType.I64:
+          self.length = iprot.readI64();
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('update_sfile_nrs_args')
+    if self.length is not None:
+      oprot.writeFieldBegin('length', TType.I64, -3)
+      oprot.writeI64(self.length)
+      oprot.writeFieldEnd()
+    if self.all_rec_nr is not None:
+      oprot.writeFieldBegin('all_rec_nr', TType.I64, -2)
+      oprot.writeI64(self.all_rec_nr)
+      oprot.writeFieldEnd()
+    if self.rec_nr is not None:
+      oprot.writeFieldBegin('rec_nr', TType.I64, -1)
+      oprot.writeI64(self.rec_nr)
+      oprot.writeFieldEnd()
+    if self.fid is not None:
+      oprot.writeFieldBegin('fid', TType.I64, 1)
+      oprot.writeI64(self.fid)
+      oprot.writeFieldEnd()
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, value)
+      for key, value in self.__dict__.iteritems()]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+  def __ne__(self, other):
+    return not (self == other)
+
+class update_sfile_nrs_result:
+  """
+  Attributes:
+   - success
+   - o1
+   - o2
+  """
+
+  thrift_spec = (
+    (0, TType.BOOL, 'success', None, None, ), # 0
+    (1, TType.STRUCT, 'o1', (MetaException, MetaException.thrift_spec), None, ), # 1
+    (2, TType.STRUCT, 'o2', (FileOperationException, FileOperationException.thrift_spec), None, ), # 2
+  )
+
+  def __init__(self, success=None, o1=None, o2=None,):
+    self.success = success
+    self.o1 = o1
+    self.o2 = o2
+
+  def read(self, iprot):
+    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
+      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      if fid == 0:
+        if ftype == TType.BOOL:
+          self.success = iprot.readBool();
+        else:
+          iprot.skip(ftype)
+      elif fid == 1:
+        if ftype == TType.STRUCT:
+          self.o1 = MetaException()
+          self.o1.read(iprot)
+        else:
+          iprot.skip(ftype)
+      elif fid == 2:
+        if ftype == TType.STRUCT:
+          self.o2 = FileOperationException()
+          self.o2.read(iprot)
+        else:
+          iprot.skip(ftype)
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
+      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+      return
+    oprot.writeStructBegin('update_sfile_nrs_result')
+    if self.success is not None:
+      oprot.writeFieldBegin('success', TType.BOOL, 0)
+      oprot.writeBool(self.success)
       oprot.writeFieldEnd()
     if self.o1 is not None:
       oprot.writeFieldBegin('o1', TType.STRUCT, 1)

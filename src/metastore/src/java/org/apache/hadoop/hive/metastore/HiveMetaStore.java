@@ -7351,6 +7351,27 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       }
     }
 
+    @Override
+    public boolean update_sfile_nrs(long fid, long rec_nr, long all_rec_nr, long length) throws MetaException,
+        FileOperationException, TException {
+      SFile saved = getMS().getSFile(fid);
+      if (saved == null) {
+        throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
+      }
+
+      if (rec_nr >= 0) {
+        saved.setRecord_nr(rec_nr);
+      }
+      if (all_rec_nr >= 0) {
+        saved.setAll_record_nr(all_rec_nr);
+      }
+      if (length >= 0) {
+        saved.setLength(length);
+      }
+      getMS().updateSFile(saved);
+      return true;
+    }
+
   }
 
   public static IHMSHandler newHMSHandler(String name, HiveConf hiveConf) throws MetaException {

@@ -1420,6 +1420,15 @@ public class DiskManager {
           if (i == init_size) {
             // FIXME: Use FLSelector framework here?
             String table = f.getDbName() + "." + f.getTableName();
+            switch (flselector.FLSelector_switch(table)) {
+            default:
+            case NONE:
+              break;
+            case FAIR_NODES:
+            case ORDERED_ALLOC_DEVS:
+              flp.dev_mode = FileLocatingPolicy.ORDERED_ALLOC;
+              break;
+            }
             flp.accept_types = flselector.getDevTypeListAfterIncludeHint(table, dtype);
           }
           try {
@@ -2382,6 +2391,10 @@ public class DiskManager {
       Long[] devnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
       Long[] adevnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
       long free = 0, used = 0, offlinenr = 0, truetotal = 0, truefree = 0;
+      long cacheFree = 0, cacheUsed = 0, cacheTruetotal = 0, cacheTruefree = 0;
+      long generalFree = 0, generalUsed = 0, generalTruetotal = 0, generalTruefree = 0;
+      long massFree = 0, massUsed = 0, massTruetotal = 0, massTruefree = 0;
+      long shareFree = 0, shareUsed = 0, shareTruetotal = 0, shareTruefree = 0;
       Set<String> offlinedevs = new TreeSet<String>();
 
       for (int i = 0; i < devnr.length; i++) {
@@ -2456,16 +2469,54 @@ public class DiskManager {
 	        }
 	        free += e.getValue().free;
 	        used += e.getValue().used;
+	        switch(e.getValue().getType()){
+	        case MetaStoreConst.MDeviceProp.CACHE:
+	          cacheFree += e.getValue().free;
+	          cacheUsed += e.getValue().used;
+	          break;
+	        case MetaStoreConst.MDeviceProp.GENERAL:
+	          generalFree += e.getValue().free;
+	          generalUsed += e.getValue().used;
+	          break;
+	        case MetaStoreConst.MDeviceProp.MASS:
+	          massFree += e.getValue().free;
+	          massUsed += e.getValue().used;
+	          break;
+	        case MetaStoreConst.MDeviceProp.SHARED:
+	          shareFree += e.getValue().free;
+	          shareUsed += e.getValue().used;
+	          break;
+	        case -1:
+	          break;
+	        }
 	        if (e.getValue().getType() >= 0) {
-            adevnr[e.getValue().getType()]++;
-          }
+	          adevnr[e.getValue().getType()]++;
+	        }
 	        if (e.getValue().isOffline) {
 	          offlinenr++;
 	          offlinedevs.add(e.getValue().dev);
 	        } else {
-            truefree += e.getValue().free;
-            truetotal += (e.getValue().free + e.getValue().used);
-          }
+	          truefree += e.getValue().free;
+	          truetotal += (e.getValue().free + e.getValue().used);
+	          switch(e.getValue().getType()){
+	          case MetaStoreConst.MDeviceProp.CACHE:
+	            cacheTruefree += e.getValue().free;
+	            cacheTruetotal += (e.getValue().free + e.getValue().used);
+	            break;
+	          case MetaStoreConst.MDeviceProp.GENERAL:
+	            generalTruefree += e.getValue().free;
+	            generalTruetotal += (e.getValue().free + e.getValue().used);
+	            break;
+	          case MetaStoreConst.MDeviceProp.MASS:
+	            massTruefree += e.getValue().free;
+	            massTruetotal += (e.getValue().free + e.getValue().used);
+	            break;
+	          case MetaStoreConst.MDeviceProp.SHARED:
+	            shareTruefree += e.getValue().free;
+	            shareTruetotal += (e.getValue().free + e.getValue().used);
+	            break;
+	          }
+	        }
 	      }
 	    }
 
@@ -2475,11 +2526,51 @@ public class DiskManager {
               "G, free " + ANSI_RED + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + " \n";
           r += "True  space " + ((truetotal) / 1000000000) + "G, used " + ((truetotal - truefree) / 1000000000) +
               "G, free " + ANSI_RED + (truefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)truefree / (truetotal)) + " \n";
+
+          r += "L1 Total space " + ((cacheUsed + cacheFree) / 1000000000) + "G, used " + (cacheUsed / 1000000000) +
+              "G, free " + ANSI_RED + (cacheFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)cacheFree / (cacheUsed + cacheFree)) + " \n";
+          r += "L1 True  space " + ((cacheTruetotal) / 1000000000) + "G, used " + ((cacheTruetotal - cacheTruefree) / 1000000000) +
+              "G, free " + ANSI_RED + (cacheTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)cacheTruefree / (cacheTruetotal)) + " \n";
+
+          r += "L2 Total space " + ((generalUsed + generalFree) / 1000000000) + "G, used " + (generalUsed / 1000000000) +
+              "G, free " + ANSI_RED + (generalFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)generalFree / (generalUsed + generalFree)) + " \n";
+          r += "L2 True  space " + ((generalTruetotal) / 1000000000) + "G, used " + ((generalTruetotal - generalTruefree) / 1000000000) +
+              "G, free " + ANSI_RED + (generalTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)generalTruefree / (generalTruetotal)) + " \n";
+
+          r += "L3 Total space " + ((massUsed + massFree) / 1000000000) + "G, used " + (massUsed / 1000000000) +
+              "G, free " + ANSI_RED + (massFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)massFree / (massUsed + massFree)) + " \n";
+          r += "L3 True  space " + ((massTruetotal) / 1000000000) + "G, used " + ((massTruetotal - massTruefree) / 1000000000) +
+              "G, free " + ANSI_RED + (massTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)massTruefree / (massTruetotal)) + " \n";
+
+          r += "L4 Total space " + ((shareUsed + shareFree) / 1000000000) + "G, used " + (shareUsed / 1000000000) +
+              "G, free " + ANSI_RED + (shareFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)shareFree / (shareUsed + shareFree)) + " \n";
+          r += "L4 True  space " + ((shareTruetotal) / 1000000000) + "G, used " + ((shareTruetotal - shareTruefree) / 1000000000) +
+              "G, free " + ANSI_RED + (shareTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)shareTruefree / (shareTruetotal)) + " \n";
         } else {
           r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
               "G, free " + ANSI_GREEN + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + "\n";
           r += "True  space " + ((truetotal) / 1000000000) + "G, used " + ((truetotal - truefree) / 1000000000) +
               "G, free " + ANSI_GREEN + (truefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)truefree / (truetotal)) + "\n";
+
+          r += "L1 Total space " + ((cacheUsed + cacheFree) / 1000000000) + "G, used " + (cacheUsed / 1000000000) +
+                  "G, free " + ANSI_GREEN + (cacheFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)cacheFree / (cacheUsed + cacheFree)) + " \n";
+          r += "L1 True  space " + ((cacheTruetotal) / 1000000000) + "G, used " + ((cacheTruetotal - cacheTruefree) / 1000000000) +
+                     "G, free " + ANSI_GREEN + (cacheTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)cacheTruefree / (cacheTruetotal)) + " \n";
+
+          r += "L2 Total space " + ((generalUsed + generalFree) / 1000000000) + "G, used " + (generalUsed / 1000000000) +
+                  "G, free " + ANSI_GREEN + (generalFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)generalFree / (generalUsed + generalFree)) + " \n";
+          r += "L2 True  space " + ((generalTruetotal) / 1000000000) + "G, used " + ((generalTruetotal - generalTruefree) / 1000000000) +
+                     "G, free " + ANSI_GREEN + (generalTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)generalTruefree / (generalTruetotal)) + " \n";
+
+          r += "L3 Total space " + ((massUsed + massFree) / 1000000000) + "G, used " + (massUsed / 1000000000) +
+                  "G, free " + ANSI_GREEN + (massFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)massFree / (massUsed + massFree)) + " \n";
+          r += "L3 True  space " + ((massTruetotal) / 1000000000) + "G, used " + ((massTruetotal - massTruefree) / 1000000000) +
+                     "G, free " + ANSI_GREEN + (massTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)massTruefree / (massTruetotal)) + " \n";
+
+          r += "L4 Total space " + ((shareUsed + shareFree) / 1000000000) + "G, used " + (shareUsed / 1000000000) +
+                  "G, free " + ANSI_GREEN + (shareFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)shareFree / (shareUsed + shareFree)) + " \n";
+          r += "L4 True  space " + ((shareTruetotal) / 1000000000) + "G, used " + ((shareTruetotal - shareTruefree) / 1000000000) +
+                     "G, free " + ANSI_GREEN + (shareTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)shareTruefree / (shareTruetotal)) + " \n";
         }
 	    }
       synchronized (rs) {
@@ -3514,7 +3605,7 @@ public class DiskManager {
         for (Integer dtype : flp.accept_types) {
           dilist.clear();
           for (DeviceInfo di : ni.dis) {
-            if (di.getType() == dtype) {
+            if (di.getType() == dtype && !di.isOffline) {
               dilist.add(di);
             }
           }
@@ -3826,6 +3917,15 @@ public class DiskManager {
               if (i == r.begin_idx) {
                 // TODO: Use FLSelector here to decide whether we need replicate it to CACHE device
                 String table = r.file.getDbName() + "." + r.file.getTableName();
+                switch (flselector.FLSelector_switch(table)) {
+                default:
+                case NONE:
+                  break;
+                case FAIR_NODES:
+                case ORDERED_ALLOC_DEVS:
+                  flp.dev_mode = FileLocatingPolicy.ORDERED_ALLOC;
+                  break;
+                }
                 flp.accept_types = flselector.getDevTypeListAfterIncludeHint(table,
                     MetaStoreConst.MDeviceProp.GENERAL);
               }

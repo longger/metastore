@@ -2897,6 +2897,23 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'replicate failed: unknown result')
     end
 
+    def update_sfile_nrs(fid, rec_nr, all_rec_nr, length)
+      send_update_sfile_nrs(fid, rec_nr, all_rec_nr, length)
+      return recv_update_sfile_nrs()
+    end
+
+    def send_update_sfile_nrs(fid, rec_nr, all_rec_nr, length)
+      send_message('update_sfile_nrs', Update_sfile_nrs_args, :fid => fid, :rec_nr => rec_nr, :all_rec_nr => all_rec_nr, :length => length)
+    end
+
+    def recv_update_sfile_nrs()
+      result = receive_message(Update_sfile_nrs_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise result.o2 unless result.o2.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'update_sfile_nrs failed: unknown result')
+    end
+
     def getMP(node_name, devid)
       send_getMP(node_name, devid)
       return recv_getMP()
@@ -5515,6 +5532,19 @@ module ThriftHiveMetastore
         result.o2 = o2
       end
       write_result(result, oprot, 'replicate', seqid)
+    end
+
+    def process_update_sfile_nrs(seqid, iprot, oprot)
+      args = read_args(iprot, Update_sfile_nrs_args)
+      result = Update_sfile_nrs_result.new()
+      begin
+        result.success = @handler.update_sfile_nrs(args.fid, args.rec_nr, args.all_rec_nr, args.length)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      rescue ::FileOperationException => o2
+        result.o2 = o2
+      end
+      write_result(result, oprot, 'update_sfile_nrs', seqid)
     end
 
     def process_getMP(seqid, iprot, oprot)
@@ -12375,6 +12405,48 @@ module ThriftHiveMetastore
 
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::I32, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException},
+      O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::FileOperationException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Update_sfile_nrs_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    FID = 1
+    REC_NR = -1
+    ALL_REC_NR = -2
+    LENGTH = -3
+
+    FIELDS = {
+      FID => {:type => ::Thrift::Types::I64, :name => 'fid'},
+      REC_NR => {:type => ::Thrift::Types::I64, :name => 'rec_nr'},
+      ALL_REC_NR => {:type => ::Thrift::Types::I64, :name => 'all_rec_nr'},
+      LENGTH => {:type => ::Thrift::Types::I64, :name => 'length'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Update_sfile_nrs_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+    O2 = 2
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException},
       O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::FileOperationException}
     }

@@ -190,6 +190,7 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual void migrate2_stage1(std::vector<SFileLocation> & _return, const std::string& dbName, const std::string& tableName, const std::vector<std::string> & partNames, const std::string& to_db) = 0;
   virtual bool migrate2_stage2(const std::string& dbName, const std::string& tableName, const std::vector<std::string> & partNames, const std::string& from_db, const std::string& to_db, const std::string& to_nas_devid) = 0;
   virtual int32_t replicate(const int64_t fid, const int32_t dtype) = 0;
+  virtual bool update_sfile_nrs(const int64_t fid, const int64_t rec_nr, const int64_t all_rec_nr, const int64_t length) = 0;
   virtual void getMP(std::string& _return, const std::string& node_name, const std::string& devid) = 0;
   virtual int64_t getSessionId() = 0;
   virtual bool createSchema(const GlobalSchema& schema) = 0;
@@ -839,6 +840,10 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   }
   int32_t replicate(const int64_t /* fid */, const int32_t /* dtype */) {
     int32_t _return = 0;
+    return _return;
+  }
+  bool update_sfile_nrs(const int64_t /* fid */, const int64_t /* rec_nr */, const int64_t /* all_rec_nr */, const int64_t /* length */) {
+    bool _return = false;
     return _return;
   }
   void getMP(std::string& /* _return */, const std::string& /* node_name */, const std::string& /* devid */) {
@@ -24073,6 +24078,161 @@ class ThriftHiveMetastore_replicate_presult {
 
 };
 
+typedef struct _ThriftHiveMetastore_update_sfile_nrs_args__isset {
+  _ThriftHiveMetastore_update_sfile_nrs_args__isset() : fid(false), rec_nr(false), all_rec_nr(false), length(false) {}
+  bool fid;
+  bool rec_nr;
+  bool all_rec_nr;
+  bool length;
+} _ThriftHiveMetastore_update_sfile_nrs_args__isset;
+
+class ThriftHiveMetastore_update_sfile_nrs_args {
+ public:
+
+  ThriftHiveMetastore_update_sfile_nrs_args() : fid(0), rec_nr(0), all_rec_nr(0), length(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_update_sfile_nrs_args() throw() {}
+
+  int64_t fid;
+  int64_t rec_nr;
+  int64_t all_rec_nr;
+  int64_t length;
+
+  _ThriftHiveMetastore_update_sfile_nrs_args__isset __isset;
+
+  void __set_fid(const int64_t val) {
+    fid = val;
+  }
+
+  void __set_rec_nr(const int64_t val) {
+    rec_nr = val;
+  }
+
+  void __set_all_rec_nr(const int64_t val) {
+    all_rec_nr = val;
+  }
+
+  void __set_length(const int64_t val) {
+    length = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_update_sfile_nrs_args & rhs) const
+  {
+    if (!(fid == rhs.fid))
+      return false;
+    if (!(rec_nr == rhs.rec_nr))
+      return false;
+    if (!(all_rec_nr == rhs.all_rec_nr))
+      return false;
+    if (!(length == rhs.length))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_update_sfile_nrs_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_update_sfile_nrs_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_update_sfile_nrs_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_update_sfile_nrs_pargs() throw() {}
+
+  const int64_t* fid;
+  const int64_t* rec_nr;
+  const int64_t* all_rec_nr;
+  const int64_t* length;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_update_sfile_nrs_result__isset {
+  _ThriftHiveMetastore_update_sfile_nrs_result__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_update_sfile_nrs_result__isset;
+
+class ThriftHiveMetastore_update_sfile_nrs_result {
+ public:
+
+  ThriftHiveMetastore_update_sfile_nrs_result() : success(0) {
+  }
+
+  virtual ~ThriftHiveMetastore_update_sfile_nrs_result() throw() {}
+
+  bool success;
+  MetaException o1;
+  FileOperationException o2;
+
+  _ThriftHiveMetastore_update_sfile_nrs_result__isset __isset;
+
+  void __set_success(const bool val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  void __set_o2(const FileOperationException& val) {
+    o2 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_update_sfile_nrs_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    if (!(o2 == rhs.o2))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_update_sfile_nrs_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_update_sfile_nrs_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_update_sfile_nrs_presult__isset {
+  _ThriftHiveMetastore_update_sfile_nrs_presult__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_update_sfile_nrs_presult__isset;
+
+class ThriftHiveMetastore_update_sfile_nrs_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_update_sfile_nrs_presult() throw() {}
+
+  bool* success;
+  MetaException o1;
+  FileOperationException o2;
+
+  _ThriftHiveMetastore_update_sfile_nrs_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
 typedef struct _ThriftHiveMetastore_getMP_args__isset {
   _ThriftHiveMetastore_getMP_args__isset() : node_name(false), devid(false) {}
   bool node_name;
@@ -28230,6 +28390,9 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   int32_t replicate(const int64_t fid, const int32_t dtype);
   void send_replicate(const int64_t fid, const int32_t dtype);
   int32_t recv_replicate();
+  bool update_sfile_nrs(const int64_t fid, const int64_t rec_nr, const int64_t all_rec_nr, const int64_t length);
+  void send_update_sfile_nrs(const int64_t fid, const int64_t rec_nr, const int64_t all_rec_nr, const int64_t length);
+  bool recv_update_sfile_nrs();
   void getMP(std::string& _return, const std::string& node_name, const std::string& devid);
   void send_getMP(const std::string& node_name, const std::string& devid);
   void recv_getMP(std::string& _return);
@@ -28501,6 +28664,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_migrate2_stage1(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_migrate2_stage2(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_replicate(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_update_sfile_nrs(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_getMP(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_getSessionId(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_createSchema(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -28708,6 +28872,7 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["migrate2_stage1"] = &ThriftHiveMetastoreProcessor::process_migrate2_stage1;
     processMap_["migrate2_stage2"] = &ThriftHiveMetastoreProcessor::process_migrate2_stage2;
     processMap_["replicate"] = &ThriftHiveMetastoreProcessor::process_replicate;
+    processMap_["update_sfile_nrs"] = &ThriftHiveMetastoreProcessor::process_update_sfile_nrs;
     processMap_["getMP"] = &ThriftHiveMetastoreProcessor::process_getMP;
     processMap_["getSessionId"] = &ThriftHiveMetastoreProcessor::process_getSessionId;
     processMap_["createSchema"] = &ThriftHiveMetastoreProcessor::process_createSchema;
@@ -30416,6 +30581,15 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
       ifaces_[i]->replicate(fid, dtype);
     }
     return ifaces_[i]->replicate(fid, dtype);
+  }
+
+  bool update_sfile_nrs(const int64_t fid, const int64_t rec_nr, const int64_t all_rec_nr, const int64_t length) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->update_sfile_nrs(fid, rec_nr, all_rec_nr, length);
+    }
+    return ifaces_[i]->update_sfile_nrs(fid, rec_nr, all_rec_nr, length);
   }
 
   void getMP(std::string& _return, const std::string& node_name, const std::string& devid) {

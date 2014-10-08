@@ -197,6 +197,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '   migrate2_stage1(string dbName, string tableName,  partNames, string to_db)'
   print '  bool migrate2_stage2(string dbName, string tableName,  partNames, string from_db, string to_db, string to_nas_devid)'
   print '  i32 replicate(i64 fid, i32 dtype)'
+  print '  bool update_sfile_nrs(i64 fid, i64 rec_nr, i64 all_rec_nr, i64 length)'
   print '  string getMP(string node_name, string devid)'
   print '  i64 getSessionId()'
   print '  bool createSchema(GlobalSchema schema)'
@@ -1320,6 +1321,12 @@ elif cmd == 'replicate':
     print 'replicate requires 2 args'
     sys.exit(1)
   pp.pprint(client.replicate(eval(args[0]),eval(args[1]),))
+
+elif cmd == 'update_sfile_nrs':
+  if len(args) != 4:
+    print 'update_sfile_nrs requires 4 args'
+    sys.exit(1)
+  pp.pprint(client.update_sfile_nrs(eval(args[0]),eval(args[1]),eval(args[2]),eval(args[3]),))
 
 elif cmd == 'getMP':
   if len(args) != 2:

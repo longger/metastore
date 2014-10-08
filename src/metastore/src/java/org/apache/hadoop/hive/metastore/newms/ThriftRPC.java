@@ -3679,4 +3679,26 @@ public class ThriftRPC extends FacebookBase implements
     }
   }
 
+  @Override
+  public boolean update_sfile_nrs(long fid, long rec_nr, long all_rec_nr, long length) throws MetaException,
+      FileOperationException, TException {
+    SFile saved = rs.getSFile(fid);
+    if (saved == null) {
+      throw new FileOperationException("Can not find SFile by FID " + fid,
+          FOFailReason.INVALID_FILE);
+    }
+
+    if (rec_nr >= 0) {
+      saved.setRecord_nr(rec_nr);
+    }
+    if (all_rec_nr >= 0) {
+      saved.setAll_record_nr(all_rec_nr);
+    }
+    if (length >= 0) {
+      saved.setLength(length);
+    }
+    rs.updateSFile(saved);
+    return true;
+  }
+
 }

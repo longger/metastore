@@ -1048,6 +1048,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   i32 replicate(1:i64 fid, 2:i32 dtype) throws (1:MetaException o1, 2:FileOperationException o2)
   
+  bool update_sfile_nrs(1:i64 fid, i64 rec_nr, i64 all_rec_nr, i64 length) throws (1:MetaException o1, 2:FileOperationException o2)
+  
   string getMP(1:string node_name, 2:string devid) throws (1:MetaException o1)
   
   i64 getSessionId() throws (1:MetaException o1) 

@@ -2397,4 +2397,10 @@ public boolean authentication(String user_name, String passwd)
   public String get_ms_uris() throws MetaException, TException {
     return client.get_ms_uris();
   }
+
+  @Override
+  public boolean update_sfile_nrs(long fid, long rec_nr, long all_rec_nr, long length) throws MetaException,
+      FileOperationException, TException {
+    return client.update_sfile_nrs(fid, rec_nr, all_rec_nr, length);
+  }
 }

@@ -892,6 +892,11 @@ class ThriftHiveMetastoreHandler : virtual public ThriftHiveMetastoreIf {
     printf("replicate\n");
   }
 
+  bool update_sfile_nrs(const int64_t fid, const int64_t rec_nr, const int64_t all_rec_nr, const int64_t length) {
+    // Your implementation goes here
+    printf("update_sfile_nrs\n");
+  }
+
   void getMP(std::string& _return, const std::string& node_name, const std::string& devid) {
     // Your implementation goes here
     printf("getMP\n");
