@@ -1341,9 +1341,13 @@ public class DiskManager {
         // find the valid entry
         for (int i = 0; i < init_size; i++) {
           try {
-            // NOTE-XXX: we allow replicate to L4 device in do_replicate
+            // NOTE-XXX: we allow replicate to L4 device in do_replicate. If we try to
+            // replicate to L4 device, ignore node masking for L4 devices.
             if (!isSharedDevice(f.getLocations().get(i).getDevid())) {
-              excludes.add(f.getLocations().get(i).getNode_name());
+              if (!(dtype == MetaStoreConst.MDeviceProp.SHARED &&
+                  isNodeHasSD(f.getLocations().get(i).getNode_name()))) {
+                excludes.add(f.getLocations().get(i).getNode_name());
+              }
             }
           } catch (MetaException e1) {
             LOG.error(e1, e1);
@@ -1362,10 +1366,10 @@ public class DiskManager {
             master_marked = true;
             DeviceInfo di = admap.get(f.getLocations().get(i).getDevid());
             if (di != null) {
-              // FIXME: we do NOT allow replicate to higher level device
+              // FIXME: now, we do ALLOW replicate to higher level device
               if (MetaStoreConst.checkDeviceOrder(dtype, di.getType())) {
                 //dtype = di.getType();
-                LOG.debug("dtype <= di.getType()");
+                LOG.debug("dtype <= di.getType(), might replicate to higher level.");
               }
             }
             if (f.getLocations().get(i).getNode_name().equals("")) {
@@ -2897,6 +2901,22 @@ public class DiskManager {
           if (ni.dis != null) {
             for (DeviceInfo di : ni.dis) {
               if (di.dev.equalsIgnoreCase(devid)) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    public boolean isNodeHasSD(String nodeName) {
+      NodeInfo ni = ndmap.get(nodeName);
+      if (ni != null) {
+        synchronized (ni) {
+          if (ni.dis != null) {
+            for (DeviceInfo di : ni.dis) {
+              if (di.getType() == MetaStoreConst.MDeviceProp.SHARED) {
                 return true;
               }
             }
