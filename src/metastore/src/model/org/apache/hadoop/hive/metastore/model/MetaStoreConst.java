@@ -14,6 +14,8 @@ public class MetaStoreConst {
     public static final int REPLICATED = 2;
     public static final int RM_LOGICAL = 3;
     public static final int RM_PHYSICAL = 4;
+
+    public static final int __MAX__ = 5;
   }
 
   public class MFileLocationVisitStatus {
