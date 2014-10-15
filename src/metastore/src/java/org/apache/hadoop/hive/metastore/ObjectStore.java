@@ -664,7 +664,9 @@ public class ObjectStore implements RawStore, Configurable {
   }
 
   public boolean dropDatabase(String dbname) throws NoSuchObjectException, MetaException {
+    String db_name = dbname;
     boolean success = false;
+
     LOG.info("Dropping database " + dbname + " along with all tables");
     dbname = dbname.toLowerCase();
     try {
@@ -675,14 +677,13 @@ public class ObjectStore implements RawStore, Configurable {
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(db).toString()));
       pm.retrieve(db);
       if (db != null) {
+        db_name = db.getName();
         List<MDBPrivilege> dbGrants = this.listDatabaseGrants(dbname);
         if (dbGrants != null && dbGrants.size() > 0) {
           pm.deletePersistentAll(dbGrants);
         }
         pm.deletePersistent(db);
       }
-      String db_name = db.getName();
-
 
       success = commitTransaction();
       HashMap<String,Object> old_params= new HashMap<String,Object>();
