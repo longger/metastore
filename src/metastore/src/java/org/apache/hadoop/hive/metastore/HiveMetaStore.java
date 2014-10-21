@@ -4574,7 +4574,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
               // NOTE-XXX: if user has set type order, use it!
               if (DiskManager.flselector.isTableOrdered(db_name + "." + table_name)) {
                 flp.dev_mode = FileLocatingPolicy.ORDERED_ALLOC;
-                flp.accept_types = DiskManager.flselector.getDevTypeList(db_name + "." + table_name);
+                flp.accept_types = DiskManager.flselector.getDevTypeListAfterIncludeHint(
+                    db_name + "." + table_name,
+                    MetaStoreConst.MDeviceProp.__AUTOSELECT_R1__);
               }
             }
             break;
@@ -4582,7 +4584,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           case ORDERED_ALLOC_DEVS:
             flp.node_mode = FileLocatingPolicy.ORDERED_ALLOC;
             flp.dev_mode = FileLocatingPolicy.ORDERED_ALLOC;
-            flp.accept_types = DiskManager.flselector.getDevTypeList(db_name + "." + table_name);
+            flp.accept_types = DiskManager.flselector.getDevTypeListAfterIncludeHint(
+                db_name + "." + table_name,
+                MetaStoreConst.MDeviceProp.__AUTOSELECT_R1__);
             break;
           }
 
@@ -7244,6 +7248,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       //                          repnr     OP=3
       //                          policy    OP=0
       //         L?L? -> L?L?  ->  L?L?     OP=4
+      //          R3      R2        R1      OP=5
       int true_op = op & 0xff;
 
       switch (true_op) {
@@ -7258,6 +7263,14 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         return DiskManager.flselector.repnrWatched(table, (op & 0xff00) >> 8);
       case 4:
         return DiskManager.flselector.orderWatched(table, parseOrderList(op >> 8));
+      case 5:{
+        List<Integer> rounds = new ArrayList<Integer>();
+        for (int i = 0; i < 3; i++) {
+          op >>>= 8;
+          rounds.add(op & 0xff);
+        }
+        return DiskManager.flselector.roundWatched(table, rounds);
+      }
       default:
         return false;
       }

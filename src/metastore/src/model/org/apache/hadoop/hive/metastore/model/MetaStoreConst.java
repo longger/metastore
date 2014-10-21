@@ -39,6 +39,9 @@ public class MetaStoreConst {
     public static final int CACHE = 4;  // L1: fast cache device, e.g. SSD
     public static final int MASS = 5; // L3: e.g. SATA
     public static final int __MAX__ = 6;
+    public static final int __AUTOSELECT_R1__ = -1;
+    public static final int __AUTOSELECT_R2__ = -2;
+    public static final int __AUTOSELECT_R3__ = -3;
 
     // Leveling of devices
     public static final int L1 = 4;

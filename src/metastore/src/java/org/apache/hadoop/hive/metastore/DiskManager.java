@@ -147,6 +147,12 @@ public class DiskManager {
       public TreeMap<Long, String> distribution;
       public TreeMap<String, Long> statis;
       public List<Integer> accept_types;
+      // We define 3 rounds of dev location selections:
+      // r1: first location (create new file)
+      // r2: first replica location (do REP in repthread)
+      // r3: other replicas (in do_replicate)
+      // Note-XXX: r2 should be L1 when you want to put your replicas to FASTEST devices
+      public int r1, r2, r3;
 
       public FLEntry(String table, long l1Key, long l2KeyMax) {
         this.table = table;
@@ -155,6 +161,9 @@ public class DiskManager {
         distribution = new TreeMap<Long, String>();
         statis = new TreeMap<String, Long>();
         accept_types = new ArrayList<Integer>();
+        r1 = MetaStoreConst.MDeviceProp.L2;
+        r2 = MetaStoreConst.MDeviceProp.L2;
+        r3 = MetaStoreConst.MDeviceProp.L2;
       }
 
       public void updateStatis(String node) {
@@ -268,10 +277,26 @@ public class DiskManager {
         return false;
       }
 
+      public boolean roundWatched(String table, List<Integer> rounds) {
+        if (rounds.size() != 3) {
+          return false;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null) {
+          synchronized (fle) {
+            fle.r1 = rounds.get(0);
+            fle.r2 = rounds.get(1);
+            fle.r3 = rounds.get(2);
+          }
+          return true;
+        }
+        return false;
+      }
+
       public String printWatched() {
         String r = "";
 
-        r += "Table FLSelector Watched: {";
+        r += "Table FLSelector Watched: " + tableWatched.size() + " {";
         for (String tbl : tableWatched) {
           r += tbl + ",";
         }
@@ -283,10 +308,17 @@ public class DiskManager {
             r += "\trepnr=" + e.getValue().repnr + ", ";
             r += "policy=" + e.getValue().policy + ", ";
             r += "order='" + e.getValue().accept_types + "', ";
+            r += "R1=" + DeviceInfo.getTypeStr(e.getValue().r1) + ", ";
+            r += "R2=" + DeviceInfo.getTypeStr(e.getValue().r2) + ", ";
+            r += "R3=" + DeviceInfo.getTypeStr(e.getValue().r3) + ", ";
             r += "l1Key=" + e.getValue().l1Key + ", l2KeyMax?=" + e.getValue().l2KeyMax + "\n";
             synchronized (e.getValue()) {
-              r += "\t" + e.getValue().distribution + "\n";
-              r += "\t" + e.getValue().statis + "\n";
+              if (e.getValue().distribution.size() > 0) {
+                r += "\t" + e.getValue().distribution + "\n";
+              }
+              if (e.getValue().statis.size() > 0) {
+                r += "\t" + e.getValue().statis + "\n";
+              }
             }
             r += "}\n";
           }
@@ -319,6 +351,17 @@ public class DiskManager {
         FLEntry fle = context.get(table);
         if (fle != null && fle.accept_types != null) {
           r.clear();
+          switch (cur_level) {
+          case MetaStoreConst.MDeviceProp.__AUTOSELECT_R1__:
+            cur_level = fle.r1;
+            break;
+          case MetaStoreConst.MDeviceProp.__AUTOSELECT_R2__:
+            cur_level = fle.r2;
+            break;
+          case MetaStoreConst.MDeviceProp.__AUTOSELECT_R3__:
+            cur_level = fle.r3;
+            break;
+          }
           // BUG-XXX: if FLE order size is ZERO, use default orders!
           List<Integer> orders = new ArrayList<Integer>(fle.accept_types);
           if (orders.size() == 0) {
@@ -1902,7 +1945,7 @@ public class DiskManager {
             }
 
             for (Map.Entry<SFile, Integer> entry : munder.entrySet()) {
-              do_replicate(entry.getKey(), entry.getValue().intValue(), MetaStoreConst.MDeviceProp.GENERAL);
+              do_replicate(entry.getKey(), entry.getValue().intValue(), MetaStoreConst.MDeviceProp.__AUTOSELECT_R3__);
             }
 
             // handle over replicated files
@@ -3947,7 +3990,7 @@ public class DiskManager {
                   break;
                 }
                 flp.accept_types = flselector.getDevTypeListAfterIncludeHint(table,
-                    MetaStoreConst.MDeviceProp.GENERAL);
+                    MetaStoreConst.MDeviceProp.__AUTOSELECT_R2__);
               }
               try {
                 String node_name = findBestNode(flp);
