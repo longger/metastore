@@ -3360,6 +3360,7 @@ public class ThriftRPC extends FacebookBase implements
           FOFailReason.INVALID_FILE);
     }
 
+    DMProfile.loadStatusBad.incrementAndGet();
     saved.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
     rs.updateSFile(saved);
     return true;

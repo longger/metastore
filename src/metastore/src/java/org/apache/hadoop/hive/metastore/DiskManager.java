@@ -199,6 +199,19 @@ public class DiskManager {
       }
     }
 
+    // TODO: up to 2014.11.30
+    // SysMonitor watch and report system info
+    //
+    public static class SysMonitor {
+      // 1. detect how many files are (truly) opened
+      //
+      // tracing current opened files, sort them, do table distribution analysis
+      //
+      // 2. hot node (device) analysis (1min, 5min, 15min)
+      //
+      // tracing node's write bandwidth on each device
+    }
+
     // FLSelector stands before any file location allocations
     //
     // --> FLSelector --> make FLP -> find_best_node -> find_best_device ...
@@ -504,6 +517,7 @@ public class DiskManager {
       public static AtomicLong delConn = new AtomicLong(0);
       public static AtomicLong query = new AtomicLong(0);
       public static AtomicLong replicate = new AtomicLong(0);
+      public static AtomicLong loadStatusBad = new AtomicLong(0);
     }
 
     public static class SFLTriple implements Comparable<SFLTriple> {
@@ -1651,7 +1665,7 @@ public class DiskManager {
         //47 [alonediskFrees],
         //48 ds.qrep,ds.hrep,ds.drep,ds.qdel,ds.hdel,ds.ddel,ds.tver,ds.tvyr,
         //56 [ds.uptime],[ds.load1],truetotal,truefree,offlinefree,sharedfree,
-        //62 replicate,
+        //62 replicate,loadstatus_bad,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -1794,6 +1808,7 @@ public class DiskManager {
         sb.append(offlinefree + ",");
         sb.append(sharedfree + ",");
         sb.append(DMProfile.replicate.get() + ",");
+        sb.append(DMProfile.loadStatusBad.get() + ",");
         sb.append("\n");
 
         // generate report file

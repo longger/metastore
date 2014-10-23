@@ -7141,6 +7141,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throw new FileOperationException("Can not find SFile by FID " + fid, FOFailReason.INVALID_FILE);
       }
 
+      DMProfile.loadStatusBad.incrementAndGet();
       saved.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
       getMS().updateSFile(saved);
       return true;
