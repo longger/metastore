@@ -190,6 +190,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print '   get_all_nodes()'
   print '  string getDMStatus()'
   print '  string getNodeInfo()'
+  print '  string getSysInfo()'
   print '  bool migrate_in(Table tbl,  files,  idxs, string from_db, string to_devid,  fileMap)'
   print '   migrate_stage1(string dbName, string tableName,  files, string to_db)'
   print '  bool migrate_stage2(string dbName, string tableName,  files, string from_db, string to_db, string to_devid, string user, string password)'
@@ -1279,6 +1280,12 @@ elif cmd == 'getNodeInfo':
     print 'getNodeInfo requires 0 args'
     sys.exit(1)
   pp.pprint(client.getNodeInfo())
+
+elif cmd == 'getSysInfo':
+  if len(args) != 0:
+    print 'getSysInfo requires 0 args'
+    sys.exit(1)
+  pp.pprint(client.getSysInfo())
 
 elif cmd == 'migrate_in':
   if len(args) != 6:

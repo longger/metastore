@@ -63,6 +63,7 @@ import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
 import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
 import org.apache.hadoop.hive.metastore.DiskManager.FLSelector.FLS_Policy;
 import org.apache.hadoop.hive.metastore.DiskManager.ReplicateRequest;
+import org.apache.hadoop.hive.metastore.DiskManager.SysMonitor;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
@@ -7144,6 +7145,13 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       DMProfile.loadStatusBad.incrementAndGet();
       saved.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
       getMS().updateSFile(saved);
+
+      if (saved.getLocationsSize() > 0) {
+        SFileLocation sfl = saved.getLocations().get(0);
+        SysMonitor.lsba.watchLSB(fid, saved.getDbName(), saved.getTableName(),
+            sfl.getNode_name(), sfl.getDevid());
+
+      }
       return true;
     }
 
@@ -7384,6 +7392,11 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       }
       getMS().updateSFile(saved);
       return true;
+    }
+
+    @Override
+    public String getSysInfo() throws MetaException, TException {
+        return DiskManager.sm.getSysInfo();
     }
 
   }

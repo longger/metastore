@@ -109,6 +109,8 @@ public class DiskManager {
     public static FLSelector flselector = new FLSelector();
     public static List<Integer> default_orders = new ArrayList<Integer>();
 
+    public static SysMonitor sm = new SysMonitor();
+
     public static boolean identify_shared_device;
 
     static {
@@ -207,9 +209,115 @@ public class DiskManager {
       //
       // tracing current opened files, sort them, do table distribution analysis
       //
+
       // 2. hot node (device) analysis (1min, 5min, 15min)
       //
-      // tracing node's write bandwidth on each device
+      // tracing node's read/write bandwidth on each device
+      //
+
+      // 3. load status bad analysis
+      //
+      // tracing load status bad calls, do table/node distribution analysis
+      public static LSBA lsba = new LSBA();
+
+      public static class LSBA {
+        private final ConcurrentHashMap<Long, LoadStatusBad> fids = new ConcurrentHashMap<Long, LoadStatusBad>();
+        private final ConcurrentLinkedQueue<LoadStatusBad> tsorted = new ConcurrentLinkedQueue<LoadStatusBad>();
+        private final int tsRange = 600 * 1000;
+
+        public class LoadStatusBad {
+          public long fid;
+          public String db;
+          public String table;
+          public String node;
+          public String devid;
+          public long ts;
+
+          public LoadStatusBad(long fid, String db, String table, String node, String devid) {
+            this.fid = fid;
+            this.db = db;
+            this.table = table;
+            this.node = node;
+            this.devid = devid;
+            this.ts = System.currentTimeMillis();
+          }
+        }
+
+        public void watchLSB(long fid, String db, String table, String node, String devid) {
+          LoadStatusBad lsb = new LoadStatusBad(fid, db, table, node, devid);
+          LoadStatusBad olsb = fids.put(fid, lsb);
+          if (olsb != null) {
+            tsorted.remove(olsb);
+          }
+          tsorted.add(lsb);
+        }
+
+        public void trimLSB() {
+          while (true) {
+            LoadStatusBad lsb = tsorted.peek();
+            if (lsb != null) {
+              if (lsb.ts + tsRange < System.currentTimeMillis()) {
+                tsorted.remove(lsb);
+              } else {
+                break;
+              }
+            } else {
+              break;
+            }
+          }
+        }
+
+        public String getTableDistribution() {
+          HashMap<String, Long> td = new HashMap<String, Long>();
+          String r = "";
+          trimLSB();
+
+          for (LoadStatusBad lsb : tsorted) {
+            Long o = td.get(lsb.db + "." + lsb.table);
+            if (o == null) {
+              o = new Long(0);
+            }
+            o++;
+            td.put(lsb.db + lsb.table, o);
+          }
+          for (Map.Entry<String, Long> e : td.entrySet()) {
+            r += e.getKey() + "\t" + e.getValue() + "\n";
+          }
+
+          return r;
+        }
+
+        public String getNodeDistribution() {
+          HashMap<String, Long> nd = new HashMap<String, Long>();
+          String r = "";
+          trimLSB();
+
+          for (LoadStatusBad lsb : tsorted) {
+            Long o = nd.get(lsb.node + "." + lsb.devid);
+            if (o == null) {
+              o = new Long(0);
+            }
+            o++;
+            nd.put(lsb.node + "." + lsb.devid, o);
+          }
+          for (Map.Entry<String, Long> e : nd.entrySet()) {
+            r += e.getKey() + "\t" + e.getValue() + "\n";
+          }
+
+          return r;
+        }
+      }
+
+      public String getSysInfo() {
+        String r = "";
+
+        r += "In Last " + lsba.tsRange / 1000 + " seconds, LSBA distribution is:\n";
+        r += lsba.getTableDistribution();
+        r += lsba.getNodeDistribution();
+        r += "\n";
+
+        return r;
+      }
     }
 
     // FLSelector stands before any file location allocations

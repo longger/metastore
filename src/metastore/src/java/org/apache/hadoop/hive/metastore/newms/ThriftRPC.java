@@ -38,6 +38,7 @@ import org.apache.hadoop.hive.metastore.DiskManager.FLSelector.FLS_Policy;
 import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
 import org.apache.hadoop.hive.metastore.DiskManager.ReplicateRequest;
 import org.apache.hadoop.hive.metastore.DiskManager.RsStatus;
+import org.apache.hadoop.hive.metastore.DiskManager.SysMonitor;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler;
 import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler.MSSessionState;
@@ -3363,6 +3364,12 @@ public class ThriftRPC extends FacebookBase implements
     DMProfile.loadStatusBad.incrementAndGet();
     saved.setLoad_status(MetaStoreConst.MFileLoadStatus.BAD);
     rs.updateSFile(saved);
+
+    if (saved.getLocationsSize() > 0) {
+      SFileLocation sfl = saved.getLocations().get(0);
+      SysMonitor.lsba.watchLSB(fid, saved.getDbName(), saved.getTableName(),
+          sfl.getNode_name(), sfl.getDevid());
+    }
     return true;
   }
 
@@ -3713,6 +3720,11 @@ public class ThriftRPC extends FacebookBase implements
     }
     rs.updateSFile(saved);
     return true;
+  }
+
+  @Override
+  public String getSysInfo() throws MetaException, TException {
+    return DiskManager.sm.getSysInfo();
   }
 
 }

@@ -2403,4 +2403,9 @@ public boolean authentication(String user_name, String passwd)
       FileOperationException, TException {
     return client.update_sfile_nrs(fid, rec_nr, all_rec_nr, length);
   }
+
+  @Override
+  public String getSysInfo() throws MetaException, TException {
+    return client.getSysInfo();
+  }
 }
