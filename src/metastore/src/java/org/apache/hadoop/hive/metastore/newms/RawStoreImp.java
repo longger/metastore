@@ -391,6 +391,9 @@ public class RawStoreImp implements RawStore {
 		return file == null ? null : file.deepCopy();
 	}
 
+	/**
+	 * might return null
+	 */
 	@Override
 	public SFile getSFile(long fid) throws MetaException {
 		try {
@@ -405,11 +408,18 @@ public class RawStoreImp implements RawStore {
 		}
 	}
 
+	/**
+	 * might return null
+	 */
 	@Override
 	public SFile getSFile(String devid, String location) throws MetaException {
-		try{
+		try {
 			SFileLocation sfl = getSFileLocation(devid, location);
-			return getSFile(sfl.getFid());
+			if (sfl != null) {
+        return getSFile(sfl.getFid());
+			} else {
+        return null;
+      }
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
@@ -1859,8 +1869,10 @@ public class RawStoreImp implements RawStore {
             }
           }
           SFile nf = this.getSFile(file.getFid());
-          nf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
-          this.updateSFile(nf);
+          if (nf != null) {
+            nf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
+            this.updateSFile(nf);
+          }
         }
       }
       if (selected) {
