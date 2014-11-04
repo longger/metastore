@@ -3724,7 +3724,7 @@ public class ThriftRPC extends FacebookBase implements
 
   @Override
   public String getSysInfo() throws MetaException, TException {
-    return DiskManager.sm.getSysInfo();
+    return DiskManager.sm.getSysInfo(dm);
   }
 
 }

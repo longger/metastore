@@ -11,12 +11,14 @@ import java.net.MulticastSocket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Random;
 import java.util.Set;
@@ -58,6 +60,8 @@ import org.apache.hadoop.hive.metastore.newms.RawStoreImp;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.thrift.TException;
+
+import com.google.common.collect.Lists;
 
 public class DiskManager {
     public static long startupTs = System.currentTimeMillis();
@@ -278,7 +282,7 @@ public class DiskManager {
               o = new Long(0);
             }
             o++;
-            td.put(lsb.db + lsb.table, o);
+            td.put(lsb.db + "." + lsb.table, o);
           }
           for (Map.Entry<String, Long> e : td.entrySet()) {
             r += e.getKey() + "\t" + e.getValue() + "\n";
@@ -308,13 +312,326 @@ public class DiskManager {
         }
       }
 
-      public String getSysInfo() {
+      // 4. Analayse file read/write/err rate in data nodes
+      //
+      // node -> pending writes
+      // node -> pending reads
+      // node -> pending I/Os
+      // node -> errs
+      // table -> pending I/Os
+      // table -> ACC read latency (latency/nr)
+      // HOT node, device detection
+      public static DSFSTAT dsfstat = new DSFSTAT();
+
+      public static class DSFSTAT {
+        public static enum VFSOperation {
+          READ_BEGIN, READ_END, WRITE_BEGIN, WRITE_END, ERROR,
+        };
+        public class DMAudit {
+          public String devid;
+          public String location;
+          public String tag;
+
+          // all nodes should be ntp synced
+          public long open;
+          public VFSOperation op;
+        }
+        public class FSTAT {
+          public String devid;
+          public String location;
+          public String tag;
+
+          public long ts; // last update TS
+          public long iolat;
+          public int rdnr;
+          public int wrnr;
+          public int ernr;
+
+          public FSTAT(String devid, String location, String tag) {
+            this.devid = devid;
+            this.location = location;
+            this.tag = tag;
+            this.ts = System.currentTimeMillis();
+            this.rdnr = this.wrnr = this.ernr = 0;
+            this.iolat = 0;
+          }
+        }
+
+        private final ConcurrentHashMap<String, DMAudit> map = new ConcurrentHashMap<String, DMAudit>();
+        private final ConcurrentHashMap<String, FSTAT> fstat = new ConcurrentHashMap<String, FSTAT>();
+        private final int recycleLatency = 8 * 3600 * 1000;
+        private final int fstatInvalidate = 12 * 3600 * 1000;
+        private long drop_rde = 0;
+        private long drop_wre = 0;
+
+        public void updateFStat(String devid, String location, String tag,
+            int rdnr, int wrnr, int ernr, long iolat) {
+          FSTAT fs = fstat.get(devid + ":" + location + ":" + tag);
+          if (fs != null) {
+            synchronized (fs) {
+              if (rdnr > 0) {
+                fs.rdnr += rdnr;
+              }
+              if (wrnr > 0) {
+                fs.wrnr += wrnr;
+              }
+              if (ernr > 0) {
+                fs.ernr += ernr;
+              }
+              if (iolat > 0) {
+                fs.iolat += iolat;
+              }
+              fs.ts = System.currentTimeMillis();
+            }
+          } else {
+            fs = new FSTAT(devid, location, tag);
+            fs.ernr += ernr;
+            fs.iolat += iolat;
+            fstat.putIfAbsent(devid + ":" + location + ":" + tag, fs);
+          }
+        }
+
+        public void updateDMAudit(List<DMReply> dmrs) {
+          if (dmrs != null) {
+            for (DMReply dmr : dmrs) {
+              if (dmr.type == DMReply.DMReplyType.AUDIT) {
+                if (dmr.args != null) {
+                  String[] fs = dmr.args.split(",");
+                  if (fs.length == 5) {
+                    // tag:devid:location
+                    DMAudit dma = map.get(fs[0] + ":" + fs[2] + ":" + fs[3]);
+
+                    if (dma == null) {
+                      // new entry
+                      if (fs[4].equals("RDB")) {
+                        dma = new DMAudit();
+                        dma.op = VFSOperation.READ_BEGIN;
+                        try {
+                          dma.open = Long.parseLong(fs[1]);
+                        } catch (Exception e) {}
+                        dma.devid = fs[2];
+                        dma.location = fs[3];
+                        dma.tag = fs[0];
+                        map.putIfAbsent(fs[0] + ":" + fs[2] + ":" + fs[3], dma);
+                      } else if (fs[4].equals("WRB")) {
+                        dma = new DMAudit();
+                        dma.op = VFSOperation.WRITE_BEGIN;
+                        try {
+                          dma.open = Long.parseLong(fs[1]);
+                        } catch (Exception e) {}
+                        dma.devid = fs[2];
+                        dma.location = fs[3];
+                        dma.tag = fs[0];
+                        map.putIfAbsent(fs[0] + ":" + fs[2] + ":" + fs[3], dma);
+                      } else if (fs[4].equals("RDE")) {
+                        drop_rde++;
+                      } else if (fs[4].equals("WRE")) {
+                        drop_wre++;
+                      } else if (fs[4].equals("ERR")) {
+                        // ok, try to update FSTAT
+                        updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, 0);
+                      }
+                    } else {
+                      switch (dma.op) {
+                      case READ_BEGIN:{
+                        if (fs[4].equals("RDE")) {
+                          // ok, try to update FSTAT
+                          long cur = dma.open;
+                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                          updateFStat(fs[2], fs[3], fs[0], 1, 0, 0, cur - dma.open);
+                          map.remove(dma);
+                        } else if (fs[4].equals("ERR")) {
+                          // ok, try to update FSTAT
+                          long cur = dma.open;
+                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                          updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, cur - dma.open);
+                          map.remove(dma);
+                        }
+                        break;
+                      }
+                      case WRITE_BEGIN:{
+                        if (fs[4].equals("WRE")) {
+                          // ok, try to update FSTAT
+                          long cur = dma.open;
+                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                          updateFStat(fs[2], fs[3], fs[0], 0, 1, 0, cur - dma.open);
+                          map.remove(dma);
+                        } else if (fs[4].equals("ERR")) {
+                          // ok, try to update FSTAT
+                          long cur = dma.open;
+                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                          updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, cur - dma.open);
+                          map.remove(dma);
+                        }
+                        break;
+                      }
+                      default:
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        private final Comparator<Entry<String, HotResult>> compByNr = new Comparator<Entry<String, HotResult>>() {
+          @Override
+          public int compare(Entry<String, HotResult> o1, Entry<String, HotResult> o2) {
+            return (o2.getValue().nr - o1.getValue().nr) > 0 ? 1 : -1;
+          }
+        };
+
+        private final Comparator<Entry<String, HotResult>> compByLatency = new Comparator<Entry<String, HotResult>>() {
+          @Override
+          public int compare(Entry<String, HotResult> o1, Entry<String, HotResult> o2) {
+            if (o1.getValue().nr == 0) {
+              return 1;
+            } else if (o2.getValue().nr == 0) {
+              return -1;
+            }
+            return (o2.getValue().iolat / o2.getValue().nr -
+                o1.getValue().iolat / o1.getValue().nr) > 0 ? 1 : -1;
+          }
+        };
+
+        public class HotResult {
+          public long nr;
+          public long iolat;
+
+          public HotResult(long nr, long iolat) {
+            this.nr = nr;
+            this.iolat = iolat;
+          }
+        }
+
+        public String getHistHots(DiskManager dm) {
+          String r = "";
+          Map<String, HotResult> hist_hot_node = new HashMap<String, HotResult>();
+          Map<String, HotResult> hist_hot_dev = new HashMap<String, HotResult>();
+          Map<String, HotResult> hist_hot_table = new HashMap<String, HotResult>();
+
+          for (Map.Entry<String, FSTAT> e : fstat.entrySet()) {
+            FSTAT fs = e.getValue();
+
+            HotResult o = hist_hot_dev.get(fs.devid);
+            if (o == null) {
+              o = new HotResult(0, 0);
+              hist_hot_dev.put(fs.devid, o);
+            }
+            o.nr++;
+            o.iolat += fs.iolat;
+
+            Device d = null;
+            synchronized (dm.rs) {
+              try {
+                d = dm.rs.getDevice(fs.devid);
+              } catch (Exception e1) {
+                dm.LOG.error(e1, e1);
+              }
+            }
+            if (d != null) {
+              String node_name = d.getNode_name();
+
+              try {
+                if (dm.isSharedDevice(d.getDevid())) {
+                  node_name = "SHARED_NODES_OF(" + d.getDevid() + ")";
+                }
+              } catch (Exception ex) {
+                dm.LOG.error(ex, ex);
+              }
+              HotResult o2 = hist_hot_node.get(node_name);
+              if (o2 == null) {
+                o2 = new HotResult(0, 0);
+                hist_hot_node.put(d.getNode_name(), o2);
+              }
+              o2.nr++;
+              o2.iolat += fs.iolat;
+            }
+
+            SFile f = null;
+            synchronized (dm.rs) {
+              try {
+                f = dm.rs.getSFile(fs.devid, fs.location);
+              } catch (Exception e1) {
+                dm.LOG.error(e1, e1);
+              }
+            }
+            if (f != null) {
+              HotResult o3 = hist_hot_table.get(f.getDbName() + "." + f.getTableName());
+              if (o3 == null) {
+                o3 = new HotResult(0, 0);
+                hist_hot_table.put(f.getDbName() + "." + f.getTableName(), o3);
+              }
+              o3.nr++;
+              o3.iolat += fs.iolat;
+            }
+          }
+          List<Entry<String, HotResult>> entries = Lists.newArrayList(hist_hot_dev.entrySet());
+          Collections.sort(entries, compByNr);
+
+          r += "Top 10 hot devices in history (by open-close pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " + entries.get(i).getValue().nr + "\n";
+          }
+
+          Collections.sort(entries, compByLatency);
+
+          r += "Top 10 hot devices in history (by latency pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " +
+                entries.get(i).getValue().iolat / entries.get(i).getValue().nr + "\n";
+          }
+
+          entries = Lists.newArrayList(hist_hot_node.entrySet());
+          Collections.sort(entries, compByNr);
+
+          r += "Top 10 hot nodes   in history (by open-close pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " + entries.get(i).getValue().nr + "\n";
+          }
+
+          Collections.sort(entries, compByLatency);
+
+          r += "Top 10 hot nodes   in history (by latency pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " +
+                entries.get(i).getValue().iolat / entries.get(i).getValue().nr + "\n";
+          }
+
+          entries = Lists.newArrayList(hist_hot_table.entrySet());
+          Collections.sort(entries, compByNr);
+
+          r += "Top 10 hot tables  in history (by open-close pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " + entries.get(i).getValue().nr + "\n";
+          }
+
+          Collections.sort(entries, compByLatency);
+
+          r += "Top 10 hot tables  in history (by latency pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " +
+                entries.get(i).getValue().iolat / entries.get(i).getValue().nr + "\n";
+          }
+
+          return r;
+        }
+      }
+
+      public String getSysInfo(DiskManager dm) {
         String r = "";
 
         r += "In Last " + lsba.tsRange / 1000 + " seconds, LSBA distribution is:\n";
         r += lsba.getTableDistribution();
         r += lsba.getNodeDistribution();
         r += "\n";
+
+        if (dm != null) {
+          r += "Audit Log Analyse Report:\n";
+          r += dsfstat.getHistHots(dm);
+          r += "\n";
+        }
 
         return r;
       }
@@ -751,7 +1068,7 @@ public class DiskManager {
 
     public static class DMReply {
       public enum DMReplyType {
-        DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY, INFO, SLAVE,
+        DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY, INFO, SLAVE, AUDIT,
       }
       DMReplyType type;
       String args;
@@ -777,6 +1094,9 @@ public class DiskManager {
           break;
         case INFO:
           r += "INFO";
+          break;
+        case AUDIT:
+          r += "AUDIT";
           break;
         default:
           r += "UNKNOWN";
@@ -2093,7 +2413,7 @@ public class DiskManager {
                 synchronized (trs) {
                   try {
                     SFile saved = trs.getSFile(entry.getKey().getFid());
-                    if (saved.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
+                    if (saved != null && saved.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
                       saved.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
                       trs.updateSFile(saved);
                     }
@@ -2306,6 +2626,9 @@ public class DiskManager {
                   SFile nf;
                   try {
                     nf = trs.getSFile(f.getFid());
+                    if (nf == null) {
+                      continue;
+                    }
                     if (nf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                       continue;
                     }
@@ -4542,6 +4865,11 @@ public class DiskManager {
                 if (__handle_slave_report(report)) {
                   continue;
                 }
+                // NOTE-XXX: handle audit report here!
+                if (report.isAuditRpt) {
+                  sm.dsfstat.updateDMAudit(report.replies);
+                  continue;
+                }
                 try {
                   synchronized (rs_s1) {
                     reportNode = rs_s1.getNode(report.node);
@@ -4695,6 +5023,15 @@ public class DiskManager {
         // +REP:node,devid,location
         // +REP:node,devid,location
         // ...
+        //
+        // or
+        //
+        // +node:node_name
+        // +CMD
+        // +CMD
+        // +A:13800000,devid,location,VFSOperation
+        // +A:13800000,devid,location,VFSOperation
+        // ...
         public String node = null;
         public List<DeviceInfo> dil = null;
         public List<DMReply> replies = null;
@@ -4704,6 +5041,9 @@ public class DiskManager {
         DatagramPacket recvPacket = null;
         Node reportNode = null;
         NodeInfo oni = null;
+
+        // is audit report?
+        public boolean isAuditRpt = false;
 
         @Override
         public String toString() {
@@ -4741,6 +5081,16 @@ public class DiskManager {
           r.node = reports[0].substring(0, reports[0].indexOf('\n')).replaceFirst("\\+node:", "");
           r.dil = parseDevices(reports[0].substring(reports[0].indexOf('\n') + 1));
           r.replies = parseCmds(reports[1]);
+          break;
+        case 3:
+          // contains profile report, example format is:
+          // +node:xxxxxx
+          // +CMD
+          // +CMD
+          // +A:TAG,13800000,devid,location,VFSOperation
+          r.isAuditRpt = true;
+          r.node = reports[0].substring(0, reports[0].indexOf('\n')).replaceFirst("\\+node:", "");
+          r.replies = parseCmds(reports[2]);
           break;
         default:
           LOG.error("parseReport '" + recv + "' error.");
@@ -4818,6 +5168,10 @@ public class DiskManager {
           } else if (cmds[i].startsWith("+SLAVE:")) {
             dmr.type = DMReply.DMReplyType.SLAVE;
             dmr.args = cmds[i].substring(7);
+            r.add(dmr);
+          } else if (cmds[i].startsWith("+A:")) {
+            dmr.type = DMReply.DMReplyType.AUDIT;
+            dmr.args = cmds[i].substring(3);
             r.add(dmr);
           }
         }
