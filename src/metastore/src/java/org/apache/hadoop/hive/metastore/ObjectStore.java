@@ -544,10 +544,12 @@ public class ObjectStore implements RawStore, Configurable {
         rollbackTransaction();
       }
     }
-    LOG.warn("---zjw---in createdatabase");
+    HashMap<String, Object> params = new HashMap<String, Object>();
+    params.put("db_name", db.getName());
+    LOG.info("---zjw---in createdatabase: " + db.getName());
     long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mdb).toString()));
     DDLMsg msg = MSGFactory.generateDDLMsg(org.apache.hadoop.hive.metastore.msg.MSGType.MSG_NEW_DATABESE,db_id,-1,
-        pm,mdb,null);
+        pm,mdb,params);
     if(commited) {
       MetaMsgServer.sendMsg(msg);
     }
@@ -650,6 +652,7 @@ public class ObjectStore implements RawStore, Configurable {
       HashMap<String, Object> params = new HashMap<String, Object>();
       ArrayList<String>  ps = new ArrayList<String>();
       ps.addAll(mdb.getParameters().keySet());
+      params.put("db_name", dbName);
       params.put("param_name",ps);
       if(committed) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALTER_DATABESE_PARAM,db_id,-1, pm, mdb,params));
@@ -1690,8 +1693,10 @@ public class ObjectStore implements RawStore, Configurable {
       MNode mnode = convertToMNode(node);
       pm.makePersistent(mnode);
       commited = commitTransaction();
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("node_name", node.getNode_name());
       if(commited) {
-        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODE,-1,-1,pm,mnode,null));
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODE,-1,-1,pm,mnode,params));
       }
     } finally {
       if (!commited) {
@@ -2095,9 +2100,12 @@ public class ObjectStore implements RawStore, Configurable {
 
       commited = commitTransaction();
 
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("db_name", tbl.getDbName());
+      params.put("table_name", tbl.getTableName());
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtbl.getDatabase()).toString()));
       if(commited) {
-        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_NEW_TALBE,db_id,-1, pm, mtbl,null));
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_NEW_TALBE,db_id,-1, pm, mtbl,params));
       }
     } finally {
       if (!commited) {
@@ -3832,6 +3840,11 @@ public class ObjectStore implements RawStore, Configurable {
       params.put("db_name", mpart.getTable().getDatabase().getName());
       params.put("table_name", mpart.getTable().getTableName());
       params.put("partition_name", mpart.getPartitionName());
+      if(mpart.getPartition_level() ==2){
+        Long.parseLong(MSGFactory.getIDFromJdoObjectId(mpart.getParent().toString()));
+        params.put("parent_partition_name", mpart.getPartitionName());
+      }
+      params.put("partition_level", mpart.getPartition_level());
       if(commited) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_NEW_PARTITION,db_id,-1,
             pm,mpart,params));
@@ -4962,6 +4975,7 @@ public class ObjectStore implements RawStore, Configurable {
         HashMap<String, Object> params = new HashMap<String, Object>();
         params.put("table_name", newt.getTableName());
         params.put("old_table_name", oldt.getTableName());
+        params.put("db_name", dbname);
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME,db_id,-1, pm, oldt,params));
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME,db_id,-1, pm, oldt,params));
       }
@@ -5686,9 +5700,13 @@ public class ObjectStore implements RawStore, Configurable {
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(idx.getOrigTable().getDatabase()).toString()));
       commited = commitTransaction();
 
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("db_name", index.getDbName());
+      params.put("index_name", index.getIndexName());
+      params.put("table_name", index.getOrigTableName());
       if(commited) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_NEW_INDEX,db_id,-1,
-            pm,idx,null));
+            pm,idx,params));
       }
       return true;
     } finally {
@@ -9628,7 +9646,9 @@ public MUser getMUser(String userName) {
         if(mdd.getDwNum() == 2) {
           event_id = MSGType.MSG_DDL_DIRECT_DW2;
         }
-        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(event_id, -1l, -1l, pm, mdd, null));
+        HashMap<String, Object> params = new HashMap<String, Object>();
+        params.put("sql", sql);
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(event_id, -1l, -1l, pm, mdd, params));
       }
     } finally {
       if (!success) {
@@ -10153,8 +10173,10 @@ public MUser getMUser(String userName) {
       commited = commitTransaction();
 
       long db_id = -1;
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("schema_name", schema.getSchemaName());
       if(commited) {
-        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_SCHEMA,db_id,-1, pm, mSchema,null));
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_SCHEMA,db_id,-1, pm, mSchema,params));
       }
     } finally {
       if (!commited) {
@@ -10164,9 +10186,6 @@ public MUser getMUser(String userName) {
 
 
   }
-
-
-
 
   /**
    * 修改模式结构的同时，需要修改表和视图
@@ -10268,6 +10287,7 @@ public MUser getMUser(String userName) {
           HashMap<String,Object> p = new HashMap<String,Object>();
           p.put("table_name", mSchema.getSchemaName().toLowerCase());
           p.put("old_table_name", oldt.getTableName());
+          p.put("db_name", oldt.getDatabase().getName());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME, db_id, -1, pm, oldt, p));
         }
       }
@@ -10620,8 +10640,10 @@ public MUser getMUser(String userName) {
       pm.makePersistent(mng);
       pm.makePersistentAll(mng.getNodes());
       commited = commitTransaction();
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("nodegroup_name", ng.getNode_group_name());
       if(commited) {
-        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODEGROUP,-1,-1,pm,mng,null));
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODEGROUP,-1,-1,pm,mng,params));
       }
       success = true;
     } finally {
