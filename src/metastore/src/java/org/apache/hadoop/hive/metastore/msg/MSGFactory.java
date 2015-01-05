@@ -48,7 +48,9 @@ public class MSGFactory {
 
      private String localhost_name;//本机主机名
 
-     public DDLMsg(){}
+     public DDLMsg(){
+       old_object_params = new HashMap<String, Object>();
+     }
 
      public DDLMsg(long event_id, long object_id,  HashMap<String,Object> msg_data, Object eventObject, long msg_id,
         long db_id, long node_id, long event_time, String event_handler,HashMap<String,Object> old_object_params) {
@@ -70,7 +72,6 @@ public class MSGFactory {
       try {
         this.localhost_name = InetAddress.getLocalHost().getHostName();
       } catch (UnknownHostException e) {
-        // TODO Auto-generated catch block
         e.printStackTrace();
       }
     }
@@ -338,11 +339,11 @@ public class MSGFactory {
     return msgs;
   }
 
-
+  public static String getMsgData2(DDLMsg msg) {
+    return msg.toJson();
+  }
 
   public static String getMsgData(DDLMsg msg) {
-
-
     HashMap<String,Object> params = new HashMap<String,Object>();
 
     switch((int)msg.getEvent_id()){
@@ -698,6 +699,12 @@ public class MSGFactory {
           }
           if (msg.getOld_object_params().containsKey("new_status")) {
             params.put("new_status", msg.getOld_object_params().get("new_status"));
+          }
+          if (msg.getOld_object_params().containsKey("devid")) {
+            params.put("devid", msg.getOld_object_params().get("devid"));
+          }
+          if (msg.getOld_object_params().containsKey("new_status")) {
+            params.put("location", msg.getOld_object_params().get("location"));
           }
           break;
       case MSGType.MSG_DEL_PARTITION_FILE :
