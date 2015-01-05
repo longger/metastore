@@ -189,6 +189,8 @@ public class ObjectStore implements RawStore, Configurable {
     NO_STATE, OPEN, COMMITED, ROLLBACK
   }
 
+  private boolean isOracle = false;
+
   private void restoreFID() {
     boolean commited = false;
 
@@ -196,9 +198,15 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT max(fid) FROM FILES");
       List results = (List) query.execute();
-      BigDecimal maxfid = (BigDecimal) results.iterator().next();
-      if (maxfid != null) {
-        g_fid = maxfid.longValue() + 10;
+      if (isOracle) {
+        BigDecimal maxfid = (BigDecimal) results.iterator().next();
+        if (maxfid != null) {
+          g_fid = maxfid.longValue() + 10;
+        }
+      } else {
+        if (results != null && results.iterator() != null && results.iterator().next() != null) {
+          g_fid = (Integer)results.iterator().next() + 10;
+        }
       }
       commited = commitTransaction();
       LOG.info("restore FID to " + g_fid);
@@ -221,9 +229,13 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT min(fid) FROM FILES");
       List results = (List) query.execute();
-      BigDecimal minfid = (BigDecimal) results.iterator().next();
-      if (minfid != null) {
-        r = minfid.longValue();
+      if (isOracle) {
+        BigDecimal minfid = (BigDecimal) results.iterator().next();
+        if (minfid != null) {
+          r = minfid.longValue();
+        }
+      } else {
+        r = (Integer)results.iterator().next();
       }
       commited = commitTransaction();
     } catch (javax.jdo.JDODataStoreException e) {
@@ -246,6 +258,10 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public long getCurrentFID() {
+    return g_fid;
+  }
+
+  public static long getFID() {
     return g_fid;
   }
 
@@ -344,7 +360,14 @@ public class ObjectStore implements RawStore, Configurable {
     LOG.info("ObjectStore, initialize called");
     prop = dsProps;
     pm = getPersistenceManager();
+
     isInitialized = pm != null;
+
+    String url = HiveConf.getVar(getConf(), ConfVars.METASTORECONNECTURLKEY).toLowerCase();
+    if (url.startsWith("jdbc:oracle")) {
+      isOracle = true;
+    }
+
     if (isInitialized) {
       if (!g_fid_inited) {
         g_fid_inited = true;
@@ -356,7 +379,14 @@ public class ObjectStore implements RawStore, Configurable {
     String zkAddr = prop.getProperty(Constants.META_JDO_ZOOKER_ADDR);
     MetaMsgServer.setZkAddr(zkAddr);
     try {
-      MetaMsgServer.start();
+      String topic;
+
+      if (new HiveConf().getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
+        topic = "oldms";
+      } else {
+        topic = "meta-test";
+      }
+      MetaMsgServer.start(topic);
     } catch (MetaClientException e) {
       LOG.error(e+"---start-metaQ--error",e);
     } catch (Exception e) {
@@ -2040,7 +2070,7 @@ public class ObjectStore implements RawStore, Configurable {
     }
   }
 
-  public void createTable(Table tbl) throws InvalidObjectException, MetaException {
+  public DDLMsg createTable(Table tbl) throws InvalidObjectException, MetaException {
     boolean commited = false;
     try {
       openTransaction();
@@ -2104,14 +2134,15 @@ public class ObjectStore implements RawStore, Configurable {
       params.put("db_name", tbl.getDbName());
       params.put("table_name", tbl.getTableName());
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtbl.getDatabase()).toString()));
-      if(commited) {
-        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_NEW_TALBE,db_id,-1, pm, mtbl,params));
+      if (commited) {
+        return MSGFactory.generateDDLMsg(MSGType.MSG_NEW_TALBE, db_id, -1, pm, mtbl, params);
       }
     } finally {
       if (!commited) {
         rollbackTransaction();
       }
     }
+    return null;
   }
 
   private void deleteBusiTypeCol(MTable mtbl) {
@@ -2346,8 +2377,12 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT count(*) FROM NODES");
       List results = (List) query.execute();
-      BigDecimal tableSize = (BigDecimal) results.iterator().next();
-      r = tableSize.longValue();
+      if (isOracle) {
+        BigDecimal tableSize = (BigDecimal) results.iterator().next();
+        r = tableSize.longValue();
+      } else {
+        r = (Integer)results.iterator().next();
+      }
       commited = commitTransaction();
     } finally {
       if (!commited) {
@@ -2366,8 +2401,12 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT count(*) FROM DEVICES");
       List results = (List) query.execute();
-      BigDecimal tableSize = (BigDecimal) results.iterator().next();
-      r = tableSize.longValue();
+      if (isOracle) {
+        BigDecimal tableSize = (BigDecimal) results.iterator().next();
+        r = tableSize.longValue();
+      } else {
+        r = (Integer)results.iterator().next();
+      }
       commited = commitTransaction();
     } finally {
       if (!commited) {
