@@ -999,6 +999,10 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   bool toggle_safemode() throws (1:MetaException o1)
   
+  bool update_ms_service(1:i32 status) throws (1:MetaException o1)
+  
+  string get_ms_uris() throws (1:MetaException o1)
+  
   SFile get_file_by_id(1:i64 fid) throws (1:FileOperationException o1, 2:MetaException o2)
   
   list<SFile> get_files_by_ids(list<i64> fids) throws (1:FileOperationException o1, 2:MetaException o2)
@@ -1040,6 +1044,8 @@ service ThriftHiveMetastore extends fb303.FacebookService
   
   string getNodeInfo() throws(1:MetaException o1)
   
+  string getSysInfo() throws(1:MetaException o1)
+  
   bool migrate_in(1:Table tbl, 2:map<i64, SFile> files, 3:list<Index> idxs, 4:string from_db, 5:string to_devid, 6:map<i64, SFileLocation> fileMap) throws (1:MetaException o1)
   
   list<SFileLocation> migrate_stage1(1:string dbName, 2:string tableName, 3:list<i64> files, 4:string to_db) throws (1:MetaException o1)
@@ -1051,6 +1057,10 @@ service ThriftHiveMetastore extends fb303.FacebookService
   list<SFileLocation> migrate2_stage1(1:string dbName, 2:string tableName, 3:list<string> partNames, 4:string to_db) throws (1:MetaException o1)
   
   bool migrate2_stage2(1:string dbName, 2:string tableName, 3:list<string> partNames, 4:string from_db, 5:string to_db, 6:string to_nas_devid) throws (1:MetaException o1)
+  
+  i32 replicate(1:i64 fid, 2:i32 dtype) throws (1:MetaException o1, 2:FileOperationException o2)
+  
+  bool update_sfile_nrs(1:i64 fid, i64 rec_nr, i64 all_rec_nr, i64 length) throws (1:MetaException o1, 2:FileOperationException o2)
   
   string getMP(1:string node_name, 2:string devid) throws (1:MetaException o1)
   

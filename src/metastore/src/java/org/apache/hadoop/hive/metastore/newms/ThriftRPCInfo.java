@@ -156,7 +156,8 @@ public class ThriftRPCInfo {
       avg = ((count.get()) * avg + time) / count.incrementAndGet();
       if (time > max) {
         max = time;
-      } else if (time < min) {
+      }
+      if (time < min) {
         min = time;
       }
     }

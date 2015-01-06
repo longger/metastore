@@ -240,7 +240,7 @@ public class RawStoreImp implements RawStore {
 	        de.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
 	      }
 	      if (!de.getNode_name().equals(node.getNode_name()) &&
-            de.getProp() == MetaStoreConst.MDeviceProp.ALONE){
+            DeviceInfo.getType(de.getProp()) == MetaStoreConst.MDeviceProp.GENERAL){
 	        Node n = getNode(node.getNode_name());
 	        if (n == null) {
 	          throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
@@ -392,6 +392,9 @@ public class RawStoreImp implements RawStore {
 		return file == null ? null : file.deepCopy();
 	}
 
+	/**
+	 * might return null
+	 */
 	@Override
 	public SFile getSFile(long fid) throws MetaException {
 		try {
@@ -406,11 +409,18 @@ public class RawStoreImp implements RawStore {
 		}
 	}
 
+	/**
+	 * might return null
+	 */
 	@Override
 	public SFile getSFile(String devid, String location) throws MetaException {
-		try{
+		try {
 			SFileLocation sfl = getSFileLocation(devid, location);
-			return getSFile(sfl.getFid());
+			if (sfl != null) {
+        return getSFile(sfl.getFid());
+			} else {
+        return null;
+      }
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
@@ -466,7 +476,9 @@ public class RawStoreImp implements RawStore {
 
 		try {
 			// update index here
-			if (!sf.getDigest().equals(newfile.getDigest())) {
+		  if ((sf.getDigest() == null) ||
+		      (!sf.getDigest().equals(newfile.getDigest()))) {
+		    // BUG-XXX: if sf.getDigest() is null, we can't call function equal!
         cs.removeLfbdValue(sf.getDigest(), sf.getFid() + "");
       }
 			if (stat_changed) {
@@ -1823,14 +1835,15 @@ public class RawStoreImp implements RawStore {
           SFileLocation x = sfl.get(i);
           Device d = null;
 
+
           try {
             d = (Device) cs.readObject(ObjectType.DEVICE, x.getDevid());
           } catch (Exception e) {
           }
 
           if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE &&
-              (d != null && (d.getProp() == MetaStoreConst.MDeviceProp.ALONE ||
-              d.getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE))) {
+              (d != null && (DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.GENERAL ||
+              DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.BACKUP_ALONE))) {
             selected = true;
             idx = i;
             break;
@@ -1858,8 +1871,10 @@ public class RawStoreImp implements RawStore {
             }
           }
           SFile nf = this.getSFile(file.getFid());
-          nf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
-          this.updateSFile(nf);
+          if (nf != null) {
+            nf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
+            this.updateSFile(nf);
+          }
         }
       }
       if (selected) {

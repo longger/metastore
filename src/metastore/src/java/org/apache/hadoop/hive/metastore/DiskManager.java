@@ -7,16 +7,18 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.MulticastSocket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Random;
 import java.util.Set;
@@ -27,6 +29,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.jdo.JDOObjectNotFoundException;
@@ -37,6 +40,7 @@ import net.sf.json.JSONObject;
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.DiskManager.DMThread.DMReport;
+import org.apache.hadoop.hive.metastore.DiskManager.FLSelector.FLS_Policy;
 import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.Device;
@@ -57,6 +61,8 @@ import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.thrift.TException;
 
+import com.google.common.collect.Lists;
+
 public class DiskManager {
     public static long startupTs = System.currentTimeMillis();
     public RawStore rs, rs_s1;
@@ -64,6 +70,11 @@ public class DiskManager {
     public static enum RsStatus{
       NEWMS, OLDMS;
     }
+    public static enum Role {
+      MASTER, SLAVE,
+    }
+    public Role role;
+    public String alternateURI;
 
     public Log LOG;
     private final HiveConf hiveConf;
@@ -86,11 +97,13 @@ public class DiskManager {
     public final Map<String, Long> toUnspc = new ConcurrentHashMap<String, Long>();
     public final Map<String, MigrateEntry> rrmap = new ConcurrentHashMap<String, MigrateEntry>();
 
+    public final ConcurrentLinkedQueue<ReplicateRequest> rrq = new ConcurrentLinkedQueue<ReplicateRequest>();
+
     // TODO: fix me: change it to 30 min
     public long backupTimeout = 1 * 60 * 1000;
     public long backupQTimeout = 5 * 3600 * 1000; // 5 hour
     public long fileSizeThreshold = 64 * 1024 * 1024;
-    public Set<String> backupDevs = new TreeSet<String>();
+    public Set<String> disabledDevs = new TreeSet<String>();
 
     // TODO: REP limiting for low I/O bandwidth env
     public AtomicLong closeRepLimit = new AtomicLong(0L);
@@ -98,15 +111,54 @@ public class DiskManager {
 
     public static long dmsnr = 0;
     public static FLSelector flselector = new FLSelector();
+    public static List<Integer> default_orders = new ArrayList<Integer>();
+
+    public static SysMonitor sm = new SysMonitor();
+
+    public static boolean identify_shared_device;
+
+    static {
+      // Default do not replicate to L1 devices
+      default_orders.add(MetaStoreConst.MDeviceProp.GENERAL);
+      default_orders.add(MetaStoreConst.MDeviceProp.MASS);
+      default_orders.add(MetaStoreConst.MDeviceProp.SHARED);
+    }
+
+    public static class ReplicateRequest {
+      public long fid;
+      public int dtype;
+
+      public ReplicateRequest(long fid, int dtype) {
+        this.fid = fid;
+        this.dtype = dtype;
+      }
+
+      @Override
+      public String toString() {
+        return "fid " + fid + " TO " + DeviceInfo.getTypeStr(dtype);
+      }
+    }
+
+    public void submitReplicateRequest(ReplicateRequest rr) {
+      rrq.add(rr);
+    }
 
     public static class FLEntry {
       // single entry for one table
       public String table;
+      public FLS_Policy policy = FLS_Policy.NONE;
       public int repnr = -1;
       public long l1Key;
       public long l2KeyMax;
       public TreeMap<Long, String> distribution;
       public TreeMap<String, Long> statis;
+      public List<Integer> accept_types;
+      // We define 3 rounds of dev location selections:
+      // r1: first location (create new file)
+      // r2: first replica location (do REP in repthread)
+      // r3: other replicas (in do_replicate)
+      // Note-XXX: r2 should be L1 when you want to put your replicas to FASTEST devices
+      public int r1, r2, r3;
 
       public FLEntry(String table, long l1Key, long l2KeyMax) {
         this.table = table;
@@ -114,6 +166,10 @@ public class DiskManager {
         this.l2KeyMax = l2KeyMax;
         distribution = new TreeMap<Long, String>();
         statis = new TreeMap<String, Long>();
+        accept_types = new ArrayList<Integer>();
+        r1 = MetaStoreConst.MDeviceProp.L2;
+        r2 = MetaStoreConst.MDeviceProp.L2;
+        r3 = MetaStoreConst.MDeviceProp.L2;
       }
 
       public void updateStatis(String node) {
@@ -149,14 +205,470 @@ public class DiskManager {
       }
     }
 
+    // TODO: up to 2014.11.30
+    // SysMonitor watch and report system info
+    //
+    public static class SysMonitor {
+      // 1. detect how many files are (truly) opened
+      //
+      // tracing current opened files, sort them, do table distribution analysis
+      //
+
+      // 2. hot node (device) analysis (1min, 5min, 15min)
+      //
+      // tracing node's read/write bandwidth on each device
+      //
+
+      // 3. load status bad analysis
+      //
+      // tracing load status bad calls, do table/node distribution analysis
+      public static LSBA lsba = new LSBA();
+
+      public static class LSBA {
+        private final ConcurrentHashMap<Long, LoadStatusBad> fids = new ConcurrentHashMap<Long, LoadStatusBad>();
+        private final ConcurrentLinkedQueue<LoadStatusBad> tsorted = new ConcurrentLinkedQueue<LoadStatusBad>();
+        private final int tsRange = 600 * 1000;
+
+        public class LoadStatusBad {
+          public long fid;
+          public String db;
+          public String table;
+          public String node;
+          public String devid;
+          public long ts;
+
+          public LoadStatusBad(long fid, String db, String table, String node, String devid) {
+            this.fid = fid;
+            this.db = db;
+            this.table = table;
+            this.node = node;
+            this.devid = devid;
+            this.ts = System.currentTimeMillis();
+          }
+        }
+
+        public void watchLSB(long fid, String db, String table, String node, String devid) {
+          LoadStatusBad lsb = new LoadStatusBad(fid, db, table, node, devid);
+          LoadStatusBad olsb = fids.put(fid, lsb);
+          if (olsb != null) {
+            tsorted.remove(olsb);
+          }
+          tsorted.add(lsb);
+        }
+
+        public void trimLSB() {
+          while (true) {
+            LoadStatusBad lsb = tsorted.peek();
+            if (lsb != null) {
+              if (lsb.ts + tsRange < System.currentTimeMillis()) {
+                tsorted.remove(lsb);
+              } else {
+                break;
+              }
+            } else {
+              break;
+            }
+          }
+        }
+
+        public String getTableDistribution() {
+          HashMap<String, Long> td = new HashMap<String, Long>();
+          String r = "";
+          trimLSB();
+
+          for (LoadStatusBad lsb : tsorted) {
+            Long o = td.get(lsb.db + "." + lsb.table);
+            if (o == null) {
+              o = new Long(0);
+            }
+            o++;
+            td.put(lsb.db + "." + lsb.table, o);
+          }
+          for (Map.Entry<String, Long> e : td.entrySet()) {
+            r += e.getKey() + "\t" + e.getValue() + "\n";
+          }
+
+          return r;
+        }
+
+        public String getNodeDistribution() {
+          HashMap<String, Long> nd = new HashMap<String, Long>();
+          String r = "";
+          trimLSB();
+
+          for (LoadStatusBad lsb : tsorted) {
+            Long o = nd.get(lsb.node + "." + lsb.devid);
+            if (o == null) {
+              o = new Long(0);
+            }
+            o++;
+            nd.put(lsb.node + "." + lsb.devid, o);
+          }
+          for (Map.Entry<String, Long> e : nd.entrySet()) {
+            r += e.getKey() + "\t" + e.getValue() + "\n";
+          }
+
+          return r;
+        }
+      }
+
+      // 4. Analayse file read/write/err rate in data nodes
+      //
+      // node -> pending writes
+      // node -> pending reads
+      // node -> pending I/Os
+      // node -> errs
+      // table -> pending I/Os
+      // table -> ACC read latency (latency/nr)
+      // HOT node, device detection
+      public static DSFSTAT dsfstat = new DSFSTAT();
+
+      public static class DSFSTAT {
+        public static enum VFSOperation {
+          READ_BEGIN, READ_END, WRITE_BEGIN, WRITE_END, ERROR,
+        };
+        public class DMAudit {
+          public String devid;
+          public String location;
+          public String tag;
+
+          // all nodes should be ntp synced
+          public long open;
+          public VFSOperation op;
+        }
+        public class FSTAT {
+          public String devid;
+          public String location;
+          public String tag;
+
+          public long ts; // last update TS
+          public long iolat;
+          public int rdnr;
+          public int wrnr;
+          public int ernr;
+
+          public FSTAT(String devid, String location, String tag) {
+            this.devid = devid;
+            this.location = location;
+            this.tag = tag;
+            this.ts = System.currentTimeMillis();
+            this.rdnr = this.wrnr = this.ernr = 0;
+            this.iolat = 0;
+          }
+        }
+
+        private final ConcurrentHashMap<String, DMAudit> map = new ConcurrentHashMap<String, DMAudit>();
+        private final ConcurrentHashMap<String, FSTAT> fstat = new ConcurrentHashMap<String, FSTAT>();
+        private final int recycleLatency = 8 * 3600 * 1000;
+        private final int fstatInvalidate = 12 * 3600 * 1000;
+        private long drop_rde = 0;
+        private long drop_wre = 0;
+
+        public void updateFStat(String devid, String location, String tag,
+            int rdnr, int wrnr, int ernr, long iolat) {
+          FSTAT fs = fstat.get(devid + ":" + location + ":" + tag);
+          if (fs != null) {
+            synchronized (fs) {
+              if (rdnr > 0) {
+                fs.rdnr += rdnr;
+              }
+              if (wrnr > 0) {
+                fs.wrnr += wrnr;
+              }
+              if (ernr > 0) {
+                fs.ernr += ernr;
+              }
+              if (iolat > 0) {
+                fs.iolat += iolat;
+              }
+              fs.ts = System.currentTimeMillis();
+            }
+          } else {
+            fs = new FSTAT(devid, location, tag);
+            fs.ernr += ernr;
+            fs.iolat += iolat;
+            fstat.putIfAbsent(devid + ":" + location + ":" + tag, fs);
+          }
+        }
+
+        public void updateDMAudit(List<DMReply> dmrs) {
+          if (dmrs != null) {
+            for (DMReply dmr : dmrs) {
+              if (dmr.type == DMReply.DMReplyType.AUDIT) {
+                if (dmr.args != null) {
+                  String[] fs = dmr.args.split(",");
+                  if (fs.length == 5) {
+                    // tag:devid:location
+                    DMAudit dma = map.get(fs[0] + ":" + fs[2] + ":" + fs[3]);
+
+                    if (dma == null) {
+                      // new entry
+                      if (fs[4].equals("RDB")) {
+                        dma = new DMAudit();
+                        dma.op = VFSOperation.READ_BEGIN;
+                        try {
+                          dma.open = Long.parseLong(fs[1]);
+                        } catch (Exception e) {}
+                        dma.devid = fs[2];
+                        dma.location = fs[3];
+                        dma.tag = fs[0];
+                        map.putIfAbsent(fs[0] + ":" + fs[2] + ":" + fs[3], dma);
+                      } else if (fs[4].equals("WRB")) {
+                        dma = new DMAudit();
+                        dma.op = VFSOperation.WRITE_BEGIN;
+                        try {
+                          dma.open = Long.parseLong(fs[1]);
+                        } catch (Exception e) {}
+                        dma.devid = fs[2];
+                        dma.location = fs[3];
+                        dma.tag = fs[0];
+                        map.putIfAbsent(fs[0] + ":" + fs[2] + ":" + fs[3], dma);
+                      } else if (fs[4].equals("RDE")) {
+                        drop_rde++;
+                      } else if (fs[4].equals("WRE")) {
+                        drop_wre++;
+                      } else if (fs[4].equals("ERR")) {
+                        // ok, try to update FSTAT
+                        updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, 0);
+                      }
+                    } else {
+                      switch (dma.op) {
+                      case READ_BEGIN:{
+                        if (fs[4].equals("RDE")) {
+                          // ok, try to update FSTAT
+                          long cur = dma.open;
+                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                          updateFStat(fs[2], fs[3], fs[0], 1, 0, 0, cur - dma.open);
+                          map.remove(dma);
+                        } else if (fs[4].equals("ERR")) {
+                          // ok, try to update FSTAT
+                          long cur = dma.open;
+                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                          updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, cur - dma.open);
+                          map.remove(dma);
+                        }
+                        break;
+                      }
+                      case WRITE_BEGIN:{
+                        if (fs[4].equals("WRE")) {
+                          // ok, try to update FSTAT
+                          long cur = dma.open;
+                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                          updateFStat(fs[2], fs[3], fs[0], 0, 1, 0, cur - dma.open);
+                          map.remove(dma);
+                        } else if (fs[4].equals("ERR")) {
+                          // ok, try to update FSTAT
+                          long cur = dma.open;
+                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                          updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, cur - dma.open);
+                          map.remove(dma);
+                        }
+                        break;
+                      }
+                      default:
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        private final Comparator<Entry<String, HotResult>> compByNr = new Comparator<Entry<String, HotResult>>() {
+          @Override
+          public int compare(Entry<String, HotResult> o1, Entry<String, HotResult> o2) {
+            return (o2.getValue().nr - o1.getValue().nr) > 0 ? 1 : -1;
+          }
+        };
+
+        private final Comparator<Entry<String, HotResult>> compByLatency = new Comparator<Entry<String, HotResult>>() {
+          @Override
+          public int compare(Entry<String, HotResult> o1, Entry<String, HotResult> o2) {
+            if (o1.getValue().nr == 0) {
+              return 1;
+            } else if (o2.getValue().nr == 0) {
+              return -1;
+            }
+            return (o2.getValue().iolat / o2.getValue().nr -
+                o1.getValue().iolat / o1.getValue().nr) > 0 ? 1 : -1;
+          }
+        };
+
+        public class HotResult {
+          public long nr;
+          public long iolat;
+
+          public HotResult(long nr, long iolat) {
+            this.nr = nr;
+            this.iolat = iolat;
+          }
+        }
+
+        public String getHistHots(DiskManager dm) {
+          String r = "";
+          Map<String, HotResult> hist_hot_node = new HashMap<String, HotResult>();
+          Map<String, HotResult> hist_hot_dev = new HashMap<String, HotResult>();
+          Map<String, HotResult> hist_hot_table = new HashMap<String, HotResult>();
+
+          for (Map.Entry<String, FSTAT> e : fstat.entrySet()) {
+            FSTAT fs = e.getValue();
+
+            HotResult o = hist_hot_dev.get(fs.devid);
+            if (o == null) {
+              o = new HotResult(0, 0);
+              hist_hot_dev.put(fs.devid, o);
+            }
+            o.nr++;
+            o.iolat += fs.iolat;
+
+            Device d = null;
+            synchronized (dm.rs) {
+              try {
+                d = dm.rs.getDevice(fs.devid);
+              } catch (Exception e1) {
+                dm.LOG.error(e1, e1);
+              }
+            }
+            if (d != null) {
+              String node_name = d.getNode_name();
+
+              try {
+                if (dm.isSharedDevice(d.getDevid())) {
+                  node_name = "SHARED_NODES_OF(" + d.getDevid() + ")";
+                }
+              } catch (Exception ex) {
+                dm.LOG.error(ex, ex);
+              }
+              HotResult o2 = hist_hot_node.get(node_name);
+              if (o2 == null) {
+                o2 = new HotResult(0, 0);
+                hist_hot_node.put(d.getNode_name(), o2);
+              }
+              o2.nr++;
+              o2.iolat += fs.iolat;
+            }
+
+            SFile f = null;
+            synchronized (dm.rs) {
+              try {
+                f = dm.rs.getSFile(fs.devid, fs.location);
+              } catch (Exception e1) {
+                dm.LOG.error(e1, e1);
+              }
+            }
+            if (f != null) {
+              HotResult o3 = hist_hot_table.get(f.getDbName() + "." + f.getTableName());
+              if (o3 == null) {
+                o3 = new HotResult(0, 0);
+                hist_hot_table.put(f.getDbName() + "." + f.getTableName(), o3);
+              }
+              o3.nr++;
+              o3.iolat += fs.iolat;
+            }
+          }
+          List<Entry<String, HotResult>> entries = Lists.newArrayList(hist_hot_dev.entrySet());
+          Collections.sort(entries, compByNr);
+
+          r += "Top 10 hot devices in history (by open-close pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " + entries.get(i).getValue().nr + "\n";
+          }
+
+          Collections.sort(entries, compByLatency);
+
+          r += "Top 10 hot devices in history (by latency pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " +
+                entries.get(i).getValue().iolat / entries.get(i).getValue().nr + "\n";
+          }
+
+          entries = Lists.newArrayList(hist_hot_node.entrySet());
+          Collections.sort(entries, compByNr);
+
+          r += "Top 10 hot nodes   in history (by open-close pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " + entries.get(i).getValue().nr + "\n";
+          }
+
+          Collections.sort(entries, compByLatency);
+
+          r += "Top 10 hot nodes   in history (by latency pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " +
+                entries.get(i).getValue().iolat / entries.get(i).getValue().nr + "\n";
+          }
+
+          entries = Lists.newArrayList(hist_hot_table.entrySet());
+          Collections.sort(entries, compByNr);
+
+          r += "Top 10 hot tables  in history (by open-close pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " + entries.get(i).getValue().nr + "\n";
+          }
+
+          Collections.sort(entries, compByLatency);
+
+          r += "Top 10 hot tables  in history (by latency pairs) is:\n";
+          for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            r += "\t" + entries.get(i).getKey() + " -> " +
+                entries.get(i).getValue().iolat / entries.get(i).getValue().nr + "\n";
+          }
+
+          return r;
+        }
+      }
+
+      public String getSysInfo(DiskManager dm) {
+        String r = "";
+
+        r += "In Last " + lsba.tsRange / 1000 + " seconds, LSBA distribution is:\n";
+        r += lsba.getTableDistribution();
+        r += lsba.getNodeDistribution();
+        r += "\n";
+
+        if (dm != null) {
+          r += "Audit Log Analyse Report:\n";
+          r += dsfstat.getHistHots(dm);
+          r += "\n";
+        }
+
+        return r;
+      }
+    }
+
+    // FLSelector stands before any file location allocations
+    //
+    // --> FLSelector --> make FLP -> find_best_node -> find_best_device ...
+    //
     public static class FLSelector {
       // considering node load and tables' first file locations
       // Note that the following table should be REGULAR table name as DB.TABLE
       public final Set<String> tableWatched = Collections.synchronizedSet(new HashSet<String>());
       public final Map<String, FLEntry> context = new ConcurrentHashMap<String, FLEntry>();
 
-      public boolean watched(String table) {
-        return tableWatched.add(table);
+      public enum FLS_Policy {
+        NONE, FAIR_NODES, ORDERED_ALLOC_DEVS,
+      }
+
+      public void initWatchedTables(RawStore rs, String[] tables, FLS_Policy policy) throws MetaException {
+        for (String table : tables) {
+          watched(table, policy);
+        }
+      }
+
+      public boolean watched(String table, FLS_Policy policy) {
+        boolean r = tableWatched.add(table);
+        FLEntry e = new FLEntry(table, -1, -1);
+        e.policy = policy;
+        synchronized (context) {
+          if (!context.containsKey(table)) {
+            context.put(table, e);
+          } else {
+            context.get(table).policy = policy;
+          }
+        }
+        return r;
       }
 
       public boolean unWatched(String table) {
@@ -191,10 +703,38 @@ public class DiskManager {
         return false;
       }
 
+      public boolean orderWatched(String table, List<Integer> accept_types) {
+        FLEntry fle = context.get(table);
+        if (fle != null) {
+          synchronized (fle) {
+            fle.accept_types.clear();
+            fle.accept_types.addAll(accept_types);
+          }
+          return true;
+        }
+        return false;
+      }
+
+      public boolean roundWatched(String table, List<Integer> rounds) {
+        if (rounds.size() != 3) {
+          return false;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null) {
+          synchronized (fle) {
+            fle.r1 = rounds.get(0);
+            fle.r2 = rounds.get(1);
+            fle.r3 = rounds.get(2);
+          }
+          return true;
+        }
+        return false;
+      }
+
       public String printWatched() {
         String r = "";
 
-        r += "Table FLSelector Watched: {";
+        r += "Table FLSelector Watched: " + tableWatched.size() + " {";
         for (String tbl : tableWatched) {
           r += tbl + ",";
         }
@@ -204,10 +744,20 @@ public class DiskManager {
           for (Map.Entry<String, FLEntry> e : context.entrySet()) {
             r += "Table '" + e.getKey() + "' -> {\n";
             r += "\trepnr=" + e.getValue().repnr + ", ";
+            r += "policy=" + e.getValue().policy + ", ";
+            r += "order='" + e.getValue().accept_types + "', ";
+            r += "R1=" + DeviceInfo.getTypeStr(e.getValue().r1) + ", ";
+            r += "R2=" + DeviceInfo.getTypeStr(e.getValue().r2) + ", ";
+            r += "R3=" + DeviceInfo.getTypeStr(e.getValue().r3) + ", ";
             r += "l1Key=" + e.getValue().l1Key + ", l2KeyMax?=" + e.getValue().l2KeyMax + "\n";
             synchronized (e.getValue()) {
-              r += "\t" + e.getValue().distribution + "\n";
-              r += "\t" + e.getValue().statis + "\n";
+
+              if (e.getValue().distribution.size() > 0) {
+                r += "\t" + e.getValue().distribution + "\n";
+              }
+              if (e.getValue().statis.size() > 0) {
+                r += "\t" + e.getValue().statis + "\n";
+              }
             }
             r += "}\n";
           }
@@ -228,6 +778,90 @@ public class DiskManager {
         }
       }
 
+      // PLEASE USE REGULAR TABLE NAME HERE
+      // filter the accept_types by cur_level, all types that BEFORE cur_level are filtered
+      public List<Integer> getDevTypeListAfterIncludeHint(String table, int cur_level) {
+        List<Integer> r = new ArrayList<Integer>();
+        r.addAll(default_orders);
+
+        if (!tableWatched.contains(table)) {
+          return r;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null && fle.accept_types != null) {
+          r.clear();
+          switch (cur_level) {
+          case MetaStoreConst.MDeviceProp.__AUTOSELECT_R1__:
+            cur_level = fle.r1;
+            break;
+          case MetaStoreConst.MDeviceProp.__AUTOSELECT_R2__:
+            cur_level = fle.r2;
+            break;
+          case MetaStoreConst.MDeviceProp.__AUTOSELECT_R3__:
+            cur_level = fle.r3;
+            break;
+          }
+          // BUG-XXX: if FLE order size is ZERO, use default orders!
+          List<Integer> orders = new ArrayList<Integer>(fle.accept_types);
+          if (orders.size() == 0) {
+            orders.addAll(default_orders);
+          }
+          for (Integer lvl : orders) {
+            if (MetaStoreConst.checkDeviceOrder(cur_level, lvl)) {
+              r.add(lvl);
+            }
+          }
+          if (r.size() == 0) {
+            r.addAll(default_orders);
+          }
+        }
+
+        return r;
+      }
+
+      // PLEASE USE REGULAR TABLE NAME HERE
+      public boolean isTableOrdered(String table) {
+        if (!tableWatched.contains(table)) {
+          return false;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null && fle.accept_types != null && fle.accept_types.size() > 0) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+
+      // PLEASE USE REGULAR TABLE NAME HERE
+      public List<Integer> getDevTypeList(String table) {
+        List<Integer> r = new ArrayList<Integer>();
+        r.addAll(default_orders);
+
+        if (!tableWatched.contains(table)) {
+          return r;
+        }
+        FLEntry fle = context.get(table);
+        if (fle != null && fle.accept_types != null && fle.accept_types.size() > 0) {
+          return fle.accept_types;
+        } else {
+          return r;
+        }
+      }
+
+      // User should switch on return value: it is policy!
+      public FLS_Policy FLSelector_switch(String table) {
+        FLEntry e = context.get(table);
+        if (e == null) {
+          return FLS_Policy.NONE;
+        } else {
+          return e.policy;
+        }
+      }
+
+      // This is used by FLSelector framework
+      //
+      // findBestNode use FLS_Policy: FAIR_NODES
+      //
       // PLEASE USE REGULAR TABLE NAME HERE
       public String findBestNode(DiskManager dm, FileLocatingPolicy flp, String table,
           long l1Key, long l2Key) throws IOException {
@@ -308,6 +942,8 @@ public class DiskManager {
       public static AtomicLong newConn = new AtomicLong(0);
       public static AtomicLong delConn = new AtomicLong(0);
       public static AtomicLong query = new AtomicLong(0);
+      public static AtomicLong replicate = new AtomicLong(0);
+      public static AtomicLong loadStatusBad = new AtomicLong(0);
     }
 
     public static class SFLTriple implements Comparable<SFLTriple> {
@@ -433,7 +1069,7 @@ public class DiskManager {
 
     public static class DMReply {
       public enum DMReplyType {
-        DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY, INFO,
+        DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY, INFO, SLAVE, AUDIT,
       }
       DMReplyType type;
       String args;
@@ -459,6 +1095,9 @@ public class DiskManager {
           break;
         case INFO:
           r += "INFO";
+          break;
+        case AUDIT:
+          r += "AUDIT";
           break;
         default:
           r += "UNKNOWN";
@@ -530,6 +1169,55 @@ public class DiskManager {
         mp = null;
         prop = -1;
         isOffline = false;
+      }
+
+      public int getType() {
+        return prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__;
+      }
+
+      public String getTypeStr() {
+        switch (prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__) {
+        case MetaStoreConst.MDeviceProp.CACHE:
+          return "L1";
+        case MetaStoreConst.MDeviceProp.GENERAL:
+          return "L2";
+        case MetaStoreConst.MDeviceProp.MASS:
+          return "L3";
+        case MetaStoreConst.MDeviceProp.SHARED:
+          return "L4";
+        default:
+          return "X" + getType();
+        }
+      }
+
+      public static String getTypeStr(int prop) {
+        switch (prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__) {
+        case MetaStoreConst.MDeviceProp.CACHE:
+          return "L1";
+        case MetaStoreConst.MDeviceProp.GENERAL:
+          return "L2";
+        case MetaStoreConst.MDeviceProp.MASS:
+          return "L3";
+        case MetaStoreConst.MDeviceProp.SHARED:
+          return "L4";
+        default:
+          return "X" + (prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__);
+        }
+      }
+
+      public static int getType(int prop) {
+        return prop & MetaStoreConst.MDeviceProp.__TYPE_MASK__;
+      }
+
+      // Note that, the quota we save is -quota
+      public int getQuota() {
+        int keep = prop >>> MetaStoreConst.MDeviceProp.__QUOTA_SHIFT__;
+        return keep > 100 ? 0 : (100 - keep);
+      }
+
+      public static int getQuota(int prop) {
+        int keep = prop >>> MetaStoreConst.MDeviceProp.__QUOTA_SHIFT__;
+        return keep > 100 ? 0 : (100 - keep);
       }
 
       public DeviceInfo(DeviceInfo old) {
@@ -604,6 +1292,8 @@ public class DiskManager {
     private final ConcurrentHashMap<String, NodeInfo> ndmap;
     // Active Device Map
     private final ConcurrentHashMap<String, DeviceInfo> admap;
+    // Device -> Node Map
+    private final ConcurrentHashMap<String, Set<String>> dnmap;
 
     public class BackupTimerTask extends TimerTask {
       private long last_backupTs = System.currentTimeMillis();
@@ -691,7 +1381,7 @@ public class DiskManager {
                 LOG.error(e, e);
               }
             }
-            if (device != null && (device.getProp() == MetaStoreConst.MDeviceProp.BACKUP)) {
+            if (device != null && (DeviceInfo.getType(device.getProp()) == MetaStoreConst.MDeviceProp.BACKUP)) {
               content += sfl.getLocation().substring(sfl.getLocation().lastIndexOf('/') + 1);
               if (ftp.isPart) {
                 content += "\tADD\t" + ftp.part.getDbName() + "\t" + ftp.part.getTableName() + "\t";
@@ -768,7 +1458,7 @@ public class DiskManager {
                 LOG.error(e, e);
               }
             }
-            if (device != null && (device.getProp() == MetaStoreConst.MDeviceProp.BACKUP)) {
+            if (device != null && (DeviceInfo.getType(device.getProp()) == MetaStoreConst.MDeviceProp.BACKUP)) {
               content += sfl.getLocation() + "\tRemove\t" + ftp.part.getDbName() + "\t" + ftp.part.getTableName() + "\t";
               for (int i = 0; i < ftp.part.getValuesSize(); i++) {
                 content += ftp.part.getValues().get(i);
@@ -985,6 +1675,7 @@ public class DiskManager {
         offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
         suspectDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_SUSPECT_DEL_TIMEOUT);
         ff_range = hiveConf.getLongVar(HiveConf.ConfVars.DM_FF_RANGE);
+        DiskManager.identify_shared_device = hiveConf.getBoolVar(HiveConf.ConfVars.DM_IDENTIFY_SHARED_DEV);
 
         if (rst == RsStatus.NEWMS){
           try {
@@ -1002,8 +1693,27 @@ public class DiskManager {
 
       }
 
+      private boolean __do_delete(SFileLocation loc, int flocsize) {
+        NodeInfo ni = ndmap.get(loc.getNode_name());
+
+        if (ni == null) {
+          return false;
+        }
+        synchronized (ni.toDelete) {
+          ni.toDelete.add(loc);
+          LOG.info("----> Add to Node " + loc.getNode_name() + "'s toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", " + flocsize);
+        }
+        return true;
+      }
+
+      // NOTE-XXX: for scruber Version 2.
+      //
+      // do_delete() try to understand how to leveling replicas. It try delete ONE highest replica
+      // and many(or one) lowest replicas.
       public void do_delete(SFile f, int nr) {
         int i = 0;
+        LinkedList<SFileLocation> inTypeOrder = null;
+        LinkedList<Integer> types = null;
 
         if (nr < 0) {
           return;
@@ -1022,35 +1732,78 @@ public class DiskManager {
               LOG.error(e, e);
             }
           }
+          inTypeOrder = new LinkedList<SFileLocation>();
+          types = new LinkedList<Integer>();
+
           for (SFileLocation loc : f.getLocations()) {
-            if (i >= nr) {
-              break;
+            DeviceInfo di = admap.get(loc.getDevid());
+            if (di != null) {
+              boolean inserted = false;
+              int btype = di.getType();
+
+              for (int j = 0; j < inTypeOrder.size(); j++) {
+                int atype = types.get(j);
+
+                if (MetaStoreConst.checkDeviceOrder(btype, atype)) {
+                  // insert before it
+                  inTypeOrder.add(j, loc);
+                  types.add(j, btype);
+                  inserted = true;
+                  break;
+                }
+              }
+              if (!inserted) {
+                inTypeOrder.addLast(loc);
+                types.addLast(btype);
+              }
             }
-            NodeInfo ni = ndmap.get(loc.getNode_name());
-            if (ni == null) {
-              continue;
-            }
-            synchronized (ni.toDelete) {
-              ni.toDelete.add(loc);
+          }
+          for (int x = 0; x < inTypeOrder.size(); x++) {
+            LOG.debug(" -> do_delete() on " + DeviceInfo.getTypeStr(types.get(x)) +
+                " Dev: " + inTypeOrder.get(x).getDevid());
+          }
+
+          // delete policy:
+          // 1. try to remove highest L? loc;
+          // 2. delete other loc randomized.
+          if (types.size() - 1 < nr) {
+            // this means we should change nr to types.size() - 1
+            nr = types.size() - 1;
+          }
+          if (inTypeOrder.size() > 0) {
+            if (__do_delete(inTypeOrder.get(0), f.getLocationsSize())) {
               i++;
-              LOG.info("----> Add to Node " + loc.getNode_name() + "'s toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", " + f.getLocationsSize());
+              inTypeOrder.remove(0);
+            }
+          }
+          Random r = new Random();
+          Set<Integer> idxs = new HashSet<Integer>();
+
+          if (nr - i > 0) {
+            for (int j = 0; j < nr - i; j++) {
+              idxs.add(r.nextInt(inTypeOrder.size()));
+            }
+            for (Integer idx : idxs) {
+              // ignore any error,
+              // because if ni == null, we don't known whether this loc is valid.
+              __do_delete(inTypeOrder.get(idx), f.getLocationsSize());
             }
           }
         }
       }
 
-      public void do_replicate(SFile f, int nr) {
+      public void do_replicate(SFile f, int nr, int dtype) {
         int init_size = f.getLocationsSize();
         int valid_idx = 0;
         boolean master_marked = false;
-        FileLocatingPolicy flp, flp_backup, flp_default;
+        FileLocatingPolicy flp, flp_default;
         Set<String> excludes = new TreeSet<String>();
         Set<String> excl_dev = new TreeSet<String>();
         Set<String> spec_dev = new TreeSet<String>();
         Set<String> spec_node = new TreeSet<String>();
 
         if (init_size <= 0) {
-          LOG.error("Not valid locations for file " + f.getFid());
+          LOG.error("No valid locations for file " + f.getFid());
           // FIXME: this means we should clean this file?
           if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
               f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
@@ -1070,16 +1823,17 @@ public class DiskManager {
           }
           return;
         }
-        // find the backup devices
-        findBackupDevice(spec_dev, spec_node);
-        LOG.debug("Try to write to backup device firstly: N <" + Arrays.toString(spec_node.toArray()) +
-            ">, D <" + Arrays.toString(spec_dev.toArray()) + ">");
 
         // find the valid entry
         for (int i = 0; i < init_size; i++) {
           try {
+            // NOTE-XXX: we allow replicate to L4 device in do_replicate. If we try to
+            // replicate to L4 device, ignore node masking for L4 devices.
             if (!isSharedDevice(f.getLocations().get(i).getDevid())) {
-              excludes.add(f.getLocations().get(i).getNode_name());
+              if (!(dtype == MetaStoreConst.MDeviceProp.SHARED &&
+                  isNodeHasSD(f.getLocations().get(i).getNode_name()))) {
+                excludes.add(f.getLocations().get(i).getNode_name());
+              }
             }
           } catch (MetaException e1) {
             LOG.error(e1, e1);
@@ -1096,6 +1850,14 @@ public class DiskManager {
           if (!master_marked && f.getLocations().get(i).getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
             valid_idx = i;
             master_marked = true;
+            DeviceInfo di = admap.get(f.getLocations().get(i).getDevid());
+            if (di != null) {
+              // FIXME: now, we do ALLOW replicate to higher level device
+              if (MetaStoreConst.checkDeviceOrder(dtype, di.getType())) {
+                //dtype = di.getType();
+                LOG.debug("dtype <= di.getType(), might replicate to higher level.");
+              }
+            }
             if (f.getLocations().get(i).getNode_name().equals("")) {
               try {
                 f.getLocations().get(i).setNode_name(getAnyNode(f.getLocations().get(i).getDevid()));
@@ -1111,7 +1873,8 @@ public class DiskManager {
           // FIXME: this means we should clean this file?
           if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED ||
               f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
-            LOG.warn("FID " + f.getFid() + " will be deleted(reason: no locations), however it's status is " + f.getStore_status());
+            boolean should_delete = true;
+
             if (f.getLocationsSize() == 0) {
               synchronized (trs) {
                 try {
@@ -1122,21 +1885,41 @@ public class DiskManager {
                 }
               }
             } else {
-              do_delete(f, f.getLocationsSize());
+              // BUG-XXX: do NOT delete a file when some SFL is in SUSPECT status
+              for (SFileLocation sfl : f.getLocations()) {
+                if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE ||
+                    sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
+                  should_delete = false;
+                }
+              }
+              if (should_delete) {
+                do_delete(f, f.getLocationsSize());
+              }
             }
+            LOG.warn("FID " + f.getFid() + " deleted=" + should_delete +
+                " (reason: no locations), however it's status is " + f.getStore_status());
           }
           return;
         }
 
-        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, false);
-        flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
-        flp_backup.origNode = f.getLocations().get(valid_idx).getNode_name();
+        flp = flp_default = new FileLocatingPolicy(excludes, excl_dev,
+            FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM,
+            FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, false);
 
         for (int i = init_size; i < (init_size + nr); i++, flp = flp_default) {
           if (i == init_size) {
-            if (spec_dev.size() > 0) {
-              flp = flp_backup;
+            // FIXME: Use FLSelector framework here?
+            String table = f.getDbName() + "." + f.getTableName();
+            switch (flselector.FLSelector_switch(table)) {
+            default:
+            case NONE:
+              break;
+            case FAIR_NODES:
+            case ORDERED_ALLOC_DEVS:
+              flp.dev_mode = FileLocatingPolicy.ORDERED_ALLOC;
+              break;
             }
+            flp.accept_types = flselector.getDevTypeListAfterIncludeHint(table, dtype);
           }
           try {
             String node_name = findBestNode(flp);
@@ -1260,7 +2043,7 @@ public class DiskManager {
         synchronized (admap) {
           for (Map.Entry<String, DeviceInfo> entry : admap.entrySet()) {
             // Note: only calculate the alone and non-offline device stdev
-            if (entry.getValue().prop == MetaStoreConst.MDeviceProp.ALONE && !entry.getValue().isOffline) {
+            if (entry.getValue().getType() == MetaStoreConst.MDeviceProp.GENERAL && !entry.getValue().isOffline) {
               avg += entry.getValue().free;
               nr++;
               vals.add(entry.getValue().free);
@@ -1311,6 +2094,7 @@ public class DiskManager {
         //47 [alonediskFrees],
         //48 ds.qrep,ds.hrep,ds.drep,ds.qdel,ds.hdel,ds.ddel,ds.tver,ds.tvyr,
         //56 [ds.uptime],[ds.load1],truetotal,truefree,offlinefree,sharedfree,
+        //62 replicate,loadstatus_bad,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -1328,8 +2112,8 @@ public class DiskManager {
   	          truefree += e.getValue().free;
   	          truetotal += (e.getValue().free + e.getValue().used);
   	        }
-  	        if (e.getValue().prop == MetaStoreConst.MDeviceProp.SHARED ||
-  	            e.getValue().prop == MetaStoreConst.MDeviceProp.BACKUP) {
+  	        if (e.getValue().getType() == MetaStoreConst.MDeviceProp.SHARED ||
+  	            e.getValue().getType() == MetaStoreConst.MDeviceProp.BACKUP) {
   	          sharedfree += e.getValue().free;
   	        }
   	      }
@@ -1452,6 +2236,8 @@ public class DiskManager {
         sb.append(truefree + ",");
         sb.append(offlinefree + ",");
         sb.append(sharedfree + ",");
+        sb.append(DMProfile.replicate.get() + ",");
+        sb.append(DMProfile.loadStatusBad.get() + ",");
         sb.append("\n");
 
         // generate report file
@@ -1473,6 +2259,14 @@ public class DiskManager {
 
       @Override
       public void run() {
+        // check if we are in slave role
+        switch (role) {
+        default:
+        case SLAVE:
+          return;
+        case MASTER:;
+        }
+
         try {
           times++;
           useVoidCheck = hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_VOID_CHECK);
@@ -1492,6 +2286,23 @@ public class DiskManager {
             synchronized (ndmap) {
               removeFromNDMapWTO(node, System.currentTimeMillis());
             }
+          }
+          // FIXME: ReplicateRequestQueue handling!!
+          int xnr = 0;
+          while (xnr < 50) {
+            ReplicateRequest rr = rrq.poll();
+
+            if (rr == null) {
+              break;
+            }
+            xnr++;
+            SFile sf = trs.getSFile(rr.fid);
+            if (sf == null) {
+              LOG.warn("Replicate request " + rr + " ERROR: file not exists.");
+              continue;
+            }
+            do_replicate(sf, 1, rr.dtype);
+            LOG.info("Replicate request " + rr + " OK: submitted.");
           }
 
           synchronized (syncIsRunning) {
@@ -1578,7 +2389,7 @@ public class DiskManager {
             }
 
             for (Map.Entry<SFile, Integer> entry : munder.entrySet()) {
-              do_replicate(entry.getKey(), entry.getValue().intValue());
+              do_replicate(entry.getKey(), entry.getValue().intValue(), MetaStoreConst.MDeviceProp.__AUTOSELECT_R3__);
             }
 
             // handle over replicated files
@@ -1603,7 +2414,7 @@ public class DiskManager {
                 synchronized (trs) {
                   try {
                     SFile saved = trs.getSFile(entry.getKey().getFid());
-                    if (saved.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
+                    if (saved != null && saved.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
                       saved.setStore_status(MetaStoreConst.MFileStoreStatus.REPLICATED);
                       trs.updateSFile(saved);
                     }
@@ -1623,7 +2434,7 @@ public class DiskManager {
                 sd.add(f);
                 continue;
               }
-              boolean do_clean = false;
+              boolean do_clean = false, ngsize_exceeded = false;
 
               if (f.getDbName() != null && f.getTableName() != null) {
                 try {
@@ -1638,6 +2449,7 @@ public class DiskManager {
                   if (ngsize <= f.getLocationsSize()) {
                     // this means we should do cleanups
                     do_clean = true;
+                    ngsize_exceeded = true;
                   }
                   if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
                     // this means we should clean up the OFFLINE locs
@@ -1660,7 +2472,9 @@ public class DiskManager {
                 // we set the timeout to 30 days.
                 if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.SUSPECT) {
                   // if this SUSPECT sfl exist too long or we do exceed the ng'size limit
-                  if (do_clean || fl.getUpdate_time() + suspectDelTimeout < System.currentTimeMillis()) {
+                  // BUG-XXX: if the file had been replicated yet, do_clean always be true! thus, we
+                  // should ignore do_clean flag here!
+                  if (ngsize_exceeded || fl.getUpdate_time() + suspectDelTimeout < System.currentTimeMillis()) {
                     s.add(fl);
                   }
                 }
@@ -1813,6 +2627,9 @@ public class DiskManager {
                   SFile nf;
                   try {
                     nf = trs.getSFile(f.getFid());
+                    if (nf == null) {
+                      continue;
+                    }
                     if (nf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
                       continue;
                     }
@@ -1857,9 +2674,19 @@ public class DiskManager {
     public DiskManager(HiveConf conf, Log LOG) throws IOException, MetaException {
       this(conf, LOG, RsStatus.OLDMS);
     }
+
     public DiskManager(HiveConf conf, Log LOG, RsStatus rsType) throws IOException, MetaException {
       this.hiveConf = conf;
       this.LOG = LOG;
+
+      String roleStr = conf.getVar(HiveConf.ConfVars.DM_ROLE);
+      if (roleStr.equalsIgnoreCase("master")) {
+        this.role = Role.MASTER;
+      } else if (roleStr.equalsIgnoreCase("slave")) {
+        this.role = Role.SLAVE;
+      } else {
+        this.role = Role.SLAVE;
+      }
 
       if (rsType == RsStatus.NEWMS){
         rs = new RawStoreImp();
@@ -1876,15 +2703,70 @@ public class DiskManager {
       this.rst = rsType;
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
+      dnmap = new ConcurrentHashMap<String, Set<String>>();
       closeRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT));
       fixRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT));
       init();
     }
 
+    private void addToDNMap(String dev, String node) {
+      Set<String> s = dnmap.get(dev);
+      if (s == null) {
+        final Set<String> n = new ConcurrentSkipListSet<String>();
+        s = dnmap.putIfAbsent(dev, n);
+        if (s == null) {
+          s = n;
+        }
+      }
+      s.add(node);
+    }
+
+    private void removeFromDNMap(String dev, String node) {
+      if (node == null) {
+        dnmap.remove(dev);
+      } else {
+        Set<String> s = dnmap.get(dev);
+        if (s == null) {
+          final Set<String> n = new ConcurrentSkipListSet<String>();
+          s = dnmap.putIfAbsent(dev, n);
+          if (s == null) {
+            s = n;
+          }
+        }
+        s.remove(node);
+      }
+    }
+
+    public List<String> getNodesByDevice(String dev) {
+      List<String> r = new ArrayList<String>();
+      Set<String> s = dnmap.get(dev);
+
+      if (s == null) {
+        return r;
+      }
+      r.addAll(s);
+
+      return r;
+    }
+
     public void init() throws IOException, MetaException {
       int listenPort = hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
-      LOG.info("Starting DiskManager on port " + listenPort);
-      server = new DatagramSocket(listenPort);
+
+      LOG.info("Starting DiskManager Role " + hiveConf.getVar(HiveConf.ConfVars.DM_ROLE) +
+          " on port " + listenPort + ", multicast enabled=" +
+          hiveConf.getVar(HiveConf.ConfVars.DM_USE_MCAST));
+
+      if (hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_MCAST)) {
+        server = new MulticastSocket(listenPort);
+        ((MulticastSocket)server).setTimeToLive(5);
+        ((MulticastSocket)server).joinGroup(InetAddress.getByName(
+            hiveConf.getVar(HiveConf.ConfVars.DM_MCAST_GROUP_IP)));
+      } else {
+        server = new DatagramSocket(listenPort);
+      }
+
+      alternateURI = hiveConf.getVar(HiveConf.ConfVars.DM_ALTERNATE_URI);
+
       dmt = new DMThread("DiskManagerThread");
       dmct = new DMCleanThread("DiskManagerCleanThread");
       dmrt = new DMRepThread("DiskManagerRepThread");
@@ -2003,6 +2885,10 @@ public class DiskManager {
       Long[] devnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
       Long[] adevnr = new Long[MetaStoreConst.MDeviceProp.__MAX__];
       long free = 0, used = 0, offlinenr = 0, truetotal = 0, truefree = 0;
+      long cacheFree = 0, cacheUsed = 0, cacheTruetotal = 0, cacheTruefree = 0;
+      long generalFree = 0, generalUsed = 0, generalTruetotal = 0, generalTruefree = 0;
+      long massFree = 0, massUsed = 0, massTruetotal = 0, massTruefree = 0;
+      long shareFree = 0, shareUsed = 0, shareTruetotal = 0, shareTruefree = 0;
       Set<String> offlinedevs = new TreeSet<String>();
 
       for (int i = 0; i < devnr.length; i++) {
@@ -2014,6 +2900,10 @@ public class DiskManager {
       r += "Timestamp " + System.currentTimeMillis() / 1000 + "\n";
       r += "MetaStore Server Disk Manager listening @ " + hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT);
       r += "\nSafeMode: " + safeMode + "\n";
+      r += "Multicast: " + hiveConf.getVar(HiveConf.ConfVars.DM_USE_MCAST) + "\n";
+      r += "Quota: " + (hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_QUOTA) ? "enabled" : "disabled") + "\n";
+      r += "IdentifySD: " + identify_shared_device + "\n";
+      r += "Role: " + role + "\n";
       r += "Per-IP-Connections: {\n";
       for (Map.Entry<String, AtomicLong> e : HiveMetaStoreServerEventHandler.perIPConns.entrySet()) {
         r += " " + e.getKey() + " -> " + e.getValue().get() + "\n";
@@ -2029,13 +2919,16 @@ public class DiskManager {
           synchronized (e.getValue()) {
             if (e.getValue().dis != null) {
               for (DeviceInfo di : e.getValue().dis) {
-                r += (di.isOffline ? "OF" : "ON") + ":" + di.prop + ":" + di.dev + ",";
-                switch (di.prop) {
-                case MetaStoreConst.MDeviceProp.ALONE:
+                r += (di.isOffline ? "OF" : "ON") + ":" + di.getTypeStr() +
+                    ":" + di.getQuota() + ":" + di.dev + ",";
+                switch (di.getType()) {
+                case MetaStoreConst.MDeviceProp.GENERAL:
                 case MetaStoreConst.MDeviceProp.BACKUP:
                 case MetaStoreConst.MDeviceProp.SHARED:
                 case MetaStoreConst.MDeviceProp.BACKUP_ALONE:
-                  devnr[di.prop]++;
+                case MetaStoreConst.MDeviceProp.MASS:
+                case MetaStoreConst.MDeviceProp.CACHE:
+                  devnr[di.getType()]++;
                 case -1:
                   break;
                 }
@@ -2070,16 +2963,54 @@ public class DiskManager {
 	        }
 	        free += e.getValue().free;
 	        used += e.getValue().used;
-	        if (e.getValue().prop >= 0) {
-            adevnr[e.getValue().prop]++;
-          }
+	        switch(e.getValue().getType()){
+	        case MetaStoreConst.MDeviceProp.CACHE:
+	          cacheFree += e.getValue().free;
+	          cacheUsed += e.getValue().used;
+	          break;
+	        case MetaStoreConst.MDeviceProp.GENERAL:
+	          generalFree += e.getValue().free;
+	          generalUsed += e.getValue().used;
+	          break;
+	        case MetaStoreConst.MDeviceProp.MASS:
+	          massFree += e.getValue().free;
+	          massUsed += e.getValue().used;
+	          break;
+	        case MetaStoreConst.MDeviceProp.SHARED:
+	          shareFree += e.getValue().free;
+	          shareUsed += e.getValue().used;
+	          break;
+	        case -1:
+	          break;
+	        }
+	        if (e.getValue().getType() >= 0) {
+	          adevnr[e.getValue().getType()]++;
+	        }
 	        if (e.getValue().isOffline) {
 	          offlinenr++;
 	          offlinedevs.add(e.getValue().dev);
 	        } else {
-            truefree += e.getValue().free;
-            truetotal += (e.getValue().free + e.getValue().used);
-          }
+	          truefree += e.getValue().free;
+	          truetotal += (e.getValue().free + e.getValue().used);
+	          switch(e.getValue().getType()){
+	          case MetaStoreConst.MDeviceProp.CACHE:
+	            cacheTruefree += e.getValue().free;
+	            cacheTruetotal += (e.getValue().free + e.getValue().used);
+	            break;
+	          case MetaStoreConst.MDeviceProp.GENERAL:
+	            generalTruefree += e.getValue().free;
+	            generalTruetotal += (e.getValue().free + e.getValue().used);
+	            break;
+	          case MetaStoreConst.MDeviceProp.MASS:
+	            massTruefree += e.getValue().free;
+	            massTruetotal += (e.getValue().free + e.getValue().used);
+	            break;
+	          case MetaStoreConst.MDeviceProp.SHARED:
+	            shareTruefree += e.getValue().free;
+	            shareTruetotal += (e.getValue().free + e.getValue().used);
+	            break;
+	          }
+	        }
 	      }
 	    }
 
@@ -2089,22 +3020,65 @@ public class DiskManager {
               "G, free " + ANSI_RED + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + " \n";
           r += "True  space " + ((truetotal) / 1000000000) + "G, used " + ((truetotal - truefree) / 1000000000) +
               "G, free " + ANSI_RED + (truefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)truefree / (truetotal)) + " \n";
+
+          r += "L1 Total space " + ((cacheUsed + cacheFree) / 1000000000) + "G, used " + (cacheUsed / 1000000000) +
+              "G, free " + ANSI_RED + (cacheFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)cacheFree / (cacheUsed + cacheFree)) + " \n";
+          r += "L1 True  space " + ((cacheTruetotal) / 1000000000) + "G, used " + ((cacheTruetotal - cacheTruefree) / 1000000000) +
+              "G, free " + ANSI_RED + (cacheTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)cacheTruefree / (cacheTruetotal)) + " \n";
+
+          r += "L2 Total space " + ((generalUsed + generalFree) / 1000000000) + "G, used " + (generalUsed / 1000000000) +
+              "G, free " + ANSI_RED + (generalFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)generalFree / (generalUsed + generalFree)) + " \n";
+          r += "L2 True  space " + ((generalTruetotal) / 1000000000) + "G, used " + ((generalTruetotal - generalTruefree) / 1000000000) +
+              "G, free " + ANSI_RED + (generalTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)generalTruefree / (generalTruetotal)) + " \n";
+
+          r += "L3 Total space " + ((massUsed + massFree) / 1000000000) + "G, used " + (massUsed / 1000000000) +
+              "G, free " + ANSI_RED + (massFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)massFree / (massUsed + massFree)) + " \n";
+          r += "L3 True  space " + ((massTruetotal) / 1000000000) + "G, used " + ((massTruetotal - massTruefree) / 1000000000) +
+              "G, free " + ANSI_RED + (massTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)massTruefree / (massTruetotal)) + " \n";
+
+          r += "L4 Total space " + ((shareUsed + shareFree) / 1000000000) + "G, used " + (shareUsed / 1000000000) +
+              "G, free " + ANSI_RED + (shareFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)shareFree / (shareUsed + shareFree)) + " \n";
+          r += "L4 True  space " + ((shareTruetotal) / 1000000000) + "G, used " + ((shareTruetotal - shareTruefree) / 1000000000) +
+              "G, free " + ANSI_RED + (shareTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)shareTruefree / (shareTruetotal)) + " \n";
         } else {
           r += "Total space " + ((used + free) / 1000000000) + "G, used " + (used / 1000000000) +
               "G, free " + ANSI_GREEN + (free / 1000000000) + ANSI_RESET + "G, ratio " + ((double)free / (used + free)) + "\n";
           r += "True  space " + ((truetotal) / 1000000000) + "G, used " + ((truetotal - truefree) / 1000000000) +
               "G, free " + ANSI_GREEN + (truefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)truefree / (truetotal)) + "\n";
+
+          r += "L1 Total space " + ((cacheUsed + cacheFree) / 1000000000) + "G, used " + (cacheUsed / 1000000000) +
+                  "G, free " + ANSI_GREEN + (cacheFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)cacheFree / (cacheUsed + cacheFree)) + " \n";
+          r += "L1 True  space " + ((cacheTruetotal) / 1000000000) + "G, used " + ((cacheTruetotal - cacheTruefree) / 1000000000) +
+                     "G, free " + ANSI_GREEN + (cacheTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)cacheTruefree / (cacheTruetotal)) + " \n";
+
+          r += "L2 Total space " + ((generalUsed + generalFree) / 1000000000) + "G, used " + (generalUsed / 1000000000) +
+                  "G, free " + ANSI_GREEN + (generalFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)generalFree / (generalUsed + generalFree)) + " \n";
+          r += "L2 True  space " + ((generalTruetotal) / 1000000000) + "G, used " + ((generalTruetotal - generalTruefree) / 1000000000) +
+                     "G, free " + ANSI_GREEN + (generalTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)generalTruefree / (generalTruetotal)) + " \n";
+
+          r += "L3 Total space " + ((massUsed + massFree) / 1000000000) + "G, used " + (massUsed / 1000000000) +
+                  "G, free " + ANSI_GREEN + (massFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)massFree / (massUsed + massFree)) + " \n";
+          r += "L3 True  space " + ((massTruetotal) / 1000000000) + "G, used " + ((massTruetotal - massTruefree) / 1000000000) +
+                     "G, free " + ANSI_GREEN + (massTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)massTruefree / (massTruetotal)) + " \n";
+
+          r += "L4 Total space " + ((shareUsed + shareFree) / 1000000000) + "G, used " + (shareUsed / 1000000000) +
+                  "G, free " + ANSI_GREEN + (shareFree / 1000000000) + ANSI_RESET + "G, ratio " +  ((double)shareFree / (shareUsed + shareFree)) + " \n";
+          r += "L4 True  space " + ((shareTruetotal) / 1000000000) + "G, used " + ((shareTruetotal - shareTruefree) / 1000000000) +
+                     "G, free " + ANSI_GREEN + (shareTruefree / 1000000000) + ANSI_RESET + "G, ratio " + ((double)shareTruefree / (shareTruetotal)) + " \n";
         }
 	    }
       synchronized (rs) {
-        r += "Total devices " + rs.countDevice() + ", active {offline " +
-            offlinenr + ", alone " +
-            devnr[MetaStoreConst.MDeviceProp.ALONE] + ", backup " +
-            devnr[MetaStoreConst.MDeviceProp.BACKUP] + " on " +
-            adevnr[MetaStoreConst.MDeviceProp.BACKUP] + ", shared " +
-            devnr[MetaStoreConst.MDeviceProp.SHARED] + " on " +
-            adevnr[MetaStoreConst.MDeviceProp.SHARED] + ", backup_alone " +
-            devnr[MetaStoreConst.MDeviceProp.BACKUP_ALONE] + "}.\n";
+        r += "Total devices " + rs.countDevice() +
+            ", active {offline " + offlinenr +
+            ", L1 " + devnr[MetaStoreConst.MDeviceProp.CACHE] +
+            ", L2 " + devnr[MetaStoreConst.MDeviceProp.GENERAL] +
+            ", L3 " + devnr[MetaStoreConst.MDeviceProp.MASS] +
+            ", backup " + devnr[MetaStoreConst.MDeviceProp.BACKUP] + " on " +
+              adevnr[MetaStoreConst.MDeviceProp.BACKUP] +
+            ", shared " + devnr[MetaStoreConst.MDeviceProp.SHARED] + " on " +
+              adevnr[MetaStoreConst.MDeviceProp.SHARED] +
+            ", backup_alone " + devnr[MetaStoreConst.MDeviceProp.BACKUP_ALONE] +
+            "}.\n";
       }
       r += "Inactive nodes list: {\n";
       synchronized (rs) {
@@ -2162,6 +3136,15 @@ public class DiskManager {
       }
       r += "}\n";
 
+      r += "RRQ: ";
+      synchronized (rrq) {
+        r += rrq.size() + "{\n";
+        for (ReplicateRequest req : rrq) {
+          r += "\t" + req.toString() + "\n";
+        }
+      }
+      r += "}\n";
+
       r += "RRMAP: {\n";
       synchronized (rrmap) {
         for (Map.Entry<String, MigrateEntry> e : rrmap.entrySet()) {
@@ -2205,6 +3188,12 @@ public class DiskManager {
       return admap.get(devid);
     }
 
+    public void removeFromADMap(String devid, String node) {
+      admap.remove(devid);
+      // remove it from device-node map
+      removeFromDNMap(devid, node);
+    }
+
     // Return old devs
     public NodeInfo addToNDMap(long ts, Node node, List<DeviceInfo> ndi) {
       NodeInfo ni = ndmap.get(node.getNode_name());
@@ -2227,13 +3216,17 @@ public class DiskManager {
               }
               if (d == null ||
                   (d.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT && di.mp != null) ||
-                  (!d.getNode_name().equals(node.getNode_name()) && d.getProp() == MetaStoreConst.MDeviceProp.ALONE)) {
+                  (!d.getNode_name().equals(node.getNode_name()) && DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.GENERAL)) {
                 rs_s1.createOrUpdateDevice(di, node, null);
                 d = rs_s1.getDevice(di.dev);
               }
               di.prop = d.getProp();
               if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE) {
                 di.isOffline = true;
+              }
+              // FIXME: set quota here!
+              if (hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_QUOTA)) {
+                di.free = Math.min(di.free, (di.free + di.used) * di.getQuota() / 100);
               }
             }
           } catch (InvalidObjectException e) {
@@ -2243,8 +3236,9 @@ public class DiskManager {
           } catch (NoSuchObjectException e) {
             LOG.error(e, e);
           }
-          // ok, update it to admap
+          // ok, update it to admap and dnmap
           admap.put(di.dev, di);
+          addToDNMap(di.dev, node.getNode_name());
         }
       }
 
@@ -2295,7 +3289,7 @@ public class DiskManager {
           synchronized (toReRep) {
             if (!toReRep.containsKey(di.dev)) {
               toReRep.put(di.dev, System.currentTimeMillis());
-              admap.remove(di.dev);
+              removeFromADMap(di.dev, node.getNode_name());
               toUnspc.remove(di.dev);
             }
           }
@@ -2406,16 +3400,32 @@ public class DiskManager {
       return false;
     }
 
+    public boolean isNodeHasSD(String nodeName) {
+      NodeInfo ni = ndmap.get(nodeName);
+      if (ni != null) {
+        synchronized (ni) {
+          if (ni.dis != null) {
+            for (DeviceInfo di : ni.dis) {
+              if (di.getType() == MetaStoreConst.MDeviceProp.SHARED) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    }
+
     public boolean isSharedDevice(String devid) throws MetaException, NoSuchObjectException {
       DeviceInfo di = admap.get(devid);
       if (di != null) {
-        return (di.prop == MetaStoreConst.MDeviceProp.SHARED ||
-            di.prop == MetaStoreConst.MDeviceProp.BACKUP);
+        return (di.getType() == MetaStoreConst.MDeviceProp.SHARED ||
+            di.getType() == MetaStoreConst.MDeviceProp.BACKUP);
       } else {
         synchronized (rs) {
           Device d = rs.getDevice(devid);
-          if (d.getProp() == MetaStoreConst.MDeviceProp.SHARED ||
-              d.getProp() == MetaStoreConst.MDeviceProp.BACKUP) {
+          if (DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.SHARED ||
+              DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.BACKUP) {
             return true;
           } else {
             return false;
@@ -2440,7 +3450,7 @@ public class DiskManager {
           continue;
         }
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(node, ni.dis);
+          List<DeviceInfo> dis = filterTypeDevice(null, ni.dis);
           long thisfree = 0;
 
           if (dis == null) {
@@ -2489,7 +3499,7 @@ public class DiskManager {
       for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
         NodeInfo ni = entry.getValue();
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(entry.getKey(), ni.dis);
+          List<DeviceInfo> dis = filterTypeDevice(null, ni.dis);
           long thisfree = 0;
 
           if (dis == null) {
@@ -2539,7 +3549,7 @@ public class DiskManager {
       for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
         NodeInfo ni = entry.getValue();
         synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(entry.getKey(), ni.dis);
+          List<DeviceInfo> dis = filterTypeDevice(null, ni.dis);
 
           if (dis == null) {
             continue;
@@ -2577,6 +3587,14 @@ public class DiskManager {
       String mp;
       if (node_name == null || node_name.equals("")) {
         node_name = getAnyNode(devid);
+      } else if (node_name.contains(";")) {
+        List<String> nodes = getNodesByDevice(devid);
+        if (nodes.size() > 0) {
+          Random r = new Random();
+          node_name = (String) nodes.toArray()[r.nextInt(nodes.size())];
+        } else {
+          throw new MetaException("Can't find DEV '" + devid + "' in Node '" + node_name + "'.");
+        }
       }
       NodeInfo ni = ndmap.get(node_name);
       if (ni == null) {
@@ -2601,12 +3619,13 @@ public class DiskManager {
       public static final int RANDOM_DEVS = 6;
       public static final int EXCLUDE_DEVS_AND_RANDOM = 7;
       public static final int EXCLUDE_NODES_AND_RANDOM = 8;
-      public static final int USE_CACHE = 9;  // active both on node and dev mode
+      public static final int ORDERED_ALLOC = 9;  // active both on node and dev mode
 
       Set<String> nodes;
       Set<String> devs;
-      int node_mode;
-      int dev_mode;
+      public int node_mode;
+      public int dev_mode;
+      public List<Integer> accept_types; // try to alloc in list order
       boolean canIgnore;
 
       public String origNode;
@@ -2618,6 +3637,7 @@ public class DiskManager {
         this.dev_mode = dev_mode;
         this.canIgnore = canIgnore;
         this.origNode = null;
+        this.accept_types = null;
       }
 
       @Override
@@ -2651,65 +3671,72 @@ public class DiskManager {
       return canFind;
     }
 
-    private Set<String> findSharedDevs(List<DeviceInfo> devs) {
+    public Set<String> filterSharedDevs(List<DeviceInfo> devs) {
       Set<String> r = new TreeSet<String>();
 
       for (DeviceInfo di : devs) {
-        if (di.prop == MetaStoreConst.MDeviceProp.SHARED ||
-            di.prop == MetaStoreConst.MDeviceProp.BACKUP) {
+        if (di.getType() == MetaStoreConst.MDeviceProp.SHARED ||
+            di.getType() == MetaStoreConst.MDeviceProp.BACKUP) {
           r.add(di.dev);
         }
       }
       return r;
     }
 
+    // findBestNode()
+    //
+    // return largest free node based on FLP.
     public String findBestNode(FileLocatingPolicy flp) throws IOException {
       boolean isExclude = true;
 
       if (flp == null) {
-        return findBestNode(false);
+        return findBestNode_L123(false);
       }
       if (safeMode) {
         throw new IOException("Disk Manager is in Safe Mode, waiting for disk reports ...\n");
       }
       switch (flp.node_mode) {
-      case FileLocatingPolicy.USE_CACHE:
+      case FileLocatingPolicy.ORDERED_ALLOC:
       {
         TreeMap<String, Long> candidate = new TreeMap<String, Long>();
 
-        for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
-          NodeInfo ni = e.getValue();
-          if (ni.dis != null && ni.dis.size() > 0) {
-            for (DeviceInfo di : ni.dis) {
-              if (di.prop == MetaStoreConst.MDeviceProp.CACHE && !di.isOffline) {
-                // ok, this node is a candidate
-                Long oldfree = candidate.get(e.getKey());
-                if (oldfree == null) {
-                  candidate.put(e.getKey(), di.free);
-                } else {
-                  candidate.put(e.getKey(), oldfree + di.free);
+        for (Integer dtype : flp.accept_types) {
+          candidate.clear();
+          for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
+            NodeInfo ni = e.getValue();
+            if (ni.dis != null && ni.dis.size() > 0) {
+              for (DeviceInfo di : ni.dis) {
+                if (di.getType() == dtype && !di.isOffline) {
+                  // ok, this node is a candidate
+                  Long oldfree = candidate.get(e.getKey());
+                  if (oldfree == null) {
+                    candidate.put(e.getKey(), di.free);
+                  } else {
+                    candidate.put(e.getKey(), oldfree + di.free);
+                  }
                 }
               }
             }
           }
-        }
-        // find the LARGEST 3 nodes, and random select one
-        if (candidate.size() == 0) {
-          return null;
-        } else {
-          Random r = new Random();
-          __trim_candidate(candidate, 3);
-          String[] a = candidate.keySet().toArray(new String[0]);
-          if (a.length > 0) {
-            return a[r.nextInt(a.length)];
+          // find the LARGEST 5 nodes, and random select one
+          if (candidate.size() == 0) {
+            continue;
           } else {
-            return null;
+            Random r = new Random();
+            __trim_candidate(candidate, 5);
+            String[] a = candidate.keySet().toArray(new String[0]);
+            if (a.length > 0) {
+              return a[r.nextInt(a.length)];
+            } else {
+              continue;
+            }
           }
         }
+        return null;
       }
       case FileLocatingPolicy.EXCLUDE_NODES:
         if (flp.nodes == null || flp.nodes.size() == 0) {
-          return findBestNode(false);
+          return findBestNode_L123(false);
         }
         break;
       case FileLocatingPolicy.SPECIFY_NODES:
@@ -2732,11 +3759,12 @@ public class DiskManager {
           }
         }
       case FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM:
-        // random select one node from largest node set
+        // random select one node from largest node set or specified type list
         Random r = new Random();
         List<String> nodes = new ArrayList<String>();
-        __select_some_nodes(nodes, Math.min(ndmap.size() / 5 + 1, 3), flp.nodes);
-        LOG.debug("Random select in nodes: " + nodes);
+        __select_some_nodes(nodes, Math.min(ndmap.size() / 5 + 1, 3),
+            flp.nodes, flp.accept_types);
+        LOG.debug("Random select in nodes: " + nodes + ", excl: " + flp.nodes);
         if (nodes.size() > 0) {
           return nodes.get(r.nextInt(nodes.size()));
         } else {
@@ -2764,7 +3792,7 @@ public class DiskManager {
             }
             if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_SHARED ||
                 flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
-              excludeDevs.addAll(findSharedDevs(dis));
+              excludeDevs.addAll(filterSharedDevs(dis));
             }
             if (!canFindDevices(ni, excludeDevs)) {
               ignore = true;
@@ -2788,13 +3816,16 @@ public class DiskManager {
       }
       if (largestNode == null && flp.canIgnore) {
         // FIXME: replicas ignore NODE GROUP settings?
-        return findBestNode(false);
+        return findBestNode_L123(false);
       }
 
       return largestNode;
     }
 
-    public String findBestNode(boolean ignoreShared) throws IOException {
+    // findBestNode_L123()
+    //
+    // return largest free nodes(count for L1,L2,L3(if false) devices).
+    public String findBestNode_L123(boolean ignoreShared) throws IOException {
       if (safeMode) {
         throw new IOException("Disk Manager is in Safe Mode, waiting for disk reports ...\n");
       }
@@ -2812,10 +3843,10 @@ public class DiskManager {
           }
           for (DeviceInfo di : dis) {
             // Do not calculate cache device's space
-            if (di.prop == MetaStoreConst.MDeviceProp.CACHE) {
+            if (di.getType() == MetaStoreConst.MDeviceProp.CACHE) {
               continue;
             }
-            if (!(ignoreShared && (di.prop == MetaStoreConst.MDeviceProp.SHARED || di.prop == MetaStoreConst.MDeviceProp.BACKUP))) {
+            if (!(ignoreShared && (di.getType() == MetaStoreConst.MDeviceProp.SHARED || di.getType() == MetaStoreConst.MDeviceProp.BACKUP))) {
               thisfree += di.free;
             }
           }
@@ -2827,42 +3858,6 @@ public class DiskManager {
       }
 
       return largestNode;
-    }
-
-    public void findBackupDevice(Set<String> dev, Set<String> node) {
-      for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
-        List<DeviceInfo> dis = e.getValue().dis;
-        if (dis != null) {
-          for (DeviceInfo di : dis) {
-            // Note: ignore almost full backup device here
-            if (di.isOffline || di.free < 1024 * 1024) {
-              continue;
-            }
-            if (di.prop == MetaStoreConst.MDeviceProp.BACKUP || di.prop == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
-              dev.add(di.dev);
-              node.add(e.getKey());
-            }
-          }
-        }
-      }
-    }
-
-    public void findCacheDevice(Set<String> dev, Set<String> node) {
-      for (Map.Entry<String, NodeInfo> e : ndmap.entrySet()) {
-        List<DeviceInfo> dis = e.getValue().dis;
-        if (dis != null) {
-          for (DeviceInfo di : dis) {
-            // Note: ignore almost full cache device here
-            if (di.isOffline || di.free < 1024 * 1024) {
-              continue;
-            }
-            if (di.prop == MetaStoreConst.MDeviceProp.BACKUP || di.prop == MetaStoreConst.MDeviceProp.BACKUP_ALONE) {
-              dev.add(di.dev);
-              node.add(e.getKey());
-            }
-          }
-        }
-      }
     }
 
     // filter offline device either
@@ -2882,21 +3877,58 @@ public class DiskManager {
       return r;
     }
 
-    // filter backup device and offline device both, and cache device either
-    private List<DeviceInfo> filterSharedOfflineCacheDevice(String node_name, List<DeviceInfo> orig) {
+    private List<DeviceInfo> generalDeviceFilter(List<DeviceInfo> orig, Set<Integer> accept_types, boolean filter_offline) {
       List<DeviceInfo> r = new ArrayList<DeviceInfo>();
 
       if (orig != null) {
         for (DeviceInfo di : orig) {
-          if (di.isOffline) {
+          if ((filter_offline && di.isOffline) || di.free < 1024 * 1024) {
             continue;
           }
-          if (di.prop == MetaStoreConst.MDeviceProp.ALONE) {
+          if (accept_types.contains(di.getType())) {
             r.add(di);
           }
         }
       }
+      return r;
+    }
 
+    // filter backup device and offline device both, and cache device either
+    private List<DeviceInfo> filterTypeDevice(List<Integer> accept_types_list,
+        List<DeviceInfo> orig) {
+      Set<Integer> accept_types = new HashSet<Integer>();
+      if (accept_types_list == null || accept_types_list.size() == 0) {
+        accept_types.add(MetaStoreConst.MDeviceProp.GENERAL);
+      } else {
+        accept_types.addAll(accept_types_list);
+      }
+      return generalDeviceFilter(orig, accept_types, true);
+    }
+
+    public Set<String> findSharedDevs() {
+      Set<Integer> accept_types = new HashSet<Integer>();
+      Set<String> r = new HashSet<String>();
+
+      accept_types.add(MetaStoreConst.MDeviceProp.SHARED);
+      accept_types.add(MetaStoreConst.MDeviceProp.BACKUP);
+
+      for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
+        NodeInfo ni = entry.getValue();
+        synchronized (ni) {
+          List<DeviceInfo> dis = ni.dis;
+
+          if (ni.dis == null) {
+            continue;
+          }
+          dis = generalDeviceFilter(ni.dis, accept_types, false);
+          if (dis == null || dis.size() == 0) {
+            continue;
+          }
+          for (DeviceInfo di : dis) {
+            r.add(di.dev);
+          }
+        }
+      }
       return r;
     }
 
@@ -2912,48 +3944,65 @@ public class DiskManager {
       }
     }
 
-    private void __select_some_nodes(List<String> nodes, int nr, Set<String> excl) {
+    // BUG-XXX: we have to preserve the accept types order here!
+    //
+    // Try to select in higher level order
+    private void __select_some_nodes(List<String> nodes, int nr, Set<String> excl,
+        List<Integer> accept_types) {
       if (nr <= 0) {
         return;
       }
-      TreeMap<Long, String> m = new TreeMap<Long, String>();
 
-      for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
-        if (excl != null && excl.contains(entry.getKey())) {
-          continue;
-        }
+      if (accept_types == null || accept_types.size() == 0) {
+        accept_types.addAll(default_orders);
+      }
 
-        NodeInfo ni = entry.getValue();
-        synchronized (ni) {
-          List<DeviceInfo> dis = filterSharedOfflineCacheDevice(entry.getKey(), ni.dis);
-          long thisfree = 0;
+      for (Integer dtype : accept_types) {
+        List<Integer> stype = new ArrayList<Integer>();
+        TreeMap<Long, String> m = new TreeMap<Long, String>();
 
-          if (dis == null) {
+        stype.add(dtype);
+
+        for (Map.Entry<String, NodeInfo> entry : ndmap.entrySet()) {
+          if (excl != null && excl.contains(entry.getKey())) {
             continue;
           }
-          for (DeviceInfo di : dis) {
-            thisfree += di.free;
-          }
-          if (thisfree > 0) {
-            m.put(thisfree, entry.getKey());
+
+          NodeInfo ni = entry.getValue();
+          synchronized (ni) {
+            List<DeviceInfo> dis = filterTypeDevice(stype, ni.dis);
+            long thisfree = 0;
+
+            if (dis == null) {
+              continue;
+            }
+            for (DeviceInfo di : dis) {
+              thisfree += di.free;
+            }
+            if (thisfree > 0) {
+              m.put(thisfree, entry.getKey());
+            }
           }
         }
-      }
-      int i = 0;
-      for (Long key : m.descendingKeySet()) {
-        if (i >= nr) {
-          break;
-        }
-        // NOTE-XXX: if this node's load1 is too large, reject to select it
-        NodeInfo ni = ndmap.get(m.get(key));
-        if (ni != null) {
-          if (ni.load1 < 100) {
+        int i = 0;
+        for (Long key : m.descendingKeySet()) {
+          if (i >= nr) {
+            break;
+          }
+          // NOTE-XXX: if this node's load1 is too large, reject to select it
+          NodeInfo ni = ndmap.get(m.get(key));
+          if (ni != null) {
+            if (ni.load1 < 50) {
+              nodes.add(m.get(key));
+              i++;
+            }
+          } else {
             nodes.add(m.get(key));
             i++;
           }
-        } else {
-          nodes.add(m.get(key));
-          i++;
+        }
+        if (nodes.size() > 0) {
+          break;
         }
       }
     }
@@ -3057,24 +4106,29 @@ public class DiskManager {
           flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
         // this two mode only used in selecting primary replica!
         synchronized (ni) {
-          dilist = filterSharedOfflineCacheDevice(node, ni.dis);
+          dilist = filterTypeDevice(flp.accept_types, ni.dis);
         }
-      } else if (flp.dev_mode == FileLocatingPolicy.USE_CACHE) {
-        if (ni.dis != null) {
+      } else if (flp.dev_mode == FileLocatingPolicy.ORDERED_ALLOC) {
+        if (ni.dis == null) {
+          return null;
+        }
+        for (Integer dtype : flp.accept_types) {
+          dilist.clear();
           for (DeviceInfo di : ni.dis) {
-            if (di.prop == MetaStoreConst.MDeviceProp.CACHE) {
+            if (di.getType() == dtype && !di.isOffline) {
               dilist.add(di);
             }
           }
+          // find the LARGEST 3 devices in current type, and random select one
+          __trim_dilist(dilist, 3, null);
+          Random r = new Random();
+          if (dilist.size() > 0) {
+            return dilist.get(r.nextInt(dilist.size())).dev;
+          } else {
+            continue;
+          }
         }
-        // find the LARGEST 3 devices, and random select one
-        __trim_dilist(dilist, 3, null);
-        Random r = new Random();
-        if (dilist.size() > 0) {
-          return dilist.get(r.nextInt(dilist.size())).dev;
-        } else {
-          return null;
-        }
+        return null;
       } else {
         // ignore offline device
         dilist = filterOfflineDevice(node, ni.dis);
@@ -3113,7 +4167,7 @@ public class DiskManager {
             }
           }
         } else if (flp.dev_mode == FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM) {
-          // random select a device and exclude used devs
+          // random select a device (in some types) and exclude used devs
           if (dilist == null) {
             return null;
           } else {
@@ -3299,7 +4353,7 @@ public class DiskManager {
           }
           // BUG-XXX: we should wait a moment to passively update the state.
           if (r.op == DMRequest.DMROperation.REPLICATE) {
-            FileLocatingPolicy flp, flp_default, flp_backup;
+            FileLocatingPolicy flp, flp_default;
             Set<String> excludes = new TreeSet<String>();
             Set<String> excl_dev = new TreeSet<String>();
             Set<String> spec_dev = new TreeSet<String>();
@@ -3314,10 +4368,6 @@ public class DiskManager {
               release_rep_limit();
               continue;
             }
-            // find backup device
-            findBackupDevice(spec_dev, spec_node);
-            LOG.debug("Try to write to backup device firstly: N <" + Arrays.toString(spec_node.toArray()) +
-                ">, D <" + Arrays.toString(spec_dev.toArray()) + ">");
 
             // exclude old file locations
             for (int i = 0; i < r.begin_idx; i++) {
@@ -3369,25 +4419,44 @@ public class DiskManager {
               continue;
             }
 
-            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev, FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM, FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, true);
-            flp_backup = new FileLocatingPolicy(spec_node, spec_dev, FileLocatingPolicy.SPECIFY_NODES, FileLocatingPolicy.SPECIFY_DEVS, true);
-            flp_backup.origNode = r.file.getLocations().get(master).getNode_name();
+            flp = flp_default = new FileLocatingPolicy(excludes, excl_dev,
+                FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM,
+                FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, true);
 
             for (int i = r.begin_idx; i < r.file.getRep_nr(); i++, flp = flp_default) {
               if (i == r.begin_idx) {
                 // TODO: Use FLSelector here to decide whether we need replicate it to CACHE device
-                if (spec_dev.size() > 0) {
-                  flp = flp_backup;
+                String table = r.file.getDbName() + "." + r.file.getTableName();
+                switch (flselector.FLSelector_switch(table)) {
+                default:
+                case NONE:
+                  break;
+                case FAIR_NODES:
+                case ORDERED_ALLOC_DEVS:
+                  flp.dev_mode = FileLocatingPolicy.ORDERED_ALLOC;
+                  break;
                 }
+                flp.accept_types = flselector.getDevTypeListAfterIncludeHint(table,
+                    MetaStoreConst.MDeviceProp.__AUTOSELECT_R2__);
               }
               try {
                 String node_name = findBestNode(flp);
                 if (node_name == null) {
                   LOG.warn("Could not find any best node to replicate file " + r.file.getFid());
+                  r.failnr++;
                   r.begin_idx = i;
-                  // insert back to the queue;
-                  synchronized (repQ) {
-                    repQ.add(r);
+                  if (r.failnr <= 50) {
+                    // insert back to the queue;
+                    synchronized (repQ) {
+                      repQ.add(r);
+                      repQ.notify();
+                    }
+                  } else {
+                    LOG.error("[FLP] Drop REP request: fid " + r.file.getFid() + ", faield " + r.failnr);
+                  }
+                  try {
+                    Thread.sleep(500);
+                  } catch (InterruptedException el) {
                   }
                   release_rep_limit();
                   break;
@@ -3519,7 +4588,7 @@ public class DiskManager {
                     repQ.notify();
                   }
                 } else {
-                  LOG.error("Drop REP request: fid " + r.file.getFid() + ", failed " + r.failnr);
+                  LOG.error("[DEV] Drop REP request: fid " + r.file.getFid() + ", failed " + r.failnr);
                 }
                 try {
                   Thread.sleep(500);
@@ -3745,6 +4814,20 @@ public class DiskManager {
           runner.start();
         }
 
+        // if we have detected one SLAVE cmd, just ignore other cms.
+        private boolean __handle_slave_report(DMReport report) {
+          if (report.replies != null && report.replies.size() > 0) {
+            for (DMReply dmr : report.replies) {
+              if (dmr.type == DMReply.DMReplyType.SLAVE) {
+                LOG.info("Detect one MS slave at " + dmr.args);
+                alternateURI = dmr.args;
+                return true;
+              }
+            }
+          }
+          return false;
+        }
+
         @Override
         public void run() {
           while (true) {
@@ -3758,7 +4841,6 @@ public class DiskManager {
                 continue;
               }
               String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
-              //LOG.debug("RECV: " + recvStr);
 
               DMReport report = parseReport(recvStr);
 
@@ -3779,6 +4861,15 @@ public class DiskManager {
                   LOG.error(e, e);
                 }
               } else {
+                // NOTE-XXX: handle SLAVE report here!
+                if (__handle_slave_report(report)) {
+                  continue;
+                }
+                // NOTE-XXX: handle audit report here!
+                if (report.isAuditRpt) {
+                  sm.dsfstat.updateDMAudit(report.replies);
+                  continue;
+                }
                 try {
                   synchronized (rs_s1) {
                     reportNode = rs_s1.getNode(report.node);
@@ -3896,6 +4987,17 @@ public class DiskManager {
                   addToNDMap(System.currentTimeMillis(), reportNode, report.dil);
                 }
 
+                // 3.0- Check if we are in slave role.
+                // Only do report handling in master role.
+                switch (role) {
+                default:
+                case SLAVE:
+                  LOG.debug("SLAVE  RECV: " + recvStr);
+                  continue;
+                case MASTER:
+                  LOG.debug("MASTER RECV: " + recvStr);
+                }
+
                 // 3. finally, add this report entry to queue
                 synchronized (reportQueue) {
                   reportQueue.add(report);
@@ -3921,6 +5023,15 @@ public class DiskManager {
         // +REP:node,devid,location
         // +REP:node,devid,location
         // ...
+        //
+        // or
+        //
+        // +node:node_name
+        // +CMD
+        // +CMD
+        // +A:13800000,devid,location,VFSOperation
+        // +A:13800000,devid,location,VFSOperation
+        // ...
         public String node = null;
         public List<DeviceInfo> dil = null;
         public List<DMReply> replies = null;
@@ -3930,6 +5041,9 @@ public class DiskManager {
         DatagramPacket recvPacket = null;
         Node reportNode = null;
         NodeInfo oni = null;
+
+        // is audit report?
+        public boolean isAuditRpt = false;
 
         @Override
         public String toString() {
@@ -3967,6 +5081,16 @@ public class DiskManager {
           r.node = reports[0].substring(0, reports[0].indexOf('\n')).replaceFirst("\\+node:", "");
           r.dil = parseDevices(reports[0].substring(reports[0].indexOf('\n') + 1));
           r.replies = parseCmds(reports[1]);
+          break;
+        case 3:
+          // contains profile report, example format is:
+          // +node:xxxxxx
+          // +CMD
+          // +CMD
+          // +A:TAG,13800000,devid,location,VFSOperation
+          r.isAuditRpt = true;
+          r.node = reports[0].substring(0, reports[0].indexOf('\n')).replaceFirst("\\+node:", "");
+          r.replies = parseCmds(reports[2]);
           break;
         default:
           LOG.error("parseReport '" + recv + "' error.");
@@ -4040,6 +5164,14 @@ public class DiskManager {
           } else if (cmds[i].startsWith("+VERIFY:")) {
             dmr.type = DMReply.DMReplyType.VERIFY;
             dmr.args = cmds[i].substring(8);
+            r.add(dmr);
+          } else if (cmds[i].startsWith("+SLAVE:")) {
+            dmr.type = DMReply.DMReplyType.SLAVE;
+            dmr.args = cmds[i].substring(7);
+            r.add(dmr);
+          } else if (cmds[i].startsWith("+A:")) {
+            dmr.type = DMReply.DMReplyType.AUDIT;
+            dmr.args = cmds[i].substring(3);
             r.add(dmr);
           }
         }
@@ -4191,7 +5323,9 @@ public class DiskManager {
                           SFileLocation sfl = rs.getSFileLocation(args[1], args[2]);
                           if (sfl != null) {
                             SFile file = rs.getSFile(sfl.getFid());
-                            toCheckDel.add(file);
+                            if (file != null) {
+                              toCheckDel.add(file);
+                            }
                             rs.delSFileLocation(args[1], args[2]);
                           }
                         }
@@ -4226,7 +5360,7 @@ public class DiskManager {
                               LOG.error(e, e);
                             }
                             LOG.info("Verify change dev: " + args[1] + " loc: " + args[2] + " sfl state from SUSPECT to ONLINE.");
-                          }
+                          }	//
                         }
                       }
                     }
@@ -4446,6 +5580,47 @@ public class DiskManager {
           } catch (Exception e) {
             LOG.error(e, e);
           }
+        }
+      }
+    }
+
+    public static void main(String[] args) throws Exception {
+      HiveConf hiveConf = new HiveConf();
+
+      MulticastSocket server = new MulticastSocket(hiveConf.getIntVar(HiveConf.ConfVars.DISKMANAGERLISTENPORT));
+      server.setTimeToLive(5);
+      server.joinGroup(InetAddress.getByName(
+            hiveConf.getVar(HiveConf.ConfVars.DM_MCAST_GROUP_IP)));
+
+      while (true) {
+        try {
+          byte[] recvBuf = new byte[65536];
+          DatagramPacket recvPacket = new DatagramPacket(recvBuf , recvBuf.length);
+          try {
+            server.receive(recvPacket);
+          } catch (IOException e) {
+            e.printStackTrace();
+            continue;
+          }
+
+          String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
+          System.out.println("RECV: " + recvStr);
+
+          String sendStr = "+OK\n";
+
+          // send back the reply
+          int port = recvPacket.getPort();
+          byte[] sendBuf;
+          sendBuf = sendStr.getBytes();
+          DatagramPacket sendPacket = new DatagramPacket(sendBuf , sendBuf.length ,
+              recvPacket.getAddress() , port );
+          try {
+            server.send(sendPacket);
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
         }
       }
     }

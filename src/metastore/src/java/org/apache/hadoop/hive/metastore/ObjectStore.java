@@ -733,7 +733,9 @@ public class ObjectStore implements RawStore, Configurable {
   }
 
   public boolean dropDatabase(String dbname) throws NoSuchObjectException, MetaException {
+    String db_name = dbname;
     boolean success = false;
+
     LOG.info("Dropping database " + dbname + " along with all tables");
     dbname = dbname.toLowerCase();
     try {
@@ -744,14 +746,13 @@ public class ObjectStore implements RawStore, Configurable {
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(db).toString()));
       pm.retrieve(db);
       if (db != null) {
+        db_name = db.getName();
         List<MDBPrivilege> dbGrants = this.listDatabaseGrants(dbname);
         if (dbGrants != null && dbGrants.size() > 0) {
           pm.deletePersistentAll(dbGrants);
         }
         pm.deletePersistent(db);
       }
-      String db_name = db.getName();
-
 
       success = commitTransaction();
       HashMap<String,Object> old_params= new HashMap<String,Object>();
@@ -2033,7 +2034,7 @@ public class ObjectStore implements RawStore, Configurable {
         doCreate = true;
       }
       if (!md.getNode().getNode_name().equals(node.getNode_name()) &&
-          md.getProp() == MetaStoreConst.MDeviceProp.ALONE) {
+          DeviceInfo.getType(md.getProp()) == MetaStoreConst.MDeviceProp.GENERAL) {
         LOG.info("Saved " + md.getNode().getNode_name() + ", this " + node.getNode_name());
         // should update it.
         MNode mn = getMNode(node.getNode_name());
@@ -2752,8 +2753,8 @@ public class ObjectStore implements RawStore, Configurable {
             MFileLocation x = mfl.get(i);
 
             if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE &&
-                (x.getDev().getProp() == MetaStoreConst.MDeviceProp.ALONE ||
-                x.getDev().getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE)) {
+                (DeviceInfo.getType(x.getDev().getProp()) == MetaStoreConst.MDeviceProp.GENERAL ||
+                DeviceInfo.getType(x.getDev().getProp()) == MetaStoreConst.MDeviceProp.BACKUP_ALONE)) {
               selected = true;
               idx = i;
               break;

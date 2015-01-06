@@ -2485,4 +2485,30 @@ public boolean authentication(String user_name, String passwd)
       throws InvalidObjectException, MetaException, TException {
     return client.get_busi_type_schema_cols_by_name(schemaName);
   }
+
+  public int replicate(long fid, int dtype) throws MetaException, FileOperationException,
+      TException {
+    return client.replicate(fid, dtype);
+  }
+
+  @Override
+  public boolean update_ms_service(int status) throws MetaException, TException {
+    return client.update_ms_service(status);
+  }
+
+  @Override
+  public String get_ms_uris() throws MetaException, TException {
+    return client.get_ms_uris();
+  }
+
+  @Override
+  public boolean update_sfile_nrs(long fid, long rec_nr, long all_rec_nr, long length) throws MetaException,
+      FileOperationException, TException {
+    return client.update_sfile_nrs(fid, rec_nr, all_rec_nr, length);
+  }
+
+  @Override
+  public String getSysInfo() throws MetaException, TException {
+    return client.getSysInfo();
+  }
 }

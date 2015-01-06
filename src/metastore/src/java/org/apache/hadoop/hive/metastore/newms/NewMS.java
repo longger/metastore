@@ -139,22 +139,25 @@ public class NewMS {
 	    int err = 0;
 
 	    try {
-	      jedis = rf.getDefaultInstance();
-	      String fid = RawStoreImp.getFid() + "";
-	      jedis.set("g_fid", fid);
-	      LOG.info("Store current g_fid " + fid + " into redis.");
-	    } catch(JedisException e) {
-	      LOG.warn(e, e);
-	      err = -1;
-	    } finally{
-	      if (err < 0) {
-	        RedisFactory.putBrokenInstance(jedis);
-	      } else {
-	        RedisFactory.putInstance(jedis);
+	      try {
+	        jedis = rf.getDefaultInstance();
+	        String fid = RawStoreImp.getFid() + "";
+	        jedis.set("g_fid", fid);
+	        LOG.info("Store current g_fid " + fid + " into redis.");
+	      } catch(JedisException e) {
+	        LOG.warn(e, e);
+	        err = -1;
+	      } finally{
+	        if (err < 0) {
+	          RedisFactory.putBrokenInstance(jedis);
+	        } else {
+	          RedisFactory.putInstance(jedis);
+	        }
 	      }
+	    } catch (Exception e) {
+	      LOG.error(e, e);
 	    }
 	  }
-
 	}
 
 	public static void main(String[] args) throws Throwable {
