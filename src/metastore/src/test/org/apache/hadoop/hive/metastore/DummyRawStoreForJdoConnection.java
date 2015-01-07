@@ -70,6 +70,7 @@ import org.apache.hadoop.hive.metastore.model.MRoleMap;
 import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
 import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
 import org.apache.hadoop.hive.metastore.model.MUser;
+import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.thrift.TException;
 
 /**
@@ -180,9 +181,9 @@ public class DummyRawStoreForJdoConnection implements RawStore {
   }
 
   @Override
-  public void createTable(Table tbl) throws InvalidObjectException, MetaException {
+  public DDLMsg createTable(Table tbl) throws InvalidObjectException, MetaException {
 
-
+    return null;
   }
 
   @Override
