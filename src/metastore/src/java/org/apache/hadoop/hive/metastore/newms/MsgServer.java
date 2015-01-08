@@ -56,14 +56,14 @@ public class MsgServer {
 		    ", localQueue " + localQueue.size());
 		return queue.isEmpty() && failed_queue.isEmpty() && localQueue.isEmpty();
 	}
-	public static void addMsg(DDLMsg msg) {
-		//通过发送线程发送到metaq的
-		if(initalized)		//启动了发送线程才往这个队列里加消息
-		{
-			queue.add(msg);
-			send.release();
-		}
 
+	public static void pdSend(DDLMsg msg) {
+	  if (initalized) {
+	    queue.add(msg);
+	    send.release();
+	  }
+	}
+	public static void addMsg(DDLMsg msg) {
 		//用来给本地消费
 		int eventid = (int) msg.getEvent_id();
 		switch(eventid){
@@ -92,7 +92,11 @@ public class MsgServer {
 	public static void startConsumer(String zkaddr, String topic, String group) throws Exception
 	{
 		Consumer c = new Consumer(zkaddr, topic, group);
-		c.consume();
+		// Note-XXX: for old2new process, do NOT consume msg, otherwise, message in oldms
+		// will be consumed.
+		if (conf.getBoolVar(ConfVars.NEWMS_CONSUME_MSG)) {
+		  c.consume();
+		}
 		c.startMsgProcessing();
 	}
 
@@ -119,8 +123,8 @@ public class MsgServer {
 	private static boolean sendDDLMsg(DDLMsg msg) {
 		String jsonMsg = "";
 
-		jsonMsg = MSGFactory.getMsgData(msg);
-		LOG.info("---zjw-- send ddl msg:" + jsonMsg);
+		jsonMsg = MSGFactory.getMsgData2(msg);
+		LOG.info("---zjw-- send ddl msg to topic=" + Producer.topic + ":" + jsonMsg);
 		boolean success = false;
 
 		success = retrySendMsg(jsonMsg, times);
@@ -223,7 +227,6 @@ public class MsgServer {
     private static String  zkAddr = conf.getVar(ConfVars.ZOOKEEPERADDRESS);
 
     private Producer() {
-
         //设置zookeeper地址
         zkConfig.zkConnect = zkAddr;
         metaClientConfig.setZkConfig(zkConfig);
@@ -252,8 +255,6 @@ public class MsgServer {
     }
 
     boolean sendMsg(String msg) throws MetaClientException, InterruptedException{
-//        LOG.debug("in send msg:"+msg);
-
         if(producer == null){
           connect();
           if(producer == null){
@@ -344,20 +345,29 @@ public class MsgServer {
 				    }
 				  }
 					String data = new String(message.getData());
-					LOG.info("Consume msg from metaq: " + data);
+					LOG.info("Consume msg from metaq's topic=" + topic + ": " + data);
 					int time = 0;
 					DDLMsg msg = DDLMsg.fromJson(data);
-					// NOTE-XXX: ignore file-related messages
+					// FIXME: if we are in IS_OLD_WITH_NEW mode, we can ignore file-related ops
 					if (conf.getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW) && (
 					    msg.getEvent_id() == MSGType.MSG_CREATE_FILE ||
 					    msg.getEvent_id() == MSGType.MSG_DEL_FILE ||
 					    msg.getEvent_id() == MSGType.MSG_REP_FILE_CHANGE ||
 					    msg.getEvent_id() == MSGType.MSG_REP_FILE_ONOFF ||
 					    msg.getEvent_id() == MSGType.MSG_STA_FILE_CHANGE ||
-					    msg.getEvent_id() == MSGType.MSG_FILE_USER_SET_REP_CHANGE
+					    msg.getEvent_id() == MSGType.MSG_FILE_USER_SET_REP_CHANGE ||
+					    msg.getEvent_id() == MSGType.MSG_FAIL_NODE ||
+					    msg.getEvent_id() == MSGType.MSG_BACK_NODE
+					    // BUG-XXX: if we ignore CREATE_DEVICE and DEL_DEVICE, we can NOT
+					    // handle online/offline device
+					    //msg.getEvent_id() == MSGType.MSG_CREATE_DEVICE ||
+					    //msg.getEvent_id() == MSGType.MSG_DEL_DEVICE
 					    )) {
+					  // Resend by NewMS from OldMS to meta-test topic
+					  MsgServer.pdSend(msg);
 					  return;
 					}
+
 					while (time <= 3) {
 						if (time >= 3) {
 							failedq.add(msg);
@@ -439,7 +449,9 @@ public class MsgServer {
 									ob.createFileLocation(sfl);
 								} catch (Exception e) {
 									LOG.error(e,e);
-									LOG.error("handle msg failed: " + msg.toJson());
+									LOG.error("handle msg failed(resend by newms): " + msg.toJson());
+									msg.getOld_object_params().put("__type", "newms");
+									MsgServer.pdSend(msg);
 								}
 	          	}
 	          	if (op.equals("del")) {
@@ -447,7 +459,9 @@ public class MsgServer {
 									ob.delSFileLocation(sfl.getDevid(), sfl.getLocation());
 								} catch (MetaException e) {
 									LOG.error(e,e);
-									LOG.error("handle msg failed: " + msg.toJson());
+									LOG.error("handle msg failed(resend by newms): " + msg.toJson());
+									msg.getOld_object_params().put("__type", "newms");
+									MsgServer.pdSend(msg);
 								}
 	          	}
 	          	break;
@@ -460,7 +474,9 @@ public class MsgServer {
 								ob.updateSFile(sf);
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.error("handle msg failed: " + msg.toJson());
+								LOG.error("handle msg failed(resend by newms): " + msg.toJson());
+								msg.getOld_object_params().put("__type", "newms");
+								MsgServer.pdSend(msg);
 							}
 
 	          	break;
@@ -472,7 +488,9 @@ public class MsgServer {
 								ob.updateSFileLocation(sfl);
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.error("handle msg failed: " + msg.toJson());
+								LOG.error("handle msg failed(resend by newms): " + msg.toJson());
+								msg.getOld_object_params().put("__type", "newms");
+								MsgServer.pdSend(msg);
 							}
 	          	break;
 	          }
@@ -483,7 +501,9 @@ public class MsgServer {
 								ob.persistFile(sf);
 							} catch (Exception e) {
 								LOG.error(e,e);
-								LOG.error("handle msg failed: " + msg.toJson());
+								LOG.error("handle msg failed(resend by newms): " + msg.toJson());
+								msg.getOld_object_params().put("__type", "newms");
+								MsgServer.pdSend(msg);
 							}
 	          	break;
 	          }
@@ -499,7 +519,9 @@ public class MsgServer {
 								ob.delSFile(sf.getFid());
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.error("handle msg failed: " + msg.toJson());
+								LOG.error("handle msg failed(resend by newms): " + msg.toJson());
+								msg.getOld_object_params().put("__type", "newms");
+								MsgServer.pdSend(msg);
 							}
 	          	break;
 						}
@@ -511,11 +533,12 @@ public class MsgServer {
 								ob.updateNode(n);
 							} catch (MetaException e) {
 								LOG.error(e,e);
-								LOG.error("handle msg failed: " + msg.toJson());
+								LOG.error("handle msg failed(resend by newms): " + msg.toJson());
+								msg.getOld_object_params().put("__type", "newms");
+								MsgServer.pdSend(msg);
 							}
 	          	break;
 	          }
-
 	          case MSGType.MSG_CREATE_DEVICE:
 	          {
 	          	Device d = (Device) msg.getEventObject();
@@ -523,7 +546,9 @@ public class MsgServer {
 	          		ob.createDevice(d);
 	          	} catch (MetaException e){
 	          		LOG.error(e,e);
-								LOG.error("handle msg failed: " + msg.toJson());
+	          		LOG.error("handle msg failed(resend by newms): " + msg.toJson());
+	          		msg.getOld_object_params().put("__type", "newms");
+	          		MsgServer.pdSend(msg);
 	          	}
 	          	break;
 	          }
@@ -534,7 +559,9 @@ public class MsgServer {
 	          		ob.delDevice(devid);
 	          	} catch (MetaException e){
 	          		LOG.error(e,e);
-								LOG.error("handle msg failed: " + msg.toJson());
+								LOG.error("handle msg failed(resend by newms): " + msg.toJson());
+								msg.getOld_object_params().put("__type", "newms");
+								MsgServer.pdSend(msg);
 	          	}
 	          	break;
 	          }
