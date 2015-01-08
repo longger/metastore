@@ -28,13 +28,10 @@ import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.common.JavaUtils;
 import org.apache.hadoop.hive.common.classification.InterfaceAudience;
 import org.apache.hadoop.hive.common.classification.InterfaceStability;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.MetaException;
-import org.apache.hadoop.hive.metastore.hooks.JDOConnectionURLHook;
-import org.apache.hadoop.util.ReflectionUtils;
 
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
@@ -43,7 +40,7 @@ public class RetryingHMSHandler implements InvocationHandler {
   private static final Log LOG = LogFactory.getLog(RetryingHMSHandler.class);
 
   private final IHMSHandler base;
-  private MetaStoreInit.MetaStoreInitData metaStoreInitData =
+  private final MetaStoreInit.MetaStoreInitData metaStoreInitData =
     new MetaStoreInit.MetaStoreInitData();
   private final HiveConf hiveConf;
 
@@ -114,10 +111,12 @@ public class RetryingHMSHandler implements InvocationHandler {
             caughtException = e.getCause();
           }
           else {
+            LOG.error(ExceptionUtils.getStackTrace(e.getCause()));
             throw e.getCause();
           }
         }
         else {
+          LOG.error(ExceptionUtils.getStackTrace(e));
           throw e;
         }
       } catch (InvocationTargetException e) {
@@ -127,11 +126,13 @@ public class RetryingHMSHandler implements InvocationHandler {
           caughtException = e.getCause();
         }
         else {
+          LOG.error(ExceptionUtils.getStackTrace(e.getCause()));
           throw e.getCause();
         }
       }
 
       if (retryCount >= retryLimit) {
+        LOG.error(ExceptionUtils.getStackTrace(caughtException));
         // Since returning exceptions with a nested "cause" can be a problem in
         // Thrift, we are stuffing the stack trace into the message itself.
         throw new MetaException(ExceptionUtils.getStackTrace(caughtException));
