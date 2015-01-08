@@ -226,6 +226,7 @@ public class MsgProcessing {
       return;
     }
 		int eventid = (int) msg.getEvent_id();
+
 		try {
 		  switch (eventid) {
 		  case MSGType.MSG_NEW_DATABESE:
@@ -276,8 +277,12 @@ public class MsgProcessing {
 		    String dbName = (String) msg.getMsg_data().get("db_name");
 		    String tableName = (String) msg.getMsg_data().get("table_name");
 		    String key = dbName + "." + tableName;
-		    Table tbl = client.getTable(dbName, tableName);
-		    cs.writeObject(ObjectType.TABLE, key, tbl, false);
+		    try {
+		      Table tbl = client.getTable(dbName, tableName);
+		      cs.writeObject(ObjectType.TABLE, key, tbl, false);
+		    } catch (NoSuchObjectException e) {
+		      LOG.error(e, e);
+		    }
 		    /*
 				TableImage ti = TableImage.generateTableImage(tbl);
 				CacheStore.getTableHm().put(key, tbl);
@@ -477,6 +482,7 @@ public class MsgProcessing {
 		        LOG.error(e,e);
 		      }
 		    }
+		    break;
 		  }
 
 		  case MSGType.MSG_DEL_SCHEMA:
@@ -533,11 +539,15 @@ public class MsgProcessing {
 		  case MSGType.MSG_CREATE_DEVICE:
 		  {
 		  	String devid = msg.getMsg_data().get("devid").toString();
-		  	Device d = client.getDevice(devid);
-		  	if(d == null) {
-          break;
-        }
-		  	cs.writeObject(ObjectType.DEVICE, devid, d, false);
+		  	try {
+		  	  Device d = client.getDevice(devid);
+		  	  if (d == null) {
+		  	    break;
+		  	  }
+		  	  cs.writeObject(ObjectType.DEVICE, devid, d, false);
+		  	} catch (NoSuchObjectException e) {
+		  	  LOG.error(e, e);
+		  	}
 		  	break;
 		  }
 		  case MSGType.MSG_DEL_DEVICE:
@@ -554,6 +564,8 @@ public class MsgProcessing {
 		    break;
 		  }
 		  }
+		  // ok, we just resend the msg to producer's topic now
+		  MsgServer.pdSend(msg);
 		} catch (TException e) {
 		  __reconnect();
 		}
