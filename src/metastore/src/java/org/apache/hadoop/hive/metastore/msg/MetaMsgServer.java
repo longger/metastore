@@ -60,24 +60,24 @@ public class MetaMsgServer {
 //		}
   }
 
-  private  static void initalize() throws MetaClientException {
+  private  static void initalize(String topic) throws MetaClientException {
     server = new MetaMsgServer();
-    producer.config(zkAddr);
+    Producer.config(zkAddr, topic);
     producer = Producer.getInstance();
     initalized = true;
     zkfailed = false;
   }
 
   private static void reconnect() throws MetaClientException {
-    producer.config(zkAddr);
+    Producer.config(zkAddr, Producer.topic);
     producer = Producer.getInstance();
     initalized = true;
     zkfailed = false;
   }
 
-  public static void start() throws MetaClientException{
+  public static void start(String topic) throws MetaClientException{
     if (!initalized){
-      initalize();
+      initalize(topic);
     }
   }
 
@@ -164,7 +164,7 @@ public class MetaMsgServer {
     String jsonMsg = "";
 
     jsonMsg = MSGFactory.getMsgData(msg);
-    LOG.info("---zjw-- send ddl msg:"+jsonMsg);
+    LOG.info("---zjw-- send ddl msg to topic=" + Producer.topic + ":" + jsonMsg);
     boolean success = false;
 
     success = retrySendMsg(jsonMsg, times);
@@ -336,16 +336,16 @@ public class MetaMsgServer {
     // create producer,强烈建议使用单例
     private MessageProducer producer = null;
     // publish topic
-    private final String topic = "meta-test";
+    private static String topic = "meta-test";
     private static String  zkAddr = "127.0.0.1:3181";
 
-    public static void config(String addr){
+    public static void config(String addr, String t){
+      topic = t;
       zkAddr = addr;
     }
 
     private Producer() {
         //设置zookeeper地址
-
         zkConfig.zkConnect = zkAddr;
         metaClientConfig.setZkConfig(zkConfig);
         // New session factory,强烈建议使用单例
