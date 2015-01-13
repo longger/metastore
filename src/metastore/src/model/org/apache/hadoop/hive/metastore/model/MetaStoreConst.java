@@ -76,10 +76,11 @@ public class MetaStoreConst {
   }
 
   public class MDeviceStatus {
-    public static final int ONLINE = 0;
-    public static final int OFFLINE = 1;
-    public static final int SUSPECT = 2;
-    public static final int __MAX__ = 3;
+    public static final int ONLINE = 0;   // Ok
+    public static final int OFFLINE = 1;  // Read only
+    public static final int SUSPECT = 2;  // Still allow access
+    public static final int DISABLE = 3;  // No read and write
+    public static final int __MAX__ = 4;
   }
 
   public class MEquipRoomStatus {
