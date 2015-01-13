@@ -327,12 +327,17 @@ public class DiskManager {
               (dt.dte[0].iotime - dt.dte[1].iotime) * 512000 / (dt.dte[0].ts - dt.dte[1].ts));
         }
 
-        public String getHotDeviceTracing() {
+        public String getHotDeviceTracing(DiskManager dm) {
           String r = "#Device -> rbw_1m,rbw_5m,rbw_15m\twbw_1m,wbw_5m,wbw_15m\tpending_rank\n";
           TreeMap<Long, String> sortedHDTMap = new TreeMap<Long, String>();
+
           for (Map.Entry<String, HDTrace> entry : tmap.entrySet()) {
+            DeviceInfo di = dm.admap.get(entry.getKey());
             String a = entry.getValue().node + "," +
-                DeviceInfo.getTypeStr(entry.getValue().devProp) + "," +
+                (di == null ?
+                    DeviceInfo.getTypeStr(entry.getValue().devProp) :
+                      di.getTypeStr()
+                ) + "," +
                 entry.getKey() + " -> " +
                 entry.getValue().rbw_1m + "," +
                 entry.getValue().rbw_5m + "," +
@@ -443,7 +448,7 @@ public class DiskManager {
         }
       }
 
-      // 4. Analayse file read/write/err rate in data nodes
+      // 4. Analyze file read/write/err rate in data nodes
       //
       // node -> pending writes
       // node -> pending reads
@@ -766,7 +771,7 @@ public class DiskManager {
 
         if (dm != null) {
           r += "Hot Device Tracking:\n";
-          r += hdt.getHotDeviceTracing();
+          r += hdt.getHotDeviceTracing(dm);
           r += "\n";
         }
 
@@ -3182,7 +3187,8 @@ public class DiskManager {
 	            try {
 	              d = rs.getDevice(e.getKey());
 	              e.getValue().prop = d.getProp();
-	              if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE) {
+	              if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE ||
+	                  d.getStatus() == MetaStoreConst.MDeviceStatus.DISABLE) {
 	                e.getValue().isOffline = true;
 	              }
 	            } catch (NoSuchObjectException e1) {
@@ -3452,7 +3458,8 @@ public class DiskManager {
                 d = rs_s1.getDevice(di.dev);
               }
               di.prop = d.getProp();
-              if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE) {
+              if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE ||
+                  d.getStatus() == MetaStoreConst.MDeviceStatus.DISABLE) {
                 di.isOffline = true;
               }
               // FIXME: set quota here!
