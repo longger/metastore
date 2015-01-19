@@ -38,6 +38,7 @@ import net.sf.json.JSONException;
 import net.sf.json.JSONObject;
 
 import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.DiskManager.DMThread.DMReport;
 import org.apache.hadoop.hive.metastore.DiskManager.FLSelector.FLS_Policy;
@@ -218,6 +219,136 @@ public class DiskManager {
       //
       // tracing node's read/write bandwidth on each device
       //
+      public static HotDeviceTracing hdt = new HotDeviceTracing();
+
+      public static class HotDeviceTracing {
+        private final long EXP_1 = 1884;
+        private final long EXP_5 = 2014;
+        private final long EXP_15 = 2037;
+        private final int FSHIFT = 11;
+        private final long FIXED_1 = (1 << 11);
+
+        private final ConcurrentHashMap<String, HDTrace> tmap = new ConcurrentHashMap<String, HDTrace>();
+
+        private final Log LOG = LogFactory.getLog(HotDeviceTracing.class);
+
+        private long calc_load(long load, long exp, long n) {
+          load *= exp;
+          load += n * (FIXED_1 - exp);
+          load >>= FSHIFT;
+          return load;
+        }
+
+        public class DTraceEntry {
+          public long read_nr;  // sectors
+          public long write_nr; // sectors
+          public long iotime;   // Milliseconds
+          public long ts = 0;
+
+          @Override
+          public String toString() {
+            String r = "";
+            r += "TS:" + ts + ", Read=" + read_nr + ", Write=" + write_nr + ", IOT=" + iotime;
+            return r;
+          }
+        }
+
+        public class HDTrace {
+          public String dev;
+          public String node;
+          public int devProp;
+          public DTraceEntry[] dte;
+          public long rbw_1m, rbw_5m, rbw_15m;
+          public long wbw_1m, wbw_5m, wbw_15m;
+          public long pending_rank;
+
+          public HDTrace() {
+            dte = new DTraceEntry[2];
+            for (int i = 0; i < 2; i++) {
+              dte[i] = new DTraceEntry();
+            }
+            rbw_1m = rbw_5m = rbw_15m = 0;
+            wbw_1m = wbw_5m = wbw_15m = 0;
+            pending_rank = 0;
+          }
+        }
+
+        public void updateDTrace(String node, DeviceInfo di) {
+          HDTrace dt = tmap.get(di.dev);
+          if (dt == null) {
+            dt = new HDTrace();
+            dt.node = node;
+            dt.dev = di.dev;
+            dt.devProp = di.prop;
+            HDTrace ndt = tmap.putIfAbsent(di.dev, dt);
+            if (ndt != null) {
+              dt = ndt;
+            }
+          }
+          synchronized (dt) {
+            // copy DTE[0] to DTE[1]
+            dt.dte[1].read_nr = dt.dte[0].read_nr;
+            dt.dte[1].write_nr = dt.dte[0].write_nr;
+            dt.dte[1].iotime = dt.dte[0].iotime;
+            dt.dte[1].ts = dt.dte[0].ts;
+            // update this entry to DTE[0]
+            dt.dte[0].read_nr = di.read_nr;
+            dt.dte[0].write_nr = di.write_nr;
+            dt.dte[0].iotime = di.err_nr;
+            dt.dte[0].ts = System.currentTimeMillis();
+          }
+
+          // try to regenerate ranks
+          if (dt.dte[0].ts == 0 || dt.dte[1].ts == 0 || (dt.dte[0].ts - dt.dte[1].ts == 0)) {
+            return;
+          }
+          if (dt.dte[0].ts - dt.dte[1].ts < 0) {
+            // BUG-XXX: this means system reboot or device reconnect? clear saved loadavg
+            dt.rbw_1m = dt.rbw_5m = dt.rbw_15m = 0;
+            dt.wbw_1m = dt.wbw_5m = dt.wbw_15m = 0;
+            dt.pending_rank = 0;
+            LOG.info("Detect system reboot or device reconnect for " +
+                dt.node + ":" + dt.dev + ", clear loadavg and rank.");
+            return;
+          }
+          dt.rbw_1m = calc_load(dt.rbw_1m, EXP_1,
+              (dt.dte[0].read_nr - dt.dte[1].read_nr) * 512000 / (dt.dte[0].ts - dt.dte[1].ts));
+          dt.rbw_5m = calc_load(dt.rbw_5m, EXP_5,
+              (dt.dte[0].read_nr - dt.dte[1].read_nr) * 512000 / (dt.dte[0].ts - dt.dte[1].ts));
+          dt.rbw_15m = calc_load(dt.rbw_15m, EXP_15,
+              (dt.dte[0].read_nr - dt.dte[1].read_nr) * 512000 / (dt.dte[0].ts - dt.dte[1].ts));
+          dt.wbw_1m = calc_load(dt.wbw_1m, EXP_1,
+              (dt.dte[0].write_nr - dt.dte[1].write_nr) * 512000 / (dt.dte[0].ts - dt.dte[1].ts));
+          dt.wbw_5m = calc_load(dt.wbw_5m, EXP_5,
+              (dt.dte[0].write_nr - dt.dte[1].write_nr) * 512000 / (dt.dte[0].ts - dt.dte[1].ts));
+          dt.wbw_15m = calc_load(dt.wbw_15m, EXP_15,
+              (dt.dte[0].write_nr - dt.dte[1].write_nr) * 512000 / (dt.dte[0].ts - dt.dte[1].ts));
+          dt.pending_rank = calc_load(dt.pending_rank, EXP_1,
+              (dt.dte[0].iotime - dt.dte[1].iotime) * 512000 / (dt.dte[0].ts - dt.dte[1].ts));
+        }
+
+        public String getHotDeviceTracing() {
+          String r = "#Device -> rbw_1m,rbw_5m,rbw_15m\twbw_1m,wbw_5m,wbw_15m\tpending_rank\n";
+          TreeMap<Long, String> sortedHDTMap = new TreeMap<Long, String>();
+          for (Map.Entry<String, HDTrace> entry : tmap.entrySet()) {
+            String a = entry.getValue().node + "," +
+                DeviceInfo.getTypeStr(entry.getValue().devProp) + "," +
+                entry.getKey() + " -> " +
+                entry.getValue().rbw_1m + "," +
+                entry.getValue().rbw_5m + "," +
+                entry.getValue().rbw_15m + "\t" +
+                entry.getValue().wbw_1m + "," +
+                entry.getValue().wbw_5m + "," +
+                entry.getValue().wbw_15m + "\t" +
+                entry.getValue().pending_rank + "\n";
+            sortedHDTMap.put(entry.getValue().pending_rank, a);
+          }
+          for (Long k : sortedHDTMap.descendingKeySet()) {
+            r += sortedHDTMap.get(k);
+          }
+          return r;
+        }
+      }
 
       // 3. load status bad analysis
       //
@@ -630,6 +761,12 @@ public class DiskManager {
         if (dm != null) {
           r += "Audit Log Analyse Report:\n";
           r += dsfstat.getHistHots(dm);
+          r += "\n";
+        }
+
+        if (dm != null) {
+          r += "Hot Device Tracking:\n";
+          r += hdt.getHotDeviceTracing();
           r += "\n";
         }
 
@@ -1294,6 +1431,8 @@ public class DiskManager {
     private final ConcurrentHashMap<String, DeviceInfo> admap;
     // Device -> Node Map
     private final ConcurrentHashMap<String, Set<String>> dnmap;
+    // Blacklisted Devices (no replicated would send to them)
+    private final ConcurrentHashMap<String, String> blacklisted;
 
     public class BackupTimerTask extends TimerTask {
       private long last_backupTs = System.currentTimeMillis();
@@ -1301,7 +1440,13 @@ public class DiskManager {
       public boolean generateSyncFiles(Set<Partition> parts, Set<Subpartition> subparts, Set<FileToPart> toAdd, Set<FileToPart> toDrop) {
         Date d = new Date(System.currentTimeMillis());
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd-HH:mm:ss");
-        File dir = new File(System.getProperty("user.dir") + "/backup/sync-" + sdf.format(d));
+        String str = new HiveConf().getVar(HiveConf.ConfVars.DM_REPORT_DIR);
+        if (str == null) {
+          str = System.getProperty("user.dir") + "/backup/sync-" + sdf.format(d);
+        } else {
+          str = str + "/backup/sync-" + sdf.format(d);
+        }
+        File dir = new File(str);
         if (!dir.mkdirs()) {
           LOG.error("Make directory " + dir.getPath() + " failed, can't write sync meta files.");
           return false;
@@ -1703,6 +1848,15 @@ public class DiskManager {
           ni.toDelete.add(loc);
           LOG.info("----> Add to Node " + loc.getNode_name() + "'s toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", " + flocsize);
         }
+        // BUG-XXX: if we do NOT del or modify SFL here, we will race with reopen
+        try {
+          if (loc.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            loc.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.OFFLINE);
+            trs.updateSFileLocation(loc);
+          }
+        } catch (MetaException e) {
+          LOG.error(e, e);
+        }
         return true;
       }
 
@@ -1811,7 +1965,7 @@ public class DiskManager {
             if (f.getLocationsSize() == 0) {
               synchronized (trs) {
                 try {
-                  // delete locations firsta
+                  // delete locations first
                   trs.delSFile(f.getFid());
                 } catch (MetaException e) {
                   LOG.error(e, e);
@@ -1905,6 +2059,8 @@ public class DiskManager {
         flp = flp_default = new FileLocatingPolicy(excludes, excl_dev,
             FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM,
             FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, false);
+        flp.length_hint = f.getLength();
+        flp_default.length_hint = f.getLength();
 
         for (int i = init_size; i < (init_size + nr); i++, flp = flp_default) {
           if (i == init_size) {
@@ -1956,8 +2112,13 @@ public class DiskManager {
               if (f.getDbName() != null && f.getTableName() != null) {
                 synchronized (trs) {
                   Table t = trs.getTable(f.getDbName(), f.getTableName());
-                  location += t.getDbName() + "/" + t.getTableName() + "/"
-                      + rand.nextInt(Integer.MAX_VALUE);
+                  if (t != null) {
+                    location += t.getDbName() + "/" + t.getTableName() + "/"
+                        + rand.nextInt(Integer.MAX_VALUE);
+                  } else {
+                    LOG.error("Inconsistent metadata detected: DB:" + f.getDbName() +
+                        ", Table:" + f.getTableName());
+                  }
                 }
               } else {
                 location += "UNNAMED-DB/UNNAMED-TABLE/" + rand.nextInt(Integer.MAX_VALUE);
@@ -2043,7 +2204,10 @@ public class DiskManager {
         synchronized (admap) {
           for (Map.Entry<String, DeviceInfo> entry : admap.entrySet()) {
             // Note: only calculate the alone and non-offline device stdev
-            if (entry.getValue().getType() == MetaStoreConst.MDeviceProp.GENERAL && !entry.getValue().isOffline) {
+            if ((entry.getValue().getType() == MetaStoreConst.MDeviceProp.GENERAL ||
+                entry.getValue().getType() == MetaStoreConst.MDeviceProp.CACHE ||
+                entry.getValue().getType() == MetaStoreConst.MDeviceProp.MASS)
+                && !entry.getValue().isOffline) {
               avg += entry.getValue().free;
               nr++;
               vals.add(entry.getValue().free);
@@ -2073,6 +2237,8 @@ public class DiskManager {
         String str = hiveConf.getVar(HiveConf.ConfVars.DM_REPORT_DIR);
         if (str == null) {
           str = System.getProperty("user.dir") + "/sotstore/reports/report-" + sdf.format(d);
+        } else {
+          str = str + "/sotstore/reports/report-" + sdf.format(d);
         }
         File reportFile = new File(str);
         if (!reportFile.getParentFile().exists() && !reportFile.getParentFile().mkdirs()) {
@@ -2095,10 +2261,18 @@ public class DiskManager {
         //48 ds.qrep,ds.hrep,ds.drep,ds.qdel,ds.hdel,ds.ddel,ds.tver,ds.tvyr,
         //56 [ds.uptime],[ds.load1],truetotal,truefree,offlinefree,sharedfree,
         //62 replicate,loadstatus_bad,
+        //64 l1Ttotal,l1Tfree,l1offline,
+        //67 l2Ttotal,l2Tfree,l2offline,
+        //70 l2Ttotal,l2Tfree,l2offline,
+        //73 l2Ttotal,l2Tfree,l2offline,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
         long truetotal = 0, truefree = 0, offlinefree = 0, sharedfree = 0;
+        long l1total = 0, l1free = 0, l1offline = 0;
+        long l2total = 0, l2free = 0, l2offline = 0;
+        long l3total = 0, l3free = 0, l3offline = 0;
+        long l4total = 0, l4free = 0, l4offline = 0;
 
         sb.append((System.currentTimeMillis() - startupTs) / 1000);
         sb.append("," + safeMode + ",");
@@ -2115,6 +2289,40 @@ public class DiskManager {
   	        if (e.getValue().getType() == MetaStoreConst.MDeviceProp.SHARED ||
   	            e.getValue().getType() == MetaStoreConst.MDeviceProp.BACKUP) {
   	          sharedfree += e.getValue().free;
+  	        }
+  	        switch (e.getValue().getType()) {
+  	        case MetaStoreConst.MDeviceProp.L1:
+  	          if (e.getValue().isOffline) {
+                l1offline += e.getValue().free;
+              } else {
+                l1free += e.getValue().free;
+                l1total += (e.getValue().free + e.getValue().used);
+              }
+  	          break;
+  	        case MetaStoreConst.MDeviceProp.L2:
+  	          if (e.getValue().isOffline) {
+                l2offline += e.getValue().free;
+              } else {
+                l2free += e.getValue().free;
+                l2total += (e.getValue().free + e.getValue().used);
+              }
+  	          break;
+  	        case MetaStoreConst.MDeviceProp.L3:
+  	          if (e.getValue().isOffline) {
+                l3offline += e.getValue().free;
+              } else {
+                l3free += e.getValue().free;
+                l3total += (e.getValue().free + e.getValue().used);
+              }
+  	          break;
+  	        case MetaStoreConst.MDeviceProp.L4:
+  	          if (e.getValue().isOffline) {
+                l4offline += e.getValue().free;
+              } else {
+                l4free += e.getValue().free;
+                l4total += (e.getValue().free + e.getValue().used);
+              }
+  	          break;
   	        }
   	      }
         }
@@ -2238,6 +2446,18 @@ public class DiskManager {
         sb.append(sharedfree + ",");
         sb.append(DMProfile.replicate.get() + ",");
         sb.append(DMProfile.loadStatusBad.get() + ",");
+        sb.append(l1total + ",");
+        sb.append(l1free + ",");
+        sb.append(l1offline + ",");
+        sb.append(l2total + ",");
+        sb.append(l2free + ",");
+        sb.append(l2offline + ",");
+        sb.append(l3total + ",");
+        sb.append(l3free + ",");
+        sb.append(l3offline + ",");
+        sb.append(l4total + ",");
+        sb.append(l4free + ",");
+        sb.append(l4offline + ",");
         sb.append("\n");
 
         // generate report file
@@ -2301,8 +2521,13 @@ public class DiskManager {
               LOG.warn("Replicate request " + rr + " ERROR: file not exists.");
               continue;
             }
-            do_replicate(sf, 1, rr.dtype);
-            LOG.info("Replicate request " + rr + " OK: submitted.");
+            // BUG-XXX: do NOT replicate open files!
+            if (sf.getStore_status() == MetaStoreConst.MFileStoreStatus.INCREATE) {
+              LOG.warn("Replicate request " + rr + " BAD: do not submit. (INCREATE)");
+            } else {
+              do_replicate(sf, 1, rr.dtype);
+              LOG.info("Replicate request " + rr + " OK: submitted.");
+            }
           }
 
           synchronized (syncIsRunning) {
@@ -2441,6 +2666,11 @@ public class DiskManager {
                   Table tbl = trs.getTable(f.getDbName(), f.getTableName());
                   long ngsize = 0;
 
+                  if (tbl == null) {
+                    LOG.error("Inconsistent metadata detected: DB:" + f.getDbName() +
+                        ", Table:" + f.getTableName());
+                    continue;
+                  }
                   if (tbl.getNodeGroupsSize() > 0) {
                     for (NodeGroup ng : tbl.getNodeGroups()) {
                       ngsize += ng.getNodesSize();
@@ -2704,6 +2934,7 @@ public class DiskManager {
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
       dnmap = new ConcurrentHashMap<String, Set<String>>();
+      blacklisted = new ConcurrentHashMap<String, String>();
       closeRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT));
       fixRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT));
       init();
@@ -2904,6 +3135,7 @@ public class DiskManager {
       r += "Quota: " + (hiveConf.getBoolVar(HiveConf.ConfVars.DM_USE_QUOTA) ? "enabled" : "disabled") + "\n";
       r += "IdentifySD: " + identify_shared_device + "\n";
       r += "Role: " + role + "\n";
+      r += "AlterURI: " + alternateURI + "\n";
       r += "Per-IP-Connections: {\n";
       for (Map.Entry<String, AtomicLong> e : HiveMetaStoreServerEventHandler.perIPConns.entrySet()) {
         r += " " + e.getKey() + " -> " + e.getValue().get() + "\n";
@@ -3216,7 +3448,7 @@ public class DiskManager {
               }
               if (d == null ||
                   (d.getStatus() == MetaStoreConst.MDeviceStatus.SUSPECT && di.mp != null) ||
-                  (!d.getNode_name().equals(node.getNode_name()) && DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.GENERAL)) {
+                  (!d.getNode_name().equals(node.getNode_name()) && DeviceInfo.getType(d.getProp()) != MetaStoreConst.MDeviceProp.SHARED)) {
                 rs_s1.createOrUpdateDevice(di, node, null);
                 d = rs_s1.getDevice(di.dev);
               }
@@ -3630,6 +3862,8 @@ public class DiskManager {
 
       public String origNode;
 
+      public long length_hint;
+
       public FileLocatingPolicy(Set<String> nodes, Set<String> devs, int node_mode, int dev_mode, boolean canIgnore) {
         this.nodes = nodes;
         this.devs = devs;
@@ -3638,13 +3872,15 @@ public class DiskManager {
         this.canIgnore = canIgnore;
         this.origNode = null;
         this.accept_types = null;
+        this.length_hint = 0;
       }
 
       @Override
       public String toString() {
         return "Node {" + (nodes == null ? "null" : nodes.toString()) + "} -> {" +
             node_mode + "}, Dev {" +
-            (devs == null ? "null" : devs.toString()) +
+            (devs == null ? "null" : devs.toString()) + "} -> {" +
+            dev_mode + "}, accept_types {" + accept_types +
             "}, canIgnore " + canIgnore + ", origNode " +
             (origNode == null ? "null" : origNode) + ".";
       }
@@ -4422,6 +4658,8 @@ public class DiskManager {
             flp = flp_default = new FileLocatingPolicy(excludes, excl_dev,
                 FileLocatingPolicy.EXCLUDE_NODES_AND_RANDOM,
                 FileLocatingPolicy.EXCLUDE_DEVS_AND_RANDOM, true);
+            flp.length_hint = r.file.getLength();
+            flp_default.length_hint = r.file.getLength();
 
             for (int i = r.begin_idx; i < r.file.getRep_nr(); i++, flp = flp_default) {
               if (i == r.begin_idx) {
@@ -4814,7 +5052,7 @@ public class DiskManager {
           runner.start();
         }
 
-        // if we have detected one SLAVE cmd, just ignore other cms.
+        // if we have detected one SLAVE cmd, just ignore other cmds.
         private boolean __handle_slave_report(DMReport report) {
           if (report.replies != null && report.replies.size() > 0) {
             for (DMReply dmr : report.replies) {
@@ -5111,6 +5349,8 @@ public class DiskManager {
           String infos = "----> node " + r.node + ", DEVINFO: {\n";
           for (DeviceInfo di : r.dil) {
             infos += "----DEVINFO------>" + di.dev + "," + di.mp + "," + di.used + "," + di.free + "\n";
+            // Note-XXX: update DTrace entry
+            DiskManager.SysMonitor.hdt.updateDTrace(r.node, di);
           }
           LOG.debug(infos);
         }
@@ -5267,6 +5507,11 @@ public class DiskManager {
                     if (args.length < 3) {
                       LOG.warn("Invalid REP report: " + r.args);
                     } else {
+                      if (args.length == 5) {
+                        LOG.info("REPLICATED to " + report.node + " dev " + args[0] + ":" + args[1] + "/" + args[2] + ", latency=" + args[4]);
+                      } else {
+                        LOG.info("REPLICATED to " + report.node + " dev " + args[0] + ":" + args[1] + "/" + args[2]);
+                      }
                       SFileLocation newsfl, toDel = null;
                       try {
                         synchronized (rs) {

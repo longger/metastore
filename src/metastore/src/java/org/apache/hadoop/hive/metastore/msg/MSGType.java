@@ -264,6 +264,24 @@ public class MSGType {
   public static final int MSG_REVOKE_PARTITION_COLUMN = 5206;
   public static final int MSG_REVOKE_TABLE_COLUMN = 5207;
 
+  /**
+   * 创建新设备，且处于可用状态
+   */
   public static final int MSG_CREATE_DEVICE = 6001;
+  /**
+   * 删除设备
+   */
   public static final int MSG_DEL_DEVICE = 6002;
+  /**
+   * 设备进入可读可写状态
+   */
+  public static final int MSG_DEVICE_RW = 6003;
+  /**
+   * 设备进入只读状态
+   */
+  public static final int MSG_DEVICE_RO = 6004;
+  /**
+   * 设备进入下线状态，不接受任何读写
+   */
+  public static final int MSG_DEVICE_OFFLINE = 6004;
 }

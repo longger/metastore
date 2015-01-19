@@ -154,6 +154,7 @@ import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
 import org.apache.hadoop.hive.metastore.model.MUser;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory;
+import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
 import org.apache.hadoop.hive.metastore.msg.MetaMsgServer;
 import org.apache.hadoop.hive.metastore.newms.CacheStore;
@@ -509,6 +510,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           LOG.info("Update msUri TO " + HMSHandler.msUri);
           // update the msUri now
           ldb.putToParameters("service.metastore.uri", HMSHandler.msUri);
+          ldb.putToParameters("service.meta.metaq.url", hiveConf.getVar(HiveConf.ConfVars.ZOOKEEPERADDRESS));
           ms.alterDatabase(ldb.getName(), ldb);
         } catch (NoSuchObjectException e) {
           LOG.error(e, e);
@@ -520,6 +522,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           mdb = HMSHandler.topdcli.get_attribution(hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION));
           // update the msUri now
           mdb.putToParameters("service.metastore.uri", HMSHandler.msUri);
+          mdb.putToParameters("service.meta.metaq.url", hiveConf.getVar(HiveConf.ConfVars.ZOOKEEPERADDRESS));
           HMSHandler.topdcli.alterDatabase(mdb.getName(), mdb);
         } catch (NoSuchObjectException e) {
           LOG.error(e, e);
@@ -548,6 +551,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         ldb = new Database(hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION), null,
             wh.getDefaultDatabasePath(hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION)).toString(), null);
         ldb.putToParameters("service.metastore.uri", HMSHandler.msUri == null ? "DEFAULT_INVALID_URI" : HMSHandler.msUri);
+        ldb.putToParameters("service.meta.metaq.url", hiveConf.getVar(HiveConf.ConfVars.ZOOKEEPERADDRESS));
 
         ms.createDatabase(ldb);
       }
@@ -559,6 +563,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           mdb = new Database(hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION), null,
               wh.getDefaultDatabasePath(hiveConf.getVar(HiveConf.ConfVars.LOCAL_ATTRIBUTION)).toString(), null);
           mdb.putToParameters("service.metastore.uri", HMSHandler.msUri == null ? "DEFAULT_INVALID_URI" : HMSHandler.msUri);
+          mdb.putToParameters("service.meta.metaq.url", hiveConf.getVar(HiveConf.ConfVars.ZOOKEEPERADDRESS));
 
           try {
             HMSHandler.topdcli.createDatabase(mdb);
@@ -582,6 +587,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         LOG.info("Update msUri: from " + savedUri + " TO " + HMSHandler.msUri);
         // update the msUri now
         ldb.putToParameters("service.metastore.uri", HMSHandler.msUri);
+        ldb.putToParameters("service.meta.metaq.url", hiveConf.getVar(HiveConf.ConfVars.ZOOKEEPERADDRESS));
         try {
           ms.alterDatabase(ldb.getName(), ldb);
         } catch (NoSuchObjectException e) {
@@ -596,6 +602,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       if (savedUri != null && !savedUri.equals(HMSHandler.msUri) && HMSHandler.topdcli != null) {
         // update the msUri now
         mdb.putToParameters("service.metastore.uri", HMSHandler.msUri);
+        mdb.putToParameters("service.meta.metaq.url", hiveConf.getVar(HiveConf.ConfVars.ZOOKEEPERADDRESS));
         try {
           HMSHandler.topdcli.alterDatabase(mdb.getName(), mdb);
         } catch (NoSuchObjectException e) {
@@ -749,6 +756,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       Path dbPath = new Path(db.getLocationUri());
       boolean success = false;
       boolean madeDir = false;
+      db.putToParameters("service.metastore.uri", HMSHandler.msUri == null ? "DEFAULT_INVALID_URI" : HMSHandler.msUri);
+      db.putToParameters("service.meta.metaq.url", hiveConf.getVar(HiveConf.ConfVars.ZOOKEEPERADDRESS));
 
       try {
 
@@ -1265,6 +1274,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           tbl.putToParameters(hive_metastoreConstants.DDL_TIME, Long.toString(time));
         }
         LOG.info("--zjw--before crt");
+        DDLMsg msg = null;
         try{
 
         /**********added by zjw for schema and table when creating view********/
@@ -1280,13 +1290,19 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         /**********end ofadded by zjw for creating view********/
         ms.createTable(tbl);
 
-        }catch(Exception e){
+
+        } catch (Exception e) {
           LOG.error(e, e);
           throw new MetaException("create schema view failed.");
         }
         LOG.info("--zjw--before commitTransaction");
         success = ms.commitTransaction();
-        LOG.info("--zjw--before commitTransaction");
+        LOG.info("--zjw--after  commitTransaction");
+
+        if (success && msg != null) {
+          MetaMsgServer.sendMsg(msg);
+        }
+
         this.createBusiTypeDC(ms, tbl);
         LOG.info("--zjw--after createBusiTypeDC");
       } finally {
@@ -7604,14 +7620,15 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         throw new MetaException("Please set 'hive.attribution.top' as top-level metastore URI." );
       }
       try {
-      HMSHandler.topdcli = new HiveMetaStoreClient(top_attribution_uri,
-          HiveConf.getIntVar(conf, HiveConf.ConfVars.METASTORETHRIFTCONNECTIONRETRIES),
-          conf.getIntVar(ConfVars.METASTORE_CLIENT_CONNECT_RETRY_DELAY),
-          null);
-      // do authentication here!
-      String user_name = conf.getVar(HiveConf.ConfVars.HIVE_USER);
-      String passwd = conf.getVar(HiveConf.ConfVars.HIVE_USERPWD);
-      HMSHandler.topdcli.authentication(user_name, passwd);
+        HMSHandler.topdcli = new HiveMetaStoreClient(top_attribution_uri,
+            HiveConf.getIntVar(conf, HiveConf.ConfVars.METASTORETHRIFTCONNECTIONRETRIES),
+            conf.getIntVar(ConfVars.METASTORE_CLIENT_CONNECT_RETRY_DELAY),
+            null);
+        // do authentication here!
+        String user_name = conf.getVar(HiveConf.ConfVars.HIVE_USER);
+        String passwd = conf.getVar(HiveConf.ConfVars.HIVE_USERPWD);
+        LOG.info("Top-level Attribution authed=" +
+            HMSHandler.topdcli.authentication(user_name, passwd));
       } catch (MetaException me) {
         LOG.info("Connect to top-level Attribution failed!");
       } catch (NoSuchObjectException e) {

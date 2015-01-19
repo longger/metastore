@@ -12,6 +12,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
+import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
 import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore.Iface;
 import org.apache.hadoop.util.StringUtils;
@@ -171,9 +172,19 @@ public class NewMS {
     	String fid = jedis.get("g_fid");
     	if (fid != null) {
     		long id = Long.parseLong(fid);
+    		long oid = id;
+
+    		// BUG-XXX: we have to make sure oldms is consistent with newms
+    		if (conf.getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
+    		  oid = ObjectStore.getFID();
+    		}
     		synchronized (RawStoreImp.class) {
 					if (RawStoreImp.getFid() < id) {
-            RawStoreImp.setFID(Long.parseLong(fid));
+					  if (oid >= id) {
+              RawStoreImp.setFID(oid);
+            } else {
+              RawStoreImp.setFID(id);
+            }
           }
 				}
     		LOG.info("NewMS restore FID to " + id);
@@ -247,8 +258,14 @@ public class NewMS {
     timer.schedule(new FidStoreTask(), 60 * 1000, 60 * 1000);
     try {
       try {
-        MsgServer.startConsumer(conf.getVar(ConfVars.ZOOKEEPERADDRESS), "meta-test", "newms");
-//        MsgServer.startProducer();
+        String topic = "meta-test";
+        if (conf.getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
+          topic = "oldms";
+        }
+        // if old_with_new, comsumer use oldms topic
+        MsgServer.startConsumer(conf.getVar(ConfVars.ZOOKEEPERADDRESS), topic, "newms");
+        // Producer use meta-test topic
+        MsgServer.startProducer();
         MsgServer.startLocalConsumer();
       } catch (Exception e) {
         LOG.error(e, e);

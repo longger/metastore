@@ -892,7 +892,29 @@ public class ThriftRPC extends FacebookBase implements
   public boolean createSchema(GlobalSchema schema)
       throws AlreadyExistsException, InvalidObjectException,
       MetaException, TException {
-    return __cli.get().createSchema(schema);
+    boolean r = __cli.get().createSchema(schema);
+    // BUG-XXX: we should check whether this SCHEMA has been created.
+    GlobalSchema gs = null;
+
+    for (int i = 0; gs == null && i < 25; i++) {
+      try {
+        gs = rs.getSchema(schema.getSchemaName());
+        if (gs != null) {
+          break;
+        }
+      } catch (NoSuchObjectException e) {
+      }
+      try {
+        Thread.sleep(200);
+      } catch (Exception e) {
+      }
+    }
+    if (gs != null) {
+      LOG.info("createSchema: " + schema.getSchemaName() + " OK.");
+    } else {
+      LOG.info("createSchema: " + schema.getSchemaName() + " still progressing.");
+    }
+    return r;
   }
 
   @Override
@@ -900,12 +922,58 @@ public class ThriftRPC extends FacebookBase implements
       throws AlreadyExistsException, InvalidObjectException,
       MetaException, TException {
     __cli.get().create_attribution(db);
+    // BUG-XXX: we should check whether this DB has been created.
+    try {
+      Database ndb = null;
+      for (int i = 0; ndb == null && i < 25; i++) {
+        try {
+          ndb = rs.getDatabase(db.getName());
+          if (ndb != null) {
+            break;
+          }
+        } catch (NoSuchObjectException e) {
+        }
+        try {
+          Thread.sleep(200);
+        } catch (Exception e) {
+        }
+      }
+      if (ndb != null) {
+        LOG.info("create_attribution: " + db.getName() + " OK.");
+      } else {
+        LOG.info("create_attribution: " + db.getName() + " still progressing.");
+      }
+    } catch (Exception e) {
+    }
   }
 
   @Override
   public void create_database(Database db) throws AlreadyExistsException,
       InvalidObjectException, MetaException, TException {
     __cli.get().createDatabase(db);
+    // BUG-XXX: we should check whether this DB has been created.
+    try {
+      Database ndb = null;
+      for (int i = 0; ndb == null && i < 25; i++) {
+        try {
+          ndb = rs.getDatabase(db.getName());
+          if (ndb != null) {
+            break;
+          }
+        } catch (NoSuchObjectException e) {
+        }
+        try {
+          Thread.sleep(200);
+        } catch (Exception e) {
+        }
+      }
+      if (ndb != null) {
+        LOG.info("create_database: " + db.getName() + " OK.");
+      } else {
+        LOG.info("create_database: " + db.getName() + " still progressing.");
+      }
+    } catch (Exception e) {
+    }
   }
 
   @Override
@@ -1450,6 +1518,26 @@ public class ThriftRPC extends FacebookBase implements
       InvalidObjectException, MetaException, NoSuchObjectException,
       TException {
     __cli.get().createTable(tbl);
+    // BUG-XXX: we should check whether this TABLE has been created.
+    try {
+      Table ntbl = null;
+      for (int i = 0; ntbl == null && i < 25; i++) {
+        ntbl = rs.getTable(tbl.getDbName(), tbl.getTableName());
+        if (ntbl != null) {
+          break;
+        }
+        try {
+          Thread.sleep(200);
+        } catch (Exception e) {
+        }
+      }
+      if (ntbl != null) {
+        LOG.info("create_table: " + tbl.getDbName() + "." + tbl.getTableName() + " OK.");
+      } else {
+        LOG.info("create_table: " + tbl.getDbName() + "." + tbl.getTableName() + " still progressing.");
+      }
+    } catch (Exception e) {
+    }
   }
 
   @Override

@@ -194,6 +194,8 @@ public class ObjectStore implements RawStore, Configurable {
     NO_STATE, OPEN, COMMITED, ROLLBACK
   }
 
+  private boolean isOracle = false;
+
   private void restoreFID() {
     boolean commited = false;
 
@@ -201,9 +203,15 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT max(fid) FROM FILES");
       List results = (List) query.execute();
-      BigDecimal maxfid = (BigDecimal) results.iterator().next();
-      if (maxfid != null) {
-        g_fid = maxfid.longValue() + 10;
+      if (isOracle) {
+        BigDecimal maxfid = (BigDecimal) results.iterator().next();
+        if (maxfid != null) {
+          g_fid = maxfid.longValue() + 10;
+        }
+      } else {
+        if (results != null && results.iterator() != null && results.iterator().next() != null) {
+          g_fid = (Integer)results.iterator().next() + 10;
+        }
       }
       commited = commitTransaction();
       LOG.info("restore FID to " + g_fid);
@@ -226,9 +234,13 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT min(fid) FROM FILES");
       List results = (List) query.execute();
-      BigDecimal minfid = (BigDecimal) results.iterator().next();
-      if (minfid != null) {
-        r = minfid.longValue();
+      if (isOracle) {
+        BigDecimal minfid = (BigDecimal) results.iterator().next();
+        if (minfid != null) {
+          r = minfid.longValue();
+        }
+      } else {
+        r = (Integer)results.iterator().next();
       }
       commited = commitTransaction();
     } catch (javax.jdo.JDODataStoreException e) {
@@ -310,6 +322,10 @@ public class ObjectStore implements RawStore, Configurable {
       insertInitBusiTypes();
       loadBusiTypes(bts);
     }
+  }
+ 
+  public static long getFID() {
+    return g_fid;
   }
 
   private static final Map<String, Class> PINCLASSMAP;
@@ -407,7 +423,14 @@ public class ObjectStore implements RawStore, Configurable {
     LOG.info("ObjectStore, initialize called");
     prop = dsProps;
     pm = getPersistenceManager();
+
     isInitialized = pm != null;
+
+    String url = HiveConf.getVar(getConf(), ConfVars.METASTORECONNECTURLKEY).toLowerCase();
+    if (url.startsWith("jdbc:oracle")) {
+      isOracle = true;
+    }
+
     if (isInitialized) {
       if (!g_fid_inited) {
         g_fid_inited = true;
@@ -425,7 +448,14 @@ public class ObjectStore implements RawStore, Configurable {
     String zkAddr = prop.getProperty(Constants.META_JDO_ZOOKER_ADDR);
     MetaMsgServer.setZkAddr(zkAddr);
     try {
-      MetaMsgServer.start();
+      String topic;
+
+      if (new HiveConf().getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
+        topic = "oldms";
+      } else {
+        topic = "meta-test";
+      }
+      MetaMsgServer.start(topic);
     } catch (MetaClientException e) {
       LOG.error(e+"---start-metaQ--error",e);
     } catch (Exception e) {
@@ -613,10 +643,12 @@ public class ObjectStore implements RawStore, Configurable {
         rollbackTransaction();
       }
     }
-    LOG.warn("---zjw---in createdatabase");
+    HashMap<String, Object> params = new HashMap<String, Object>();
+    params.put("db_name", db.getName());
+    LOG.info("---zjw---in createdatabase: " + db.getName());
     long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mdb).toString()));
     DDLMsg msg = MSGFactory.generateDDLMsg(org.apache.hadoop.hive.metastore.msg.MSGType.MSG_NEW_DATABESE,db_id,-1,
-        pm,mdb,null);
+        pm,mdb,params);
     if(commited) {
       MetaMsgServer.sendMsg(msg);
     }
@@ -719,6 +751,7 @@ public class ObjectStore implements RawStore, Configurable {
       HashMap<String, Object> params = new HashMap<String, Object>();
       ArrayList<String>  ps = new ArrayList<String>();
       ps.addAll(mdb.getParameters().keySet());
+      params.put("db_name", dbName);
       params.put("param_name",ps);
       if(committed) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALTER_DATABESE_PARAM,db_id,-1, pm, mdb,params));
@@ -1759,8 +1792,10 @@ public class ObjectStore implements RawStore, Configurable {
       MNode mnode = convertToMNode(node);
       pm.makePersistent(mnode);
       commited = commitTransaction();
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("node_name", node.getNode_name());
       if(commited) {
-        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODE,-1,-1,pm,mnode,null));
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODE,-1,-1,pm,mnode,params));
       }
     } finally {
       if (!commited) {
@@ -2104,7 +2139,7 @@ public class ObjectStore implements RawStore, Configurable {
     }
   }
 
-  public void createTable(Table tbl) throws InvalidObjectException, MetaException {
+  public DDLMsg createTable(Table tbl) throws InvalidObjectException, MetaException {
     boolean commited = false;
     try {
       openTransaction();
@@ -2164,15 +2199,19 @@ public class ObjectStore implements RawStore, Configurable {
 
       commited = commitTransaction();
 
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("db_name", tbl.getDbName());
+      params.put("table_name", tbl.getTableName());
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(mtbl.getDatabase()).toString()));
-      if(commited) {
-        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_NEW_TALBE,db_id,-1, pm, mtbl,null));
+      if (commited) {
+        return MSGFactory.generateDDLMsg(MSGType.MSG_NEW_TALBE, db_id, -1, pm, mtbl, params);
       }
     } finally {
       if (!commited) {
         rollbackTransaction();
       }
     }
+    return null;
   }
 
   private void deleteBusiTypeCol(MTable mtbl) {
@@ -2481,8 +2520,12 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT count(*) FROM NODES");
       List results = (List) query.execute();
-      BigDecimal tableSize = (BigDecimal) results.iterator().next();
-      r = tableSize.longValue();
+      if (isOracle) {
+        BigDecimal tableSize = (BigDecimal) results.iterator().next();
+        r = tableSize.longValue();
+      } else {
+        r = (Integer)results.iterator().next();
+      }
       commited = commitTransaction();
     } finally {
       if (!commited) {
@@ -2501,8 +2544,12 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT count(*) FROM DEVICES");
       List results = (List) query.execute();
-      BigDecimal tableSize = (BigDecimal) results.iterator().next();
-      r = tableSize.longValue();
+      if (isOracle) {
+        BigDecimal tableSize = (BigDecimal) results.iterator().next();
+        r = tableSize.longValue();
+      } else {
+        r = (Integer)results.iterator().next();
+      }
       commited = commitTransaction();
     } finally {
       if (!commited) {
@@ -3975,6 +4022,11 @@ public class ObjectStore implements RawStore, Configurable {
       params.put("db_name", mpart.getTable().getDatabase().getName());
       params.put("table_name", mpart.getTable().getTableName());
       params.put("partition_name", mpart.getPartitionName());
+      if(mpart.getPartition_level() ==2){
+        Long.parseLong(MSGFactory.getIDFromJdoObjectId(mpart.getParent().toString()));
+        params.put("parent_partition_name", mpart.getPartitionName());
+      }
+      params.put("partition_level", mpart.getPartition_level());
       if(commited) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_NEW_PARTITION,db_id,-1,
             pm,mpart,params));
@@ -5105,6 +5157,7 @@ public class ObjectStore implements RawStore, Configurable {
         HashMap<String, Object> params = new HashMap<String, Object>();
         params.put("table_name", newt.getTableName());
         params.put("old_table_name", oldt.getTableName());
+        params.put("db_name", dbname);
 //        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME,db_id,-1, pm, oldt,params));
         msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME,db_id,-1, pm, oldt,params));
       }
@@ -5837,9 +5890,13 @@ public class ObjectStore implements RawStore, Configurable {
       long db_id = Long.parseLong(MSGFactory.getIDFromJdoObjectId(pm.getObjectId(idx.getOrigTable().getDatabase()).toString()));
       commited = commitTransaction();
 
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("db_name", index.getDbName());
+      params.put("index_name", index.getIndexName());
+      params.put("table_name", index.getOrigTableName());
       if(commited) {
         MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_NEW_INDEX,db_id,-1,
-            pm,idx,null));
+            pm,idx,params));
       }
       return true;
     } finally {
@@ -9779,7 +9836,9 @@ public MUser getMUser(String userName) {
         if(mdd.getDwNum() == 2) {
           event_id = MSGType.MSG_DDL_DIRECT_DW2;
         }
-        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(event_id, -1l, -1l, pm, mdd, null));
+        HashMap<String, Object> params = new HashMap<String, Object>();
+        params.put("sql", sql);
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(event_id, -1l, -1l, pm, mdd, params));
       }
     } finally {
       if (!success) {
@@ -10398,8 +10457,10 @@ public MUser getMUser(String userName) {
       commited = commitTransaction();
 
       long db_id = -1;
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("schema_name", schema.getSchemaName());
       if(commited) {
-        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_SCHEMA,db_id,-1, pm, mSchema,null));
+        MetaMsgServer.sendMsg(MSGFactory.generateDDLMsg(MSGType.MSG_CREATE_SCHEMA,db_id,-1, pm, mSchema,params));
       }
     } finally {
       if (!commited) {
@@ -10409,9 +10470,6 @@ public MUser getMUser(String userName) {
 
 
   }
-
-
-
 
   /**
    * 修改模式结构的同时，需要修改表和视图
@@ -10513,6 +10571,7 @@ public MUser getMUser(String userName) {
           HashMap<String,Object> p = new HashMap<String,Object>();
           p.put("table_name", mSchema.getSchemaName().toLowerCase());
           p.put("old_table_name", oldt.getTableName());
+          p.put("db_name", oldt.getDatabase().getName());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME, db_id, -1, pm, oldt, p));
         }
       }
@@ -11023,8 +11082,10 @@ public MUser getMUser(String userName) {
       pm.makePersistent(mng);
       pm.makePersistentAll(mng.getNodes());
       commited = commitTransaction();
+      HashMap<String, Object> params = new HashMap<String, Object>();
+      params.put("nodegroup_name", ng.getNode_group_name());
       if(commited) {
-        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODEGROUP,-1,-1,pm,mng,null));
+        MetaMsgServer.sendMsg( MSGFactory.generateDDLMsg(MSGType.MSG_NEW_NODEGROUP,-1,-1,pm,mng,params));
       }
       success = true;
     } finally {

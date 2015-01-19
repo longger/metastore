@@ -69,6 +69,7 @@ import org.apache.hadoop.hive.metastore.model.MRoleMap;
 import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
 import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
 import org.apache.hadoop.hive.metastore.model.MUser;
+import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.thrift.TException;
 
 public interface RawStore extends Configurable {
@@ -117,7 +118,7 @@ public interface RawStore extends Configurable {
 
   public abstract boolean dropType(String typeName);
 
-  public abstract void createTable(Table tbl) throws InvalidObjectException,
+  public abstract DDLMsg createTable(Table tbl) throws InvalidObjectException,
       MetaException;
 
   public abstract void createOrUpdateDevice(DeviceInfo di, Node node, NodeGroup ng) throws
