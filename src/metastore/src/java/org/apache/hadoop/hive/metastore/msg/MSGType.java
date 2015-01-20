@@ -279,4 +279,9 @@ public class MSGType {
    * 设备进入下线状态，不接受任何读写
    */
   public static final int MSG_DEVICE_OFFLINE = 6004;
+  /**
+   * 设备进入非稳状态，平台检测到设备不可达，但可能是网络等原因造成，
+   * 检索和加载可能仍能够使用
+   */
+  public static final int MSG_DEVICE_SUSPECT = 6005;
 }
