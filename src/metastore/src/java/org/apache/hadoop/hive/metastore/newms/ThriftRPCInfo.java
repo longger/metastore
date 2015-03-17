@@ -22,7 +22,6 @@ import com.google.common.collect.Lists;
 public class ThriftRPCInfo {
   private static final AtomicLong TOTAL_COUNT = new AtomicLong();
   private static final AtomicLong ERROR_COUNT = new AtomicLong();
-  private static final Date CURRENT_DATE = new Date();
   private static final String FORMAT = "Report_For_Date:\t%s%n" +
       "RPC_Count:      \t%s%n" +
       "RPC_ERR_Count:  \t%s%n" +
@@ -73,6 +72,8 @@ public class ThriftRPCInfo {
     String str = new HiveConf().getVar(HiveConf.ConfVars.DM_REPORT_DIR);
     if (str == null) {
       str = System.getProperty("user.dir") + "/sotstore/reports/rpcinfo-" + sdf.format(d);
+    } else {
+      str = str + "/sotstore/reports/rpcinfo-" + sdf.format(d);
     }
     File reportFile = new File(str);
     if (!reportFile.getParentFile().exists() && !reportFile.getParentFile().mkdirs()) {
@@ -123,7 +124,7 @@ public class ThriftRPCInfo {
     }
     StringBuilder sb = new StringBuilder();
     sb.append(String.format(FORMAT,
-        CURRENT_DATE, TOTAL_COUNT.get(), ERROR_COUNT.get(),
+        new Date(System.currentTimeMillis()), TOTAL_COUNT.get(), ERROR_COUNT.get(),
         (double) totalTime.get() / TOTAL_COUNT.get() / 1000,
         entries.get(0).getKey(),// RPC_Max_Method
         entries.get(0).getValue().avg() / 1000,// RPC_Max_Time

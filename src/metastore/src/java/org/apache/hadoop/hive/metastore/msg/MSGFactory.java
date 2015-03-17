@@ -48,7 +48,9 @@ public class MSGFactory {
 
      private String localhost_name;//本机主机名
 
-     public DDLMsg(){}
+     public DDLMsg(){
+       old_object_params = new HashMap<String, Object>();
+     }
 
      public DDLMsg(long event_id, long object_id,  HashMap<String,Object> msg_data, Object eventObject, long msg_id,
         long db_id, long node_id, long event_time, String event_handler,HashMap<String,Object> old_object_params) {
@@ -70,7 +72,6 @@ public class MSGFactory {
       try {
         this.localhost_name = InetAddress.getLocalHost().getHostName();
       } catch (UnknownHostException e) {
-        // TODO Auto-generated catch block
         e.printStackTrace();
       }
     }
@@ -338,81 +339,120 @@ public class MSGFactory {
     return msgs;
   }
 
-
+  public static String getMsgData2(DDLMsg msg) {
+    return msg.toJson();
+  }
 
   public static String getMsgData(DDLMsg msg) {
-
-
     HashMap<String,Object> params = new HashMap<String,Object>();
 
     switch((int)msg.getEvent_id()){
       case MSGType.MSG_NEW_DATABESE :
-      //新建库
-            MDatabase db = (MDatabase)msg.getEventObject();
-            params.put("db_name",db.getName());
-
-            break;
+        //新建库
+        MDatabase db = (MDatabase)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        } else {
+          params.put("db_name", db.getName());
+        }
+        break;
       case MSGType.MSG_ALTER_DATABESE :
-            //修改库
-          MDatabase alt_db = (MDatabase)msg.getEventObject();
+        //修改库
+        MDatabase alt_db = (MDatabase)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        } else {
           params.put("db_name",alt_db.getName());
-          if(msg.getOld_object_params().containsKey("old_db_name")){
-            params.put("old_db_name",msg.getOld_object_params().get("old_db_name"));
-          }
-          break;
+        }
+        if(msg.getOld_object_params().containsKey("old_db_name")){
+          params.put("old_db_name",msg.getOld_object_params().get("old_db_name"));
+        }
+        break;
       case MSGType.MSG_ALTER_DATABESE_PARAM :
-            //修改库属性
-          MDatabase alt_param_db = (MDatabase)msg.getEventObject();
+        //修改库属性
+        MDatabase alt_param_db = (MDatabase)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        } else {
           params.put("db_name",alt_param_db.getName());
-          if(msg.getOld_object_params().containsKey("param_name")){
-            params.put("param_name",msg.getOld_object_params().get("param_name"));
-          }
-          break;
+        }
+        if(msg.getOld_object_params().containsKey("param_name")){
+          params.put("param_name",msg.getOld_object_params().get("param_name"));
+        }
+        break;
       case MSGType.MSG_DROP_DATABESE :
-            //删除库
-          params.put("db_name",msg.getOld_object_params().get("db_name"));
-          break;
+        //删除库
+        params.put("db_name",msg.getOld_object_params().get("db_name"));
+        break;
       case MSGType.MSG_NEW_TALBE :
-            //新建表
-          MTable tbl = (MTable)msg.getEventObject();
+        //新建表
+        MTable tbl = (MTable)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        } else {
           params.put("db_name",tbl.getDatabase().getName());
+        }
+        if (msg.getOld_object_params().containsKey("table_name")) {
+          params.put("table_name", msg.getOld_object_params().get("table_name"));
+        } else {
           params.put("table_name",tbl.getTableName());
-          break;
+        }
+        break;
       case MSGType.MSG_ALT_TALBE_NAME :
-            //修改表名
-          MTable alt_tbl = (MTable)msg.getEventObject();
+        //修改表名
+        MTable alt_tbl = (MTable)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        } else {
           params.put("db_name",alt_tbl.getDatabase().getName());
-          if(msg.getOld_object_params().containsKey("table_name")){
-            params.put("table_name",msg.getOld_object_params().get("table_name"));
-          }
-          if(msg.getOld_object_params().containsKey("old_table_name")){
-            params.put("old_table_name",msg.getOld_object_params().get("old_table_name"));
-          }
-          break;
+        }
+        if(msg.getOld_object_params().containsKey("table_name")){
+          params.put("table_name",msg.getOld_object_params().get("table_name"));
+        }
+        if(msg.getOld_object_params().containsKey("old_table_name")){
+          params.put("old_table_name",msg.getOld_object_params().get("old_table_name"));
+        }
+        break;
       case MSGType.MSG_ALT_TALBE_DISTRIBUTE :
-            //修改表数据分布
+        //修改表数据分布
         /**
          * 目前，表的分布方式有两种，全分布和全复制
          */
-          MTable alt_distribute_tbl = (MTable)msg.getEventObject();
+        MTable alt_distribute_tbl = (MTable)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        } else {
           params.put("db_name",alt_distribute_tbl.getDatabase().getName());
+        }
+        if(msg.getOld_object_params().containsKey("table_name")){
+          params.put("table_name",msg.getOld_object_params().get("table_name"));
+        } else {
           params.put("table_name",alt_distribute_tbl.getTableName());
-          if(msg.getOld_object_params().containsKey("table_distribute")){
-            params.put("table_distribute",msg.getOld_object_params().get("table_distribute"));
-          }
-          if(msg.getOld_object_params().containsKey("old_table_distribute")){
-            params.put("old_table_distribute",msg.getOld_object_params().get("old_table_distribute"));
-          }
-          break;
+        }
+        if(msg.getOld_object_params().containsKey("table_distribute")){
+          params.put("table_distribute",msg.getOld_object_params().get("table_distribute"));
+        }
+        if(msg.getOld_object_params().containsKey("old_table_distribute")){
+          params.put("old_table_distribute",msg.getOld_object_params().get("old_table_distribute"));
+        }
+        break;
       case MSGType.MSG_ALT_TALBE_PARTITIONING :
-            //修改表分区方式
-          MTable alt_partitioning_tbl = (MTable)msg.getEventObject();
+        //修改表分区方式
+        MTable alt_partitioning_tbl = (MTable)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        } else {
           params.put("db_name",alt_partitioning_tbl.getDatabase().getName());
+        }
+        if(msg.getOld_object_params().containsKey("table_name")){
+          params.put("table_name",msg.getOld_object_params().get("table_name"));
+        } else {
           params.put("table_name",alt_partitioning_tbl.getTableName());
-          if(msg.getOld_object_params().containsKey("version")){
-            params.put("version",msg.getOld_object_params().get("version"));
-          }
-          break;
+        }
+        if(msg.getOld_object_params().containsKey("version")){
+          params.put("version",msg.getOld_object_params().get("version"));
+        }
+        break;
       case MSGType.MSG_ALT_TABLE_SPLITKEYS :
           //修改文件划分规则
           params.put("db_name",msg.getOld_object_params().get("db_name"));
@@ -496,18 +536,17 @@ public class MSGFactory {
           params.put("table_name", msg.getOld_object_params().get("table_name"));
         }
         break;
+      // BUG-XXX: THE FOLLOWING SECTIONS CONTAIN BUGS!!!
       case MSGType.MSG_NEW_PARTITION :
-            // 新建分区
-          MPartition p = (MPartition)msg.getEventObject();
-          params.put("db_name", msg.getOld_object_params().get("db_name"));
-          params.put("table_name", msg.getOld_object_params().get("table_name"));
-          params.put("partition_name", msg.getOld_object_params().get("partition_name"));
-          if(p.getPartition_level() ==2){
-            Long.parseLong(getIDFromJdoObjectId(p.getParent().toString()));
-            params.put("parent_partition_name", p.getPartitionName());
-          }
-          params.put("partition_level", p.getPartition_level());
-          break;
+        // 新建分区
+        params.put("db_name", msg.getOld_object_params().get("db_name"));
+        params.put("table_name", msg.getOld_object_params().get("table_name"));
+        params.put("partition_name", msg.getOld_object_params().get("partition_name"));
+        if (msg.getOld_object_params().containsKey("parent_partition_name")) {
+          params.put("parent_partition_name", msg.getOld_object_params().get("parent_partition_name"));
+        }
+        params.put("partition_level", msg.getOld_object_params().get("partition_level"));
+        break;
       case MSGType.MSG_ALT_PARTITION :
             //修改分区
           MPartition alt_part = (MPartition)msg.getEventObject();
@@ -661,6 +700,12 @@ public class MSGFactory {
           if (msg.getOld_object_params().containsKey("new_status")) {
             params.put("new_status", msg.getOld_object_params().get("new_status"));
           }
+          if (msg.getOld_object_params().containsKey("devid")) {
+            params.put("devid", msg.getOld_object_params().get("devid"));
+          }
+          if (msg.getOld_object_params().containsKey("new_status")) {
+            params.put("location", msg.getOld_object_params().get("location"));
+          }
           break;
       case MSGType.MSG_DEL_PARTITION_FILE :
             //删除分区文件
@@ -695,17 +740,38 @@ public class MSGFactory {
         }
         break;
       case MSGType.MSG_NEW_INDEX :
-            //新建列索引
-          MIndex index = (MIndex)msg.getEventObject();
+        //新建列索引
+        MIndex index = (MIndex)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        } else {
           params.put("db_name",index.getOrigTable().getDatabase().getName());
+        }
+        if (msg.getOld_object_params().containsKey("index_name")) {
+          params.put("index_name", msg.getOld_object_params().get("index_name"));
+        } else {
           params.put("index_name",index.getIndexName());
+        }
+        if (msg.getOld_object_params().containsKey("table_name")) {
+          params.put("table_name", msg.getOld_object_params().get("table_name"));
+        } else {
           params.put("table_name", index.getOrigTable().getTableName());
-          break;
+        }
+        break;
       case MSGType.MSG_ALT_INDEX :
-            //修改列索引
-          MIndex alt_index = (MIndex)msg.getEventObject();
+        //修改列索引
+        MIndex alt_index = (MIndex)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("db_name")) {
+          params.put("db_name", msg.getOld_object_params().get("db_name"));
+        } else {
           params.put("db_name",alt_index.getOrigTable().getDatabase().getName());
+        }
+        if (msg.getOld_object_params().containsKey("index_name")) {
+          params.put("index_name", msg.getOld_object_params().get("index_name"));
+        } else {
           params.put("index_name",alt_index.getIndexName());
+        }
+        break;
       case MSGType.MSG_ALT_INDEX_PARAM :
             //修改列索引属性
 //          MIndex alt_param_index = (MIndex)msg.getEventObject();
@@ -719,7 +785,7 @@ public class MSGFactory {
         //删除列索引
         params.putAll(msg.getOld_object_params());
         break;
-
+      // BUG-XXX: THE FOLLOWING SECTIONS CONTAIN BUGS!!!!
       case MSGType.MSG_NEW_PARTITION_INDEX :
             //新建分区索引
           MPartitionIndex part_idx = (MPartitionIndex)msg.getEventObject();
@@ -744,7 +810,11 @@ public class MSGFactory {
       case MSGType.MSG_NEW_PARTITION_INDEX_FILE :
             //增加分区索引文件
           MFile idx_file = (MFile)msg.getEventObject();
-          params.put("f_id",idx_file.getFid());
+          if (msg.getOld_object_params().containsKey("f_id")) {
+            params.put("f_id", msg.getOld_object_params().get("f_id"));
+          } else {
+            params.put("f_id",idx_file.getFid());
+          }
           if(msg.getOld_object_params().containsKey("part_index_store_id")){
             params.put("part_index_store_id",msg.getOld_object_params().get("part_index_store_id"));
           }
@@ -758,7 +828,11 @@ public class MSGFactory {
       case MSGType.MSG_ALT_PARTITION_INDEX_FILE :
             //修改分区索引文件
           MFile alt_idx_file = (MFile)msg.getEventObject();
-          params.put("f_id",alt_idx_file.getFid());
+          if (msg.getOld_object_params().containsKey("f_id")) {
+            params.put("f_id", msg.getOld_object_params().get("f_id"));
+          } else {
+            params.put("f_id",alt_idx_file.getFid());
+          }
           if(msg.getOld_object_params().containsKey("part_index_store_id")){
             params.put("part_index_store_id",msg.getOld_object_params().get("part_index_store_id"));
           }
@@ -796,7 +870,11 @@ public class MSGFactory {
       case MSGType.MSG_DEL_PARTITION_INDEX_FILE :
             //删除分区索引文件
           MFile del_idx_file = (MFile)msg.getEventObject();
-          params.put("f_id",del_idx_file.getFid());
+          if (msg.getOld_object_params().containsKey("f_id")) {
+            params.put("f_id", msg.getOld_object_params().get("f_id"));
+          } else {
+            params.put("f_id",del_idx_file.getFid());
+          }
           if(msg.getOld_object_params().containsKey("part_index_store_id")){
             params.put("part_index_store_id",msg.getOld_object_params().get("part_index_store_id"));
           }
@@ -810,7 +888,11 @@ public class MSGFactory {
       case MSGType.MSG_NEW_NODE :
             //新增节点
           MNode node = (MNode)msg.getEventObject();
-          params.put("node_name",node.getNode_name());
+          if (msg.getOld_object_params().containsKey("node_name")) {
+            params.put("node_name", msg.getOld_object_params().get("node_name"));
+          } else {
+            params.put("node_name",node.getNode_name());
+          }
           break;
       case MSGType.MSG_DEL_NODE :
             //删除节点
@@ -821,7 +903,7 @@ public class MSGFactory {
             //节点故障
           if (msg.getOld_object_params().containsKey("node_name")) {
             params.put("node_name", msg.getOld_object_params().get("node_name"));
-          } 
+          }
           if (msg.getOld_object_params().containsKey("status")) {
             params.put("status", msg.getOld_object_params().get("status"));
           }
@@ -830,7 +912,7 @@ public class MSGFactory {
             //节点恢复
           if (msg.getOld_object_params().containsKey("node_name")) {
             params.put("node_name", msg.getOld_object_params().get("node_name"));
-          } 
+          }
           if (msg.getOld_object_params().containsKey("status")) {
             params.put("status", msg.getOld_object_params().get("status"));
           }
@@ -839,8 +921,12 @@ public class MSGFactory {
       case MSGType.MSG_CREATE_SCHEMA :
         //新建schema
         MSchema ms = (MSchema)msg.getEventObject();
+        if (msg.getOld_object_params().containsKey("schema_name")) {
+          params.put("schema_name", msg.getOld_object_params().get("schema_name"));
+        } else {
           params.put("schema_name",ms.getSchemaName());
-          break;
+        }
+        break;
       case MSGType.MSG_MODIFY_SCHEMA_NAME :
             //修改schema名
           if(msg.getOld_object_params().containsKey("schema_name")){
@@ -908,18 +994,30 @@ public class MSGFactory {
       case MSGType.MSG_DDL_DIRECT_DW1 :
         //dw1 专用DDL语句
           MDirectDDL direct_ddl1 = (MDirectDDL)msg.getEventObject();
-          params.put("sql",direct_ddl1.getSql());
+          if (msg.getOld_object_params().containsKey("sql")) {
+            params.put("sql", msg.getOld_object_params().get("sql"));
+          } else {
+            params.put("sql",direct_ddl1.getSql());
+          }
           break;
       case MSGType.MSG_DDL_DIRECT_DW2 :
         //dw2 专用DDL语句
           MDirectDDL direct_ddl2 = (MDirectDDL)msg.getEventObject();
-          params.put("sql",direct_ddl2.getSql());
+          if (msg.getOld_object_params().containsKey("sql")) {
+            params.put("sql", msg.getOld_object_params().get("sql"));
+          } else {
+            params.put("sql",direct_ddl2.getSql());
+          }
           break;
 
       case MSGType.MSG_NEW_NODEGROUP:
         //新建节点组
         MNodeGroup newmng = (MNodeGroup)msg.getEventObject();
-        params.put("nodegroup_name",newmng.getNode_group_name());
+        if (msg.getOld_object_params().containsKey("nodegroup_name")) {
+          params.put("nodegroup_name", msg.getOld_object_params().get("nodegroup_name"));
+        } else {
+          params.put("nodegroup_name",newmng.getNode_group_name());
+        }
         break;
       case MSGType.MSG_DEL_NODEGROUP:
         //删除节点组
@@ -993,9 +1091,9 @@ public class MSGFactory {
       case MSGType.MSG_REVOKE_TABLE_COLUMN:
       	params.putAll(msg.getOld_object_params());
       	break;
-      default:      	
+      default:
       	params.putAll(msg.getOld_object_params());
-      	
+
         break;
     }//end of switch
 

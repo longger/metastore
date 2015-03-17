@@ -2425,6 +2425,38 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'toggle_safemode failed: unknown result')
     end
 
+    def update_ms_service(status)
+      send_update_ms_service(status)
+      return recv_update_ms_service()
+    end
+
+    def send_update_ms_service(status)
+      send_message('update_ms_service', Update_ms_service_args, :status => status)
+    end
+
+    def recv_update_ms_service()
+      result = receive_message(Update_ms_service_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'update_ms_service failed: unknown result')
+    end
+
+    def get_ms_uris()
+      send_get_ms_uris()
+      return recv_get_ms_uris()
+    end
+
+    def send_get_ms_uris()
+      send_message('get_ms_uris', Get_ms_uris_args)
+    end
+
+    def recv_get_ms_uris()
+      result = receive_message(Get_ms_uris_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_ms_uris failed: unknown result')
+    end
+
     def get_file_by_id(fid)
       send_get_file_by_id(fid)
       return recv_get_file_by_id()
@@ -2752,6 +2784,22 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'getNodeInfo failed: unknown result')
     end
 
+    def getSysInfo()
+      send_getSysInfo()
+      return recv_getSysInfo()
+    end
+
+    def send_getSysInfo()
+      send_message('getSysInfo', GetSysInfo_args)
+    end
+
+    def recv_getSysInfo()
+      result = receive_message(GetSysInfo_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'getSysInfo failed: unknown result')
+    end
+
     def migrate_in(tbl, files, idxs, from_db, to_devid, fileMap)
       send_migrate_in(tbl, files, idxs, from_db, to_devid, fileMap)
       return recv_migrate_in()
@@ -2846,6 +2894,40 @@ module ThriftHiveMetastore
       return result.success unless result.success.nil?
       raise result.o1 unless result.o1.nil?
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'migrate2_stage2 failed: unknown result')
+    end
+
+    def replicate(fid, dtype)
+      send_replicate(fid, dtype)
+      return recv_replicate()
+    end
+
+    def send_replicate(fid, dtype)
+      send_message('replicate', Replicate_args, :fid => fid, :dtype => dtype)
+    end
+
+    def recv_replicate()
+      result = receive_message(Replicate_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise result.o2 unless result.o2.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'replicate failed: unknown result')
+    end
+
+    def update_sfile_nrs(fid, rec_nr, all_rec_nr, length)
+      send_update_sfile_nrs(fid, rec_nr, all_rec_nr, length)
+      return recv_update_sfile_nrs()
+    end
+
+    def send_update_sfile_nrs(fid, rec_nr, all_rec_nr, length)
+      send_message('update_sfile_nrs', Update_sfile_nrs_args, :fid => fid, :rec_nr => rec_nr, :all_rec_nr => all_rec_nr, :length => length)
+    end
+
+    def recv_update_sfile_nrs()
+      result = receive_message(Update_sfile_nrs_result)
+      return result.success unless result.success.nil?
+      raise result.o1 unless result.o1.nil?
+      raise result.o2 unless result.o2.nil?
+      raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'update_sfile_nrs failed: unknown result')
     end
 
     def getMP(node_name, devid)
@@ -5133,6 +5215,28 @@ module ThriftHiveMetastore
       write_result(result, oprot, 'toggle_safemode', seqid)
     end
 
+    def process_update_ms_service(seqid, iprot, oprot)
+      args = read_args(iprot, Update_ms_service_args)
+      result = Update_ms_service_result.new()
+      begin
+        result.success = @handler.update_ms_service(args.status)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'update_ms_service', seqid)
+    end
+
+    def process_get_ms_uris(seqid, iprot, oprot)
+      args = read_args(iprot, Get_ms_uris_args)
+      result = Get_ms_uris_result.new()
+      begin
+        result.success = @handler.get_ms_uris()
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'get_ms_uris', seqid)
+    end
+
     def process_get_file_by_id(seqid, iprot, oprot)
       args = read_args(iprot, Get_file_by_id_args)
       result = Get_file_by_id_result.new()
@@ -5367,6 +5471,17 @@ module ThriftHiveMetastore
       write_result(result, oprot, 'getNodeInfo', seqid)
     end
 
+    def process_getSysInfo(seqid, iprot, oprot)
+      args = read_args(iprot, GetSysInfo_args)
+      result = GetSysInfo_result.new()
+      begin
+        result.success = @handler.getSysInfo()
+      rescue ::MetaException => o1
+        result.o1 = o1
+      end
+      write_result(result, oprot, 'getSysInfo', seqid)
+    end
+
     def process_migrate_in(seqid, iprot, oprot)
       args = read_args(iprot, Migrate_in_args)
       result = Migrate_in_result.new()
@@ -5431,6 +5546,32 @@ module ThriftHiveMetastore
         result.o1 = o1
       end
       write_result(result, oprot, 'migrate2_stage2', seqid)
+    end
+
+    def process_replicate(seqid, iprot, oprot)
+      args = read_args(iprot, Replicate_args)
+      result = Replicate_result.new()
+      begin
+        result.success = @handler.replicate(args.fid, args.dtype)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      rescue ::FileOperationException => o2
+        result.o2 = o2
+      end
+      write_result(result, oprot, 'replicate', seqid)
+    end
+
+    def process_update_sfile_nrs(seqid, iprot, oprot)
+      args = read_args(iprot, Update_sfile_nrs_args)
+      result = Update_sfile_nrs_result.new()
+      begin
+        result.success = @handler.update_sfile_nrs(args.fid, args.rec_nr, args.all_rec_nr, args.length)
+      rescue ::MetaException => o1
+        result.o1 = o1
+      rescue ::FileOperationException => o2
+        result.o2 = o2
+      end
+      write_result(result, oprot, 'update_sfile_nrs', seqid)
     end
 
     def process_getMP(seqid, iprot, oprot)
@@ -11223,6 +11364,73 @@ module ThriftHiveMetastore
     ::Thrift::Struct.generate_accessors self
   end
 
+  class Update_ms_service_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    STATUS = 1
+
+    FIELDS = {
+      STATUS => {:type => ::Thrift::Types::I32, :name => 'status'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Update_ms_service_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Get_ms_uris_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+
+    FIELDS = {
+
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Get_ms_uris_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::STRING, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
   class Get_file_by_id_args
     include ::Thrift::Struct, ::Thrift::Struct_Union
     FID = 1
@@ -11938,6 +12146,39 @@ module ThriftHiveMetastore
     ::Thrift::Struct.generate_accessors self
   end
 
+  class GetSysInfo_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+
+    FIELDS = {
+
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class GetSysInfo_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::STRING, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
   class Migrate_in_args
     include ::Thrift::Struct, ::Thrift::Struct_Union
     TBL = 1
@@ -12188,6 +12429,86 @@ module ThriftHiveMetastore
     FIELDS = {
       SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
       O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Replicate_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    FID = 1
+    DTYPE = 2
+
+    FIELDS = {
+      FID => {:type => ::Thrift::Types::I64, :name => 'fid'},
+      DTYPE => {:type => ::Thrift::Types::I32, :name => 'dtype'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Replicate_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+    O2 = 2
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::I32, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException},
+      O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::FileOperationException}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Update_sfile_nrs_args
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    FID = 1
+    REC_NR = -1
+    ALL_REC_NR = -2
+    LENGTH = -3
+
+    FIELDS = {
+      FID => {:type => ::Thrift::Types::I64, :name => 'fid'},
+      REC_NR => {:type => ::Thrift::Types::I64, :name => 'rec_nr'},
+      ALL_REC_NR => {:type => ::Thrift::Types::I64, :name => 'all_rec_nr'},
+      LENGTH => {:type => ::Thrift::Types::I64, :name => 'length'}
+    }
+
+    def struct_fields; FIELDS; end
+
+    def validate
+    end
+
+    ::Thrift::Struct.generate_accessors self
+  end
+
+  class Update_sfile_nrs_result
+    include ::Thrift::Struct, ::Thrift::Struct_Union
+    SUCCESS = 0
+    O1 = 1
+    O2 = 2
+
+    FIELDS = {
+      SUCCESS => {:type => ::Thrift::Types::BOOL, :name => 'success'},
+      O1 => {:type => ::Thrift::Types::STRUCT, :name => 'o1', :class => ::MetaException},
+      O2 => {:type => ::Thrift::Types::STRUCT, :name => 'o2', :class => ::FileOperationException}
     }
 
     def struct_fields; FIELDS; end

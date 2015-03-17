@@ -62,6 +62,7 @@ import org.apache.hadoop.hive.metastore.model.MTableColumnPrivilege;
 import org.apache.hadoop.hive.metastore.model.MTablePrivilege;
 import org.apache.hadoop.hive.metastore.model.MUser;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
 import org.apache.thrift.TException;
 
@@ -206,10 +207,9 @@ public class RawStoreImp implements RawStore {
 	}
 
 	@Override
-	public void createTable(Table tbl) throws InvalidObjectException,
+	public DDLMsg createTable(Table tbl) throws InvalidObjectException,
 			MetaException {
-		// TODO Auto-generated method stub
-
+	  return null;
 	}
 
 	@Override
@@ -239,7 +239,7 @@ public class RawStoreImp implements RawStore {
 	        de.setStatus(MetaStoreConst.MDeviceStatus.ONLINE);
 	      }
 	      if (!de.getNode_name().equals(node.getNode_name()) &&
-            de.getProp() == MetaStoreConst.MDeviceProp.ALONE){
+            DeviceInfo.getType(de.getProp()) == MetaStoreConst.MDeviceProp.GENERAL){
 	        Node n = getNode(node.getNode_name());
 	        if (n == null) {
 	          throw new InvalidObjectException("Invalid Node name '" + node.getNode_name() + "'!");
@@ -391,6 +391,9 @@ public class RawStoreImp implements RawStore {
 		return file == null ? null : file.deepCopy();
 	}
 
+	/**
+	 * might return null
+	 */
 	@Override
 	public SFile getSFile(long fid) throws MetaException {
 		try {
@@ -405,11 +408,18 @@ public class RawStoreImp implements RawStore {
 		}
 	}
 
+	/**
+	 * might return null
+	 */
 	@Override
 	public SFile getSFile(String devid, String location) throws MetaException {
-		try{
+		try {
 			SFileLocation sfl = getSFileLocation(devid, location);
-			return getSFile(sfl.getFid());
+			if (sfl != null) {
+        return getSFile(sfl.getFid());
+			} else {
+        return null;
+      }
 		} catch (Exception e) {
 			LOG.error(e,e);
 			throw new MetaException(e.getMessage());
@@ -1829,9 +1839,10 @@ public class RawStoreImp implements RawStore {
           } catch (Exception e) {
           }
 
+          // BUG-XXX: we do NOT use L1/L4 device as reopen location candidate
           if (x.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE &&
-              (d != null && (d.getProp() == MetaStoreConst.MDeviceProp.ALONE ||
-              d.getProp() == MetaStoreConst.MDeviceProp.BACKUP_ALONE))) {
+              (d != null && (DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.GENERAL ||
+              DeviceInfo.getType(d.getProp()) == MetaStoreConst.MDeviceProp.MASS))) {
             selected = true;
             idx = i;
             break;
@@ -1851,16 +1862,27 @@ public class RawStoreImp implements RawStore {
         }
         if (selected) {
           // it is ok to reopen, and close other locations
-          for (int i = 0; i < sfl.size(); i++) {
-            if (i != idx) {
-              SFileLocation x = sfl.get(i);
-              // BUG-XXX: delete the SFL, cause SFL not found exception for incomming REP_DONE
-              this.delSFileLocation(x.getDevid(), x.getLocation());
+
+          // BUG-XXX: recheck the SFL status, make sure it exists and is valid!
+          if (getSFileLocation(sfl.get(idx).getDevid(), sfl.get(idx).getLocation()) == null ||
+              getSFileLocation(sfl.get(idx).getDevid(), sfl.get(idx).getLocation()).getVisit_status()
+                != MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            // ABORT REOPEN NOW
+            selected = false;
+          } else {
+            for (int i = 0; i < sfl.size(); i++) {
+              if (i != idx) {
+                SFileLocation x = sfl.get(i);
+                // BUG-XXX: delete the SFL, cause SFL not found exception for incomming REP_DONE
+                this.delSFileLocation(x.getDevid(), x.getLocation());
+              }
+            }
+            SFile nf = this.getSFile(file.getFid());
+            if (nf != null) {
+              nf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
+              this.updateSFile(nf);
             }
           }
-          SFile nf = this.getSFile(file.getFid());
-          nf.setStore_status(MetaStoreConst.MFileStoreStatus.INCREATE);
-          this.updateSFile(nf);
         }
       }
       if (selected) {
