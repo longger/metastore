@@ -8,7 +8,6 @@ public class MGeoLocation {
   private String dist;
 
   /**
-   * 空参构造方法
    */
   public MGeoLocation(){}
   /**

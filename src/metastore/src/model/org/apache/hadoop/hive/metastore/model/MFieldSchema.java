@@ -92,7 +92,7 @@ public class MFieldSchema {
 
 
   @Override
-  public boolean equals(Object o)         //重写equals方法,在修改表增删列中的removeall方法中要用到,列名和类型相同就认为列一样
+  public boolean equals(Object o)  
   {
     if(this == o) {
       return true;
