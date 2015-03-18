@@ -156,6 +156,7 @@ class UnparseTranslator {
     else {
       // transform the table reference to an absolute reference (i.e., "db.table")
       StringBuilder replacementText = new StringBuilder();
+      //########################################################added by zjw for schema
 //      replacementText.append(HiveUtils.unparseIdentifier(currentDatabaseName));
 //      replacementText.append('.');
 

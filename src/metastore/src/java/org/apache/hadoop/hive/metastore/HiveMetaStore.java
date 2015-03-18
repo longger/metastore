@@ -67,6 +67,7 @@ import org.apache.hadoop.hive.metastore.DiskManager.SysMonitor;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
+import org.apache.hadoop.hive.metastore.api.BusiTypeSchemaColumn;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsDesc;
@@ -140,6 +141,8 @@ import org.apache.hadoop.hive.metastore.events.PreDropTableEvent;
 import org.apache.hadoop.hive.metastore.events.PreEventContext;
 import org.apache.hadoop.hive.metastore.events.PreLoadPartitionDoneEvent;
 import org.apache.hadoop.hive.metastore.events.PreUserAuthorityCheckEvent;
+import org.apache.hadoop.hive.metastore.ha.MetaMaster;
+import org.apache.hadoop.hive.metastore.metalog.MetaStoreClientManager;
 import org.apache.hadoop.hive.metastore.model.MDBPrivilege;
 import org.apache.hadoop.hive.metastore.model.MGlobalPrivilege;
 import org.apache.hadoop.hive.metastore.model.MPartitionColumnPrivilege;
@@ -177,6 +180,7 @@ import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TServerTransport;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportFactory;
+import org.apache.zookeeper.KeeperException;
 
 import com.facebook.fb303.FacebookBase;
 import com.facebook.fb303.fb_status;
@@ -223,6 +227,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
   public static class HMSHandler extends FacebookBase implements
       IHMSHandler {
     public static IMetaStoreClient topdcli = null;
+    public MetaStoreClientManager metaStoreClientManager = null;
     public static String msUri = null;
     public static final Log LOG = HiveMetaStore.LOG;
 
@@ -437,6 +442,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         Timer cleaner = new Timer("Metastore Events Cleaner Thread", true);
         cleaner.schedule(new EventCleanerTask(this), cleanFreq, cleanFreq);
       }
+
+      MetaStoreClientManager.setTopClient(topdcli);
+      metaStoreClientManager = MetaStoreClientManager.getInstance(hiveConf);
+
       return true;
     }
 
@@ -1268,19 +1277,23 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         DDLMsg msg = null;
         try{
 
-          /**********added by zjw for schema and table when creating view********/
-          /**********with what need to notice is that table cache syn    ********/
-          /********** *  should compermise with schema                   ********/
-          /********** *  视图的table对象仅在全局点存储，视图的schema对象全局保存 ********/
-          if (TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType())) {
-            LOG.info("--zjw--TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()");
-            createSchema(copySchemaFromtable(tbl));
-          }
-          /**********end ofadded by zjw for creating view********/
-          msg = ms.createTable(tbl);
+        /**********added by zjw for schema and table when creating view********/
+        /**********with what need to notice is that table cache syn    ********/
+        /********** *  should compermise with schema                   ********/
+        /********** *  视图的table对象仅在全局点存储，视图的schema对象全局保存 ********/
+        if (TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType())) {
+          GlobalSchema schema = copySchemaFromtable(tbl);
+          tbl.setSchemaName(schema.getSchemaName());
+          LOG.info("--zjw--TableType.VIRTUAL_VIEW.toString().equals(tbl.getTableType()");
+          createSchema(copySchemaFromtable(tbl));
+        }
+        /**********end ofadded by zjw for creating view********/
+        ms.createTable(tbl);
+
 
         } catch (Exception e) {
           LOG.error(e, e);
+          throw new MetaException("create schema view failed.");
         }
         LOG.info("--zjw--before commitTransaction");
         success = ms.commitTransaction();
@@ -1309,7 +1322,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     }
 
     private GlobalSchema copySchemaFromtable(Table tbl){
-      GlobalSchema gs = new GlobalSchema(tbl.getSchemaName(), tbl.getOwner(),
+      GlobalSchema gs = new GlobalSchema(tbl.getTableName(), tbl.getOwner(),
           tbl.getCreateTime(), tbl.getLastAccessTime(), tbl.getRetention(),
           tbl.getSd(), tbl.getParameters(),
           tbl.getViewOriginalText(), tbl.getViewExpandedText(), tbl.getTableType());
@@ -4739,6 +4752,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           }
           // BUG-XXX: if client didn't call online_sfilelocation, then file and saved are inconsistent.
           // So, we have to check saved sfile here
+
           if (saved.getLocationsSize() > 0) {
             for (SFileLocation sfl : saved.getLocations()) {
               // double check and delete invalid SFLs, this might result in false warnings in SFL delete
@@ -7330,6 +7344,16 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     }
 
     @Override
+    public List<BusiTypeSchemaColumn> get_busi_type_schema_cols() throws MetaException, TException {
+      return getMS().get_busi_type_schema_cols();
+    }
+
+    @Override
+    public List<BusiTypeSchemaColumn> get_busi_type_schema_cols_by_name(String schemaName)
+        throws InvalidObjectException, MetaException, TException {
+      return getMS().get_busi_type_schema_cols_by_name(schemaName);
+    }
+
     public int replicate(long fid, int dtype) throws MetaException, FileOperationException,
     TException {
       DMProfile.replicate.incrementAndGet();
@@ -7528,6 +7552,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       }
     }
 
+
+    MetaMaster master = null;
+
     try {
       String msg = "Starting hive metastore on port " + cli.port;
       HMSHandler.LOG.info(msg);
@@ -7556,6 +7583,14 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         });
       }
 
+      ////**********Here for HA
+//      if(!conf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION)){
+        HMSHandler.LOG.info("===========register zk master not top===========");
+        master = new MetaMaster(conf);
+        master.start();
+//      }
+
+
       if (!conf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION) && !conf.getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
         dm = new DiskManager(new HiveConf(DiskManager.class), HMSHandler.LOG);
       }
@@ -7564,6 +7599,12 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       // Catch the exception, log it and rethrow it.
       HMSHandler.LOG
           .error("Metastore Thrift Server threw an exception...", t);
+
+      if(master != null){
+        HMSHandler.LOG.info("===========unregister zk master===========");
+        master.abort("MetastoreServer threw an exception,exit.", t);
+      }
+
       System.exit(-1);
       throw t;
     }
@@ -7711,6 +7752,30 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       HMSHandler.LOG.error(StringUtils.stringifyException(x));
       throw x;
     }
+  }
+
+
+
+  public boolean isStopped() {
+    // TODO Auto-generated method stub
+    return false;
+  }
+
+
+
+  public void abort(String string, KeeperException ke) {
+    HMSHandler.LOG
+    .info("Metastore Thrift Server exit by exception...for reasion:"+string, ke);
+    System.exit(-1);
+
+  }
+
+
+
+  public void stop(String string) {
+    HMSHandler.LOG.info("Metastore Thrift Server stop ...because of:"+string);
+    System.exit(-1);
+
   }
 
 }

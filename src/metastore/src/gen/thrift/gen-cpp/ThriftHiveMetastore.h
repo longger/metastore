@@ -29,6 +29,8 @@ class ThriftHiveMetastoreIf : virtual public  ::facebook::fb303::FacebookService
   virtual bool add_datawarehouse_sql(const int32_t dwNum, const std::string& sql) = 0;
   virtual void showBusitypes(std::vector<Busitype> & _return) = 0;
   virtual int32_t createBusitype(const Busitype& busitype) = 0;
+  virtual void get_busi_type_schema_cols(std::vector<BusiTypeSchemaColumn> & _return) = 0;
+  virtual void get_busi_type_schema_cols_by_name(std::vector<BusiTypeSchemaColumn> & _return, const std::string& schemaName) = 0;
   virtual int32_t add_partition_files(const Partition& part, const std::vector<SFile> & files) = 0;
   virtual int32_t drop_partition_files(const Partition& part, const std::vector<SFile> & files) = 0;
   virtual int32_t add_subpartition_files(const Subpartition& subpart, const std::vector<SFile> & files) = 0;
@@ -290,6 +292,12 @@ class ThriftHiveMetastoreNull : virtual public ThriftHiveMetastoreIf , virtual p
   int32_t createBusitype(const Busitype& /* busitype */) {
     int32_t _return = 0;
     return _return;
+  }
+  void get_busi_type_schema_cols(std::vector<BusiTypeSchemaColumn> & /* _return */) {
+    return;
+  }
+  void get_busi_type_schema_cols_by_name(std::vector<BusiTypeSchemaColumn> & /* _return */, const std::string& /* schemaName */) {
+    return;
   }
   int32_t add_partition_files(const Partition& /* part */, const std::vector<SFile> & /* files */) {
     int32_t _return = 0;
@@ -2526,6 +2534,238 @@ class ThriftHiveMetastore_createBusitype_presult {
   MetaException o2;
 
   _ThriftHiveMetastore_createBusitype_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+
+class ThriftHiveMetastore_get_busi_type_schema_cols_args {
+ public:
+
+  ThriftHiveMetastore_get_busi_type_schema_cols_args() {
+  }
+
+  virtual ~ThriftHiveMetastore_get_busi_type_schema_cols_args() throw() {}
+
+
+  bool operator == (const ThriftHiveMetastore_get_busi_type_schema_cols_args & /* rhs */) const
+  {
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_get_busi_type_schema_cols_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_get_busi_type_schema_cols_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_get_busi_type_schema_cols_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_get_busi_type_schema_cols_pargs() throw() {}
+
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_get_busi_type_schema_cols_result__isset {
+  _ThriftHiveMetastore_get_busi_type_schema_cols_result__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_get_busi_type_schema_cols_result__isset;
+
+class ThriftHiveMetastore_get_busi_type_schema_cols_result {
+ public:
+
+  ThriftHiveMetastore_get_busi_type_schema_cols_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_get_busi_type_schema_cols_result() throw() {}
+
+  std::vector<BusiTypeSchemaColumn>  success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_get_busi_type_schema_cols_result__isset __isset;
+
+  void __set_success(const std::vector<BusiTypeSchemaColumn> & val) {
+    success = val;
+  }
+
+  void __set_o1(const MetaException& val) {
+    o1 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_get_busi_type_schema_cols_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_get_busi_type_schema_cols_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_get_busi_type_schema_cols_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_get_busi_type_schema_cols_presult__isset {
+  _ThriftHiveMetastore_get_busi_type_schema_cols_presult__isset() : success(false), o1(false) {}
+  bool success;
+  bool o1;
+} _ThriftHiveMetastore_get_busi_type_schema_cols_presult__isset;
+
+class ThriftHiveMetastore_get_busi_type_schema_cols_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_get_busi_type_schema_cols_presult() throw() {}
+
+  std::vector<BusiTypeSchemaColumn> * success;
+  MetaException o1;
+
+  _ThriftHiveMetastore_get_busi_type_schema_cols_presult__isset __isset;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+
+};
+
+typedef struct _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args__isset {
+  _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args__isset() : schemaName(false) {}
+  bool schemaName;
+} _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args__isset;
+
+class ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args {
+ public:
+
+  ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args() : schemaName() {
+  }
+
+  virtual ~ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args() throw() {}
+
+  std::string schemaName;
+
+  _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args__isset __isset;
+
+  void __set_schemaName(const std::string& val) {
+    schemaName = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args & rhs) const
+  {
+    if (!(schemaName == rhs.schemaName))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_get_busi_type_schema_cols_by_name_args & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+
+class ThriftHiveMetastore_get_busi_type_schema_cols_by_name_pargs {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_get_busi_type_schema_cols_by_name_pargs() throw() {}
+
+  const std::string* schemaName;
+
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result__isset {
+  _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result__isset;
+
+class ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result {
+ public:
+
+  ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result() {
+  }
+
+  virtual ~ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result() throw() {}
+
+  std::vector<BusiTypeSchemaColumn>  success;
+  InvalidObjectException o1;
+  MetaException o2;
+
+  _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result__isset __isset;
+
+  void __set_success(const std::vector<BusiTypeSchemaColumn> & val) {
+    success = val;
+  }
+
+  void __set_o1(const InvalidObjectException& val) {
+    o1 = val;
+  }
+
+  void __set_o2(const MetaException& val) {
+    o2 = val;
+  }
+
+  bool operator == (const ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result & rhs) const
+  {
+    if (!(success == rhs.success))
+      return false;
+    if (!(o1 == rhs.o1))
+      return false;
+    if (!(o2 == rhs.o2))
+      return false;
+    return true;
+  }
+  bool operator != (const ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const ThriftHiveMetastore_get_busi_type_schema_cols_by_name_result & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+typedef struct _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_presult__isset {
+  _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_presult__isset() : success(false), o1(false), o2(false) {}
+  bool success;
+  bool o1;
+  bool o2;
+} _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_presult__isset;
+
+class ThriftHiveMetastore_get_busi_type_schema_cols_by_name_presult {
+ public:
+
+
+  virtual ~ThriftHiveMetastore_get_busi_type_schema_cols_by_name_presult() throw() {}
+
+  std::vector<BusiTypeSchemaColumn> * success;
+  InvalidObjectException o1;
+  MetaException o2;
+
+  _ThriftHiveMetastore_get_busi_type_schema_cols_by_name_presult__isset __isset;
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
 
@@ -28015,6 +28255,12 @@ class ThriftHiveMetastoreClient : virtual public ThriftHiveMetastoreIf, public  
   int32_t createBusitype(const Busitype& busitype);
   void send_createBusitype(const Busitype& busitype);
   int32_t recv_createBusitype();
+  void get_busi_type_schema_cols(std::vector<BusiTypeSchemaColumn> & _return);
+  void send_get_busi_type_schema_cols();
+  void recv_get_busi_type_schema_cols(std::vector<BusiTypeSchemaColumn> & _return);
+  void get_busi_type_schema_cols_by_name(std::vector<BusiTypeSchemaColumn> & _return, const std::string& schemaName);
+  void send_get_busi_type_schema_cols_by_name(const std::string& schemaName);
+  void recv_get_busi_type_schema_cols_by_name(std::vector<BusiTypeSchemaColumn> & _return);
   int32_t add_partition_files(const Partition& part, const std::vector<SFile> & files);
   void send_add_partition_files(const Partition& part, const std::vector<SFile> & files);
   int32_t recv_add_partition_files();
@@ -28614,6 +28860,8 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
   void process_add_datawarehouse_sql(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_showBusitypes(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_createBusitype(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_get_busi_type_schema_cols(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
+  void process_get_busi_type_schema_cols_by_name(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_add_partition_files(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_drop_partition_files(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
   void process_add_subpartition_files(int32_t seqid, ::apache::thrift::protocol::TProtocol* iprot, ::apache::thrift::protocol::TProtocol* oprot, void* callContext);
@@ -28823,6 +29071,8 @@ class ThriftHiveMetastoreProcessor : public  ::facebook::fb303::FacebookServiceP
     processMap_["add_datawarehouse_sql"] = &ThriftHiveMetastoreProcessor::process_add_datawarehouse_sql;
     processMap_["showBusitypes"] = &ThriftHiveMetastoreProcessor::process_showBusitypes;
     processMap_["createBusitype"] = &ThriftHiveMetastoreProcessor::process_createBusitype;
+    processMap_["get_busi_type_schema_cols"] = &ThriftHiveMetastoreProcessor::process_get_busi_type_schema_cols;
+    processMap_["get_busi_type_schema_cols_by_name"] = &ThriftHiveMetastoreProcessor::process_get_busi_type_schema_cols_by_name;
     processMap_["add_partition_files"] = &ThriftHiveMetastoreProcessor::process_add_partition_files;
     processMap_["drop_partition_files"] = &ThriftHiveMetastoreProcessor::process_drop_partition_files;
     processMap_["add_subpartition_files"] = &ThriftHiveMetastoreProcessor::process_add_subpartition_files;
@@ -29170,6 +29420,26 @@ class ThriftHiveMetastoreMultiface : virtual public ThriftHiveMetastoreIf, publi
       ifaces_[i]->createBusitype(busitype);
     }
     return ifaces_[i]->createBusitype(busitype);
+  }
+
+  void get_busi_type_schema_cols(std::vector<BusiTypeSchemaColumn> & _return) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->get_busi_type_schema_cols(_return);
+    }
+    ifaces_[i]->get_busi_type_schema_cols(_return);
+    return;
+  }
+
+  void get_busi_type_schema_cols_by_name(std::vector<BusiTypeSchemaColumn> & _return, const std::string& schemaName) {
+    size_t sz = ifaces_.size();
+    size_t i = 0;
+    for (; i < (sz - 1); ++i) {
+      ifaces_[i]->get_busi_type_schema_cols_by_name(_return, schemaName);
+    }
+    ifaces_[i]->get_busi_type_schema_cols_by_name(_return, schemaName);
+    return;
   }
 
   int32_t add_partition_files(const Partition& part, const std::vector<SFile> & files) {

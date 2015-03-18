@@ -30,6 +30,7 @@
                 conf="compile->default" />
     <dependency org="org.apache.hive" name="hive-shims" rev="${version}"
                 conf="compile->default" transitive="false" />
+    <dependency org="org.apache.hbase" name="hbase" rev="${hbase.version}"/>
     <dependency org="org.antlr" name="antlr" rev="${antlr.version}"/>
     <dependency org="org.antlr" name="antlr-runtime" rev="${antlr-runtime.version}"/>
     <dependency org="commons-cli" name="commons-cli" rev="${commons-cli.version}"/>

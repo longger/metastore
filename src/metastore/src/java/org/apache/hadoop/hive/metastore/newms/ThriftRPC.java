@@ -53,6 +53,7 @@ import org.apache.hadoop.hive.metastore.Warehouse;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
+import org.apache.hadoop.hive.metastore.api.BusiTypeSchemaColumn;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
@@ -772,6 +773,13 @@ public class ThriftRPC extends FacebookBase implements
             dm.asyncDelSFL(sfl);
           }
         }
+        for (SFileLocation sfl : saved.getLocations()) {
+          // double check and delete invalid SFLs, this might result in false warnings in SFL delete
+          if (sfl.getVisit_status() != MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+            sflToDel.add(sfl);
+            dm.asyncDelSFL(sfl);
+          }
+        }
         // BUG-XXX: trunc offline sfls
         if (sflToDel.size() > 0) {
           file.getLocations().removeAll(sflToDel);
@@ -1072,6 +1080,7 @@ public class ThriftRPC extends FacebookBase implements
       // this means we should select Best Available Node and Best Available Device;
       // FIXME: add FLSelector here, filter already used nodes, update will used nodes;
       try {
+
         repnr = DiskManager.flselector.updateRepnr(db_name + "." + table_name, repnr);
         // call FLSelector's main function
         switch (DiskManager.flselector.FLSelector_switch(db_name + "." + table_name)) {
@@ -1116,6 +1125,12 @@ public class ThriftRPC extends FacebookBase implements
           break;
         }
 
+        if (node_name == null) {
+          node_name = dm.findBestNode(flp);
+        }
+        if (node_name == null) {
+          throw new IOException("Following the FLP(" + flp + "), we can't find any available node now.");
+        }
         if (node_name == null) {
           node_name = dm.findBestNode(flp);
         }
@@ -3738,6 +3753,18 @@ public class ThriftRPC extends FacebookBase implements
 	}
 
   @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols() throws MetaException, TException {
+    // TODO Auto-generated method stub
+    return  __cli.get().get_busi_type_schema_cols();
+  }
+
+  @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols_by_name(String schemaName)
+      throws InvalidObjectException, MetaException, TException {
+    // TODO Auto-generated method stub
+    return  __cli.get().get_busi_type_schema_cols_by_name(schemaName);
+  }
+
   public int replicate(long fid, int dtype) throws MetaException, FileOperationException,
       TException {
     DMProfile.replicate.incrementAndGet();

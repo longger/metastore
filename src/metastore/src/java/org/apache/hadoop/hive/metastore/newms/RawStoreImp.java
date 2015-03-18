@@ -19,6 +19,7 @@ import org.apache.hadoop.hive.metastore.RawStore;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
+import org.apache.hadoop.hive.metastore.api.BusiTypeSchemaColumn;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.Database;
@@ -1834,6 +1835,7 @@ public class RawStoreImp implements RawStore {
           SFileLocation x = sfl.get(i);
           Device d = null;
 
+
           try {
             d = (Device) cs.readObject(ObjectType.DEVICE, x.getDevid());
           } catch (Exception e) {
@@ -1960,5 +1962,18 @@ public class RawStoreImp implements RawStore {
       LOG.error(e, e);
       throw new MetaException(e.getMessage());
     }
+  }
+
+  @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols() throws MetaException, TException {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols_by_name(String schemaName)
+      throws InvalidObjectException, MetaException, TException {
+    // TODO Auto-generated method stub
+    return null;
   }
 }

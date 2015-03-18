@@ -19,25 +19,25 @@
 package org.apache.hadoop.hive.metastore.model;
 
 
-public class MBusitype {
+public class MBusiType {
 
   private String businame;
   private String comment;
 
-  public MBusitype() {}
+  public MBusiType() {}
 
-  public MBusitype(String businame, String comment) {
+  public MBusiType(String busiTypeName, String comment) {
     super();
-    this.businame = businame;
+    this.businame = busiTypeName;
     this.comment = comment;
   }
 
-  public String getBusiname() {
+  public String getBusiTypeName() {
     return businame;
   }
 
-  public void setBusiname(String businame) {
-    this.businame = businame;
+  public void setBusiTypeName(String busiTypeName) {
+    this.businame = busiTypeName;
   }
 
 

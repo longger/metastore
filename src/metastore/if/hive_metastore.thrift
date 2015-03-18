@@ -352,10 +352,20 @@ struct Table {
 }
 
 
+struct Busitype {
+  1: string name, // name of the field
+  2: string comment
+}
 
 struct BusiTypeColumn {
   1: string busiType,  // required @ip,@content,@tel,@time
   2: Table table,         // table
+  3: string column      //column
+}
+
+struct BusiTypeSchemaColumn {
+  1: Busitype busiType,  // required @ip,@content,@tel,@time
+  2: GlobalSchema schema,         // schema
   3: string column      //column
 }
 
@@ -416,10 +426,6 @@ struct SFileRef {
   2: i64    origin_fid,
 }
 
-struct Busitype {
-  1: string name, // name of the field
-  2: string comment
-}
 
 struct Index {
   1: string       indexName, // unique with in the whole database namespace
@@ -608,6 +614,10 @@ service ThriftHiveMetastore extends fb303.FacebookService
   list<Busitype> showBusitypes()  throws(1:InvalidObjectException o1, 2:MetaException o2)
   
   i32 createBusitype(1:Busitype busitype)  throws(1:InvalidObjectException o1, 2:MetaException o2)
+  
+  list<BusiTypeSchemaColumn> get_busi_type_schema_cols() throws(1:MetaException o1)
+  
+  list<BusiTypeSchemaColumn> get_busi_type_schema_cols_by_name(1:string schemaName ) throws(1:InvalidObjectException o1, 2:MetaException o2)
   
   //start of partition file
   i32 add_partition_files(1:Partition part, 2:list<SFile> files)

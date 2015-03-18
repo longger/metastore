@@ -26,6 +26,7 @@ import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
+import org.apache.hadoop.hive.metastore.api.BusiTypeSchemaColumn;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.Database;
@@ -694,5 +695,10 @@ public interface RawStore extends Configurable {
   public abstract statfs statFileSystem(long from, long to) throws MetaException;
 
   public abstract long countDevice() throws MetaException;
+
+  public abstract List<BusiTypeSchemaColumn> get_busi_type_schema_cols() throws MetaException, TException;
+
+  public abstract List<BusiTypeSchemaColumn> get_busi_type_schema_cols_by_name(String schemaName)
+        throws InvalidObjectException, MetaException, TException;
 
 }

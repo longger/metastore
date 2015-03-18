@@ -988,6 +988,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
               getMsg("Table " + getUnescapedName(qb.getParseInfo().getSrcForAlias(alias))));
         }
 
+        LOG.info("---zjw--tab.isView():"+tab.isView());
         if (tab.isView()) {
           if (qb.getParseInfo().isAnalyzeCommand()) {
             throw new SemanticException(ErrorMsg.ANALYZE_VIEW.getMsg());
@@ -999,8 +1000,11 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
                 " detected (cycle: " + StringUtils.join(viewsExpanded, " -> ") +
                 " -> " + fullViewName + ").");
           }
+          LOG.info("---zjw--getting pre view sql:"+tab.getViewOriginalText());
           replaceViewReferenceWithDefinition(qb, tab, tab_name, alias);
           aliasToViewName.put(alias, fullViewName);
+
+          LOG.info("---zjw--getting suf view sql:"+tab.getViewOriginalText());
           // This is the last time we'll see the Table objects for views, so add it to the inputs
           // now
           inputs.add(new ReadEntity(tab));
@@ -8694,7 +8698,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     String originalText = ctx.getTokenRewriteStream().toString(
         viewSelect.getTokenStartIndex(), viewSelect.getTokenStopIndex());
     createVwDesc.setViewOriginalText(originalText);
-
+    LOG.info("---zjw--1 getting pre view sql:"+createVwDesc.getViewOriginalText());
     // Now expand the view definition with extras such as explicit column
     // references; this expanded form is what we'll re-parse when the view is
     // referenced later.
@@ -8702,6 +8706,7 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
     String expandedText = ctx.getTokenRewriteStream().toString(
         viewSelect.getTokenStartIndex(), viewSelect.getTokenStopIndex());
 
+    LOG.info("---zjw--2 getting expandedText:"+expandedText);
     if (imposedSchema != null) {
       // Merge the names from the imposed schema into the types
       // from the derived schema.
@@ -9583,6 +9588,8 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       tableName, cols, comment, tblProps, partColNames, ifNotExists,isHeter, orReplace);
     unparseTranslator.enable();
     LOG.info("---zjw--createView.isHeter:"+createVwDesc.isHeter());
+
+    LOG.info("---zjw--createView.getViewExpandedText:"+createVwDesc.getViewExpandedText());
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         createVwDesc), conf));
     qb.setViewDesc(createVwDesc);

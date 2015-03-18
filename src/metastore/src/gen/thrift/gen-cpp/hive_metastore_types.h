@@ -2056,6 +2056,57 @@ class Table {
 
 void swap(Table &a, Table &b);
 
+typedef struct _Busitype__isset {
+  _Busitype__isset() : name(false), comment(false) {}
+  bool name;
+  bool comment;
+} _Busitype__isset;
+
+class Busitype {
+ public:
+
+  static const char* ascii_fingerprint; // = "07A9615F837F7D0A952B595DD3020972";
+  static const uint8_t binary_fingerprint[16]; // = {0x07,0xA9,0x61,0x5F,0x83,0x7F,0x7D,0x0A,0x95,0x2B,0x59,0x5D,0xD3,0x02,0x09,0x72};
+
+  Busitype() : name(), comment() {
+  }
+
+  virtual ~Busitype() throw() {}
+
+  std::string name;
+  std::string comment;
+
+  _Busitype__isset __isset;
+
+  void __set_name(const std::string& val) {
+    name = val;
+  }
+
+  void __set_comment(const std::string& val) {
+    comment = val;
+  }
+
+  bool operator == (const Busitype & rhs) const
+  {
+    if (!(name == rhs.name))
+      return false;
+    if (!(comment == rhs.comment))
+      return false;
+    return true;
+  }
+  bool operator != (const Busitype &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const Busitype & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+void swap(Busitype &a, Busitype &b);
+
 typedef struct _BusiTypeColumn__isset {
   _BusiTypeColumn__isset() : busiType(false), table(false), column(false) {}
   bool busiType;
@@ -2114,6 +2165,65 @@ class BusiTypeColumn {
 };
 
 void swap(BusiTypeColumn &a, BusiTypeColumn &b);
+
+typedef struct _BusiTypeSchemaColumn__isset {
+  _BusiTypeSchemaColumn__isset() : busiType(false), schema(false), column(false) {}
+  bool busiType;
+  bool schema;
+  bool column;
+} _BusiTypeSchemaColumn__isset;
+
+class BusiTypeSchemaColumn {
+ public:
+
+  static const char* ascii_fingerprint; // = "394528269271AD3D4285BB553C595B5E";
+  static const uint8_t binary_fingerprint[16]; // = {0x39,0x45,0x28,0x26,0x92,0x71,0xAD,0x3D,0x42,0x85,0xBB,0x55,0x3C,0x59,0x5B,0x5E};
+
+  BusiTypeSchemaColumn() : column() {
+  }
+
+  virtual ~BusiTypeSchemaColumn() throw() {}
+
+  Busitype busiType;
+  GlobalSchema schema;
+  std::string column;
+
+  _BusiTypeSchemaColumn__isset __isset;
+
+  void __set_busiType(const Busitype& val) {
+    busiType = val;
+  }
+
+  void __set_schema(const GlobalSchema& val) {
+    schema = val;
+  }
+
+  void __set_column(const std::string& val) {
+    column = val;
+  }
+
+  bool operator == (const BusiTypeSchemaColumn & rhs) const
+  {
+    if (!(busiType == rhs.busiType))
+      return false;
+    if (!(schema == rhs.schema))
+      return false;
+    if (!(column == rhs.column))
+      return false;
+    return true;
+  }
+  bool operator != (const BusiTypeSchemaColumn &rhs) const {
+    return !(*this == rhs);
+  }
+
+  bool operator < (const BusiTypeSchemaColumn & ) const;
+
+  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
+  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
+
+};
+
+void swap(BusiTypeSchemaColumn &a, BusiTypeSchemaColumn &b);
 
 typedef struct _BusiTypeDatacenter__isset {
   _BusiTypeDatacenter__isset() : busiType(false), db(false) {}
@@ -2647,57 +2757,6 @@ class SFileRef {
 };
 
 void swap(SFileRef &a, SFileRef &b);
-
-typedef struct _Busitype__isset {
-  _Busitype__isset() : name(false), comment(false) {}
-  bool name;
-  bool comment;
-} _Busitype__isset;
-
-class Busitype {
- public:
-
-  static const char* ascii_fingerprint; // = "07A9615F837F7D0A952B595DD3020972";
-  static const uint8_t binary_fingerprint[16]; // = {0x07,0xA9,0x61,0x5F,0x83,0x7F,0x7D,0x0A,0x95,0x2B,0x59,0x5D,0xD3,0x02,0x09,0x72};
-
-  Busitype() : name(), comment() {
-  }
-
-  virtual ~Busitype() throw() {}
-
-  std::string name;
-  std::string comment;
-
-  _Busitype__isset __isset;
-
-  void __set_name(const std::string& val) {
-    name = val;
-  }
-
-  void __set_comment(const std::string& val) {
-    comment = val;
-  }
-
-  bool operator == (const Busitype & rhs) const
-  {
-    if (!(name == rhs.name))
-      return false;
-    if (!(comment == rhs.comment))
-      return false;
-    return true;
-  }
-  bool operator != (const Busitype &rhs) const {
-    return !(*this == rhs);
-  }
-
-  bool operator < (const Busitype & ) const;
-
-  uint32_t read(::apache::thrift::protocol::TProtocol* iprot);
-  uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const;
-
-};
-
-void swap(Busitype &a, Busitype &b);
 
 typedef struct _Index__isset {
   _Index__isset() : indexName(false), indexHandlerClass(false), dbName(false), origTableName(false), createTime(false), lastAccessTime(false), indexTableName(false), sd(false), parameters(false), deferredRebuild(false) {}

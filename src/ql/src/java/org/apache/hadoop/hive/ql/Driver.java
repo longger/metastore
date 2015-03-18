@@ -568,6 +568,8 @@ public class Driver implements CommandProcessor {
         }
 
       }
+    }else{
+      LOG.warn("---zjw-- Operation in doauthorization is NULL.");
     }
 
     if (inputs != null && inputs.size() > 0) {

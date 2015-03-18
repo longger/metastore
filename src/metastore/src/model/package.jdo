@@ -378,6 +378,9 @@
             <field name="type">
               <column name="TYPE_NAME" length="4000" jdbc-type="VARCHAR"  allows-null="false"/>
             </field>
+            <field name="comment" >
+              <column name="FCOMMENT" length="4000" jdbc-type="VARCHAR" allows-null="true"/>
+            </field>
           </embedded>
         </element>
       </field>
@@ -568,6 +571,21 @@
       </field>
       <field name="table">
         <column name="TBL_ID"/>
+      </field>
+      <field name="column">
+      	<column name="COLUMN_NAME" length="256" jdbc-type="VARCHAR"/>
+      </field>
+    </class>
+    
+    <class name="MBusiTypeSchemaColumn" table="BUSITYPE_SCHEMA_COL" identity-type="datastore" detachable="true">
+      <datastore-identity>
+        <column name="BSC_ID"/>
+      </datastore-identity>
+      <field name="busiType">
+        <column name="BUSI_TYPE_ID"/>
+      </field>
+      <field name="schema">
+        <column name="SCHEMA_ID"/>
       </field>
       <field name="column">
       	<column name="COLUMN_NAME" length="256" jdbc-type="VARCHAR"/>
@@ -1426,9 +1444,9 @@
       </field>
     </class>
     
-    <class name="MBusitype" table="busi_types" detachable="true">
+    <class name="MBusiType" table="busi_types" detachable="true">
       <index name="UniqueBusitype" unique="true">
-        <column name="name"/>
+        <column name="NAME"/>
       </index>
       
       <datastore-identity>

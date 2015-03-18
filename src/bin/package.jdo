@@ -574,6 +574,22 @@
       </field>
     </class>
     
+    
+    <class name="MBusiTypeSchemaColumn" table="BUSITYPE_SCHEMA_COL" identity-type="datastore" detachable="true">
+      <datastore-identity>
+        <column name="BSC_ID"/>
+      </datastore-identity>
+      <field name="busiType">
+        <column name="BUSI_TYPE_ID"/>
+      </field>
+      <field name="schema">
+        <column name="SCHEMA_ID"/>
+      </field>
+      <field name="column">
+      	<column name="COLUMN_NAME" length="256" jdbc-type="VARCHAR"/>
+      </field>
+    </class>
+    
    <class name="MBusiTypeDatacenter" table="BUSITYPE_DATACENTER" identity-type="datastore" detachable="true">
       <datastore-identity>
         <column name="BD_ID"/>

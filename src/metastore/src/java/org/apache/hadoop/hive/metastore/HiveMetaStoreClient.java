@@ -41,11 +41,13 @@ import javax.security.auth.login.LoginException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
+import org.apache.hadoop.hive.metastore.api.BusiTypeSchemaColumn;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ConfigValSecurityException;
@@ -91,6 +93,9 @@ import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.metastore.zk.ServerName;
+import org.apache.hadoop.hive.metastore.zk.ZKUtil;
+import org.apache.hadoop.hive.metastore.zk.ZooKeeperWatcher;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
@@ -129,6 +134,27 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
   throws MetaException {
     this.hookLoader = hookLoader;
     this.conf = new HiveConf(HiveMetaStoreClient.class);
+
+    /******************added by zjw for hivemetastore service HA****************/
+
+
+    String zkUri = conf.getVar(HiveConf.ConfVars.METAZOOKEEPERSTOREURIS);
+    String zkPort = conf.getVar(HiveConf.ConfVars.HIVE_ZOOKEEPER_META_PORT);
+    LOG.info("#####msUri address:"+msUri+",zkUri:"+zkUri+",zkport:"+zkPort);
+    if(!msUri.contains("thrift")){//
+      zkUri = msUri;
+      if(zkUri.indexOf(":") < 0){
+        zkUri = zkUri +":"+ zkPort;
+      }
+      LOG.info("#####connecting to zk address:"+msUri);
+      if(zkUri != null){
+        ZooKeeperWatcher zkw = null;
+        msUri = retryGetMaster(zkw,zkUri,  3);
+        LOG.info("#####hivemetasore address:"+msUri);
+      }
+    }
+
+    /******************end hivemetastore service HA****************/
 
     localMetaStore = (msUri == null) ? true : msUri.trim().isEmpty();
     if (localMetaStore) {
@@ -186,6 +212,25 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     this.conf = conf;
 
     String msUri = conf.getVar(HiveConf.ConfVars.METASTOREURIS);
+
+    /******************added by zjw for hivemetastore service HA****************/
+
+
+    String zkUri = conf.getVar(HiveConf.ConfVars.METAZOOKEEPERSTOREURIS);
+    String zkPort = conf.getVar(HiveConf.ConfVars.HIVE_ZOOKEEPER_META_PORT);
+    LOG.info("#####msUri address:"+msUri+",zkUri:"+zkUri+",zkport:"+zkPort);
+    if(!msUri.contains("thrift")){//
+      zkUri = msUri;
+      zkUri = zkUri +":"+ zkPort;
+      LOG.info("#####connecting to zk address:"+zkUri);
+      if(zkUri != null){
+        ZooKeeperWatcher zkw = null;
+        msUri = retryGetMaster(zkw,zkUri,  3);
+        LOG.info("#####hivemetasore address:"+msUri);
+      }
+    }
+
+    /******************end hivemetastore service HA****************/
     localMetaStore = (msUri == null) ? true : msUri.trim().isEmpty();
     if (localMetaStore) {
       // instantiate the metastore server handler directly instead of connecting
@@ -200,9 +245,12 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     retryDelaySeconds = conf.getIntVar(ConfVars.METASTORE_CLIENT_CONNECT_RETRY_DELAY);
 
     // user wants file store based configuration
-    if (conf.getVar(HiveConf.ConfVars.METASTOREURIS) != null) {
-      String metastoreUrisString[] = conf.getVar(
-          HiveConf.ConfVars.METASTOREURIS).split(",");
+//    if (conf.getVar(HiveConf.ConfVars.METASTOREURIS) != null) {
+//      String metastoreUrisString[] = conf.getVar(
+//          HiveConf.ConfVars.METASTOREURIS).split(",");
+
+    if (msUri != null) {
+    String metastoreUrisString[] = msUri.split(",");
       metastoreUris = new URI[metastoreUrisString.length];
       try {
         int i = 0;
@@ -234,6 +282,51 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     }
     // finally open the store
     open();
+  }
+
+  private String retryGetMaster(ZooKeeperWatcher zkw,String zkString,int times){
+    if(times <= 0){
+      return null;
+    }
+    LOG.info("###Connectiong zookeeper:"+zkString);
+    String msUri =  null;
+    try {
+      zkw = new ZooKeeperWatcher(conf,zkString,this.toString(),null,false);
+      msUri = blockUntilAvailable(zkw,60000).toString();
+      return msUri;
+    } catch (ZooKeeperConnectionException e) {
+      LOG.error("Error in init zk connection");
+      LOG.error(e, e);
+    } catch (IOException e) {
+      LOG.error("IO Error in init zk connection");
+      LOG.error(e, e);
+    } catch (InterruptedException e) {
+      LOG.error("IO Error in init zk connection");
+      LOG.error(e, e);
+    }
+    return this.retryGetMaster(zkw,zkString, times-1);
+
+  }
+
+  /**
+   * Wait until the meta region is available.
+   * @param zkw
+   * @param timeout
+   * @return ServerName or null if we timed out.
+   * @throws InterruptedException
+   */
+  public static ServerName blockUntilAvailable(final ZooKeeperWatcher zkw,
+      final long timeout)
+  throws InterruptedException {
+    byte [] data = null;
+
+    data =  ZKUtil.blockUntilAvailable(zkw, zkw.masterAddressZNode, timeout);
+    if (data == null) {
+      return null;
+    }else{
+      LOG.info("==============master bytes:"+new String(data));
+    }
+    return ServerName.parseFrom(data);
   }
 
   /**
@@ -2383,6 +2476,16 @@ public boolean authentication(String user_name, String passwd)
   }
 
   @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols() throws MetaException, TException {
+    return client.get_busi_type_schema_cols();
+  }
+
+  @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols_by_name(String schemaName)
+      throws InvalidObjectException, MetaException, TException {
+    return client.get_busi_type_schema_cols_by_name(schemaName);
+  }
+
   public int replicate(long fid, int dtype) throws MetaException, FileOperationException,
       TException {
     return client.replicate(fid, dtype);

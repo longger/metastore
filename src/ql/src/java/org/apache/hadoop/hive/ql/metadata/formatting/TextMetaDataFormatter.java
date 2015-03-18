@@ -536,7 +536,11 @@ public class TextMetaDataFormatter implements MetaDataFormatter {
         for (Busitype bt : bts) {
           outStream.writeBytes(bt.getName());
           outStream.write(separator);
-          outStream.writeBytes(bt.getComment());
+          if(bt.getComment()!= null) {
+            outStream.writeBytes(bt.getComment());
+          } else {
+            outStream.writeBytes("");
+          }
           outStream.write(terminator);
         }
       } catch (IOException e) {

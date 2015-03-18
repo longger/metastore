@@ -36,6 +36,7 @@ import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -65,6 +66,7 @@ import org.apache.hadoop.hive.metastore.api.BinaryColumnStatsData;
 import org.apache.hadoop.hive.metastore.api.BooleanColumnStatsData;
 import org.apache.hadoop.hive.metastore.api.BusiTypeColumn;
 import org.apache.hadoop.hive.metastore.api.BusiTypeDatacenter;
+import org.apache.hadoop.hive.metastore.api.BusiTypeSchemaColumn;
 import org.apache.hadoop.hive.metastore.api.Busitype;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsData;
@@ -114,9 +116,10 @@ import org.apache.hadoop.hive.metastore.api.UnknownPartitionException;
 import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.statfs;
+import org.apache.hadoop.hive.metastore.model.MBusiType;
 import org.apache.hadoop.hive.metastore.model.MBusiTypeColumn;
 import org.apache.hadoop.hive.metastore.model.MBusiTypeDatacenter;
-import org.apache.hadoop.hive.metastore.model.MBusitype;
+import org.apache.hadoop.hive.metastore.model.MBusiTypeSchemaColumn;
 import org.apache.hadoop.hive.metastore.model.MColumnDescriptor;
 import org.apache.hadoop.hive.metastore.model.MDBPrivilege;
 import org.apache.hadoop.hive.metastore.model.MDatabase;
@@ -179,11 +182,13 @@ public class ObjectStore implements RawStore, Configurable {
   private static final Long g_fid_syncer = new Long(0);
   private static long g_fid = 0;
   private static boolean g_fid_inited = false;
+  private static boolean busi_type_inited = false;
   private static Properties prop = null;
   private static PersistenceManagerFactory pmf = null;
 
   private static Lock pmfPropLock = new ReentrantLock();
   private static final Log LOG = LogFactory.getLog(ObjectStore.class.getName());
+  private static ConcurrentHashMap<String, Busitype> busiTypes = new ConcurrentHashMap<String, Busitype>();
 
   private static enum TXN_STATUS {
     NO_STATE, OPEN, COMMITED, ROLLBACK
@@ -261,6 +266,64 @@ public class ObjectStore implements RawStore, Configurable {
     return g_fid;
   }
 
+  /**
+   * name prefixed by @ => type
+   * @param bts
+   */
+  private void loadBusiTypes(List<Busitype> bts)
+  {
+    try {
+      bts = showBusitypes();
+    } catch (MetaException e) {
+      LOG.error(e,e);
+    } catch (TException e) {
+      LOG.error(e,e);
+    }
+    if(bts != null || bts.size() != 0 ){
+      for(Busitype type : bts){
+        if(!busiTypes.contains("@"+type.getName())){
+          busiTypes.put("@"+type.getName(), type);
+        }
+      }
+    }
+  }
+
+  private void insertInitBusiTypes()
+  {
+    boolean commited = false;
+    List<MBusiType> mbts = new ArrayList<MBusiType>();
+    for(String type : MetaStoreUtils.BUSI_TYPES){
+      if(!busiTypes.containsKey(type)){
+        MBusiType mBusiType = new MBusiType(type.substring(1),type);
+        mbts.add(mBusiType);
+      }
+    }
+
+    try {
+      openTransaction();
+      LOG.debug("---zjw-- insert init BusiTypes :" + mbts.size() );
+      pm.makePersistentAll(mbts);
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+  }
+
+  public void initBusiType() {
+
+    List<Busitype> bts = null;
+    loadBusiTypes(bts);
+    if(bts != null && bts.size() != 0){
+      return;
+    }
+    else{
+      insertInitBusiTypes();
+      loadBusiTypes(bts);
+    }
+  }
+ 
   public static long getFID() {
     return g_fid;
   }
@@ -373,6 +436,12 @@ public class ObjectStore implements RawStore, Configurable {
         g_fid_inited = true;
         restoreFID();
       }
+
+      if (!busi_type_inited) {
+        busi_type_inited = true;
+        initBusiType();
+      }
+
     }
 
     //add by zjw for messge queue
@@ -2172,7 +2241,8 @@ public class ObjectStore implements RawStore, Configurable {
       String cmet = f.getComment();
       if(cmet != null && cmet.indexOf(MetaStoreUtils.BUSI_TYPES_PREFIX)>=0){
         int pos = cmet.indexOf(MetaStoreUtils.BUSI_TYPES_PREFIX);// ip/tel/time/content
-        for(String type : MetaStoreUtils.BUSI_TYPES){
+        //for(String type : MetaStoreUtils.BUSI_TYPES){
+        for(String type : busiTypes.keySet()){
           if( cmet.length() - pos >= type.length()
               && type.equals(cmet.substring(pos,type.length()).toLowerCase())){
             MBusiTypeColumn bc = new MBusiTypeColumn(type,mtbl,f.getName());
@@ -2182,6 +2252,35 @@ public class ObjectStore implements RawStore, Configurable {
       }
     }
   }
+
+
+
+  private void createBusiTypeSchemaCol(MSchema mSchema, List<MBusiTypeSchemaColumn> bcs) throws MetaException {
+    for(MFieldSchema f : mSchema.getSd().getCD().getCols()){
+      String cmet = f.getComment();
+      LOG.info("--zjw check BusiType " + f.getName()+":"+f.getComment());
+      if(cmet != null && cmet.indexOf(MetaStoreUtils.BUSI_TYPES_PREFIX)>=0){
+        int pos = cmet.indexOf(MetaStoreUtils.BUSI_TYPES_PREFIX);// ip/tel/time/content
+        //for(String type : MetaStoreUtils.BUSI_TYPES){
+        for(String type : busiTypes.keySet()){
+
+          LOG.info("--zjw BusiType num  " +busiTypes.keySet().size()+"=="+ type);
+          if( cmet.length() - pos >= type.length()
+              && type.equals(cmet.substring(pos,type.length()).toLowerCase())){
+            MBusiType mType = getMBusitype(type.substring(1));
+            LOG.info("--zjw add BusiType " + mType.getBusiTypeName());
+            if(mType == null){
+              continue;
+            }
+            MBusiTypeSchemaColumn bc = new MBusiTypeSchemaColumn(mType,mSchema,f.getName());
+            bcs.add(bc);
+          }
+        }
+      }
+    }
+
+  }
+
   private void deleteBusiTypeCol(MBusiTypeColumn mbc)
   {
   	boolean commited = false;
@@ -2220,6 +2319,50 @@ public class ObjectStore implements RawStore, Configurable {
         rollbackTransaction();
       }
     }
+  }
+
+
+  private void deleteBusiTypeCol(MBusiTypeSchemaColumn mBusiTypeSchemaColumn) {
+    boolean commited = false;
+    MSchema mSchema = mBusiTypeSchemaColumn.getSchema();
+    try {
+      openTransaction();
+      Query query = pm.newQuery(MBusiTypeColumn.class, "schema.schemaName == schemaName && column == column");
+      query.declareParameters("java.lang.String schemaName, java.lang.String column");
+      Collection cols = (Collection)query.execute(mSchema.getSchemaName(), mBusiTypeSchemaColumn.getColumn());
+      Iterator iter = cols.iterator();
+      while (iter.hasNext()) {
+        MBusiTypeColumn col = (MBusiTypeColumn)iter.next();
+        LOG.debug("---zjw--  DEL schema BusiType " + col.getBusiType() + " on col "
+        + col.getColumn() + " for schema " +
+          mSchema.getSchemaName());
+        pm.deletePersistent(col);
+      }
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+
+  }
+
+  private void insertBusiTypeCol(MBusiTypeSchemaColumn mBusiTypeSchemaColumn) {
+    boolean commited = false;
+    MSchema mSchema = mBusiTypeSchemaColumn.getSchema();
+    try {
+      openTransaction();
+      LOG.debug("---zjw-- insert schema BusiType " + mBusiTypeSchemaColumn.getBusiType()
+          + " on col " + mBusiTypeSchemaColumn.getColumn() + " for schema " +
+          mSchema.getSchemaName());
+      pm.makePersistent(mBusiTypeSchemaColumn);
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+
   }
 
   /**
@@ -5118,7 +5261,8 @@ public class ObjectStore implements RawStore, Configurable {
          oldCols.removeAll(newCols);
          for(MFieldSchema mf : oldCols)		//del col, delete busitype
          {
-        	 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        	 //for(String bt : MetaStoreUtils.BUSI_TYPES)
+        	 for(String bt : busiTypes.keySet())
         	 {
         		 if(mf.getComment() != null && mf.getComment().indexOf(bt) != -1)
         		 {
@@ -5141,7 +5285,8 @@ public class ObjectStore implements RawStore, Configurable {
          newCols.removeAll(oldCols);
          for(MFieldSchema mf : newCols)		//add col, insert busitype
          {
-        	 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        	 //for(String bt : MetaStoreUtils.BUSI_TYPES)
+           for(String bt : busiTypes.keySet())
         	 {
         		 if(mf.getComment() != null && mf.getComment().indexOf(bt) != -1)
         		 {
@@ -5180,7 +5325,8 @@ public class ObjectStore implements RawStore, Configurable {
         			 }
         			 else if(omf.getComment() == null)
         			 {
-        				 for(String bt : MetaStoreUtils.BUSI_TYPES)			//insert busitype
+        				 //for(String bt : MetaStoreUtils.BUSI_TYPES)			//insert busitype
+        			   for(String bt : busiTypes.keySet())
               	 {
               		 if(nmf.getComment() != null && nmf.getComment().indexOf(bt) != -1)
               		 {
@@ -5203,7 +5349,8 @@ public class ObjectStore implements RawStore, Configurable {
         			 }
         			 else if(nmf.getComment() == null)			//del busitype
         			 {
-        				 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        				 //for(String bt : MetaStoreUtils.BUSI_TYPES)
+        				 for(String bt : busiTypes.keySet())
               	 {
               		 if(nmf.getComment() != null && nmf.getComment().indexOf(bt) != -1)
               		 {
@@ -5222,7 +5369,8 @@ public class ObjectStore implements RawStore, Configurable {
         			 }
         			 else if(!nmf.getComment().equals(omf.getComment()))
         			 {
-        				 for(String bt : MetaStoreUtils.BUSI_TYPES)
+        				 //for(String bt : MetaStoreUtils.BUSI_TYPES)
+        				 for(String bt : busiTypes.keySet())
         				 {
         					 if(nmf.getComment().indexOf(bt) != -1){			//insert busitype
         						 HashMap<String, Object> params = new HashMap<String, Object>();
@@ -5337,6 +5485,8 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
       cur_version++;
+
+      LOG.info("---zjw-- in alter table:cur_version:"+cur_version);
       List<PartitionInfo> newPis =  PartitionInfo.getPartitionInfo(convertToFieldSchemas(newt.getFileSplitKeys()));
       if (newPis != null) {
         int i=0;
@@ -5346,6 +5496,7 @@ public class ObjectStore implements RawStore, Configurable {
           newt.getFileSplitKeys().get(i).setComment(pif.toJson());
           newFS.add(newt.getFileSplitKeys().get(i));
           i++;
+          LOG.info("---zjw-- in alter getP_col:"+pif.getP_col()+" --version:"+pif.getP_version());
         }
       }
 //      if (newt.getFileSplitKeys() != null) {
@@ -9892,12 +10043,12 @@ public MUser getMUser(String userName) {
     boolean success = false;
     try {
       openTransaction();
-      Query query = pm.newQuery(MBusitype.class);
-      List<MBusitype> mbts = (List<MBusitype>) query.execute();
+      Query query = pm.newQuery(MBusiType.class);
+      List<MBusiType> mbts = (List<MBusiType>) query.execute();
       pm.retrieveAll(mbts);
       for (Iterator i = mbts.iterator(); i.hasNext();) {
-        MBusitype mbt = (MBusitype)i.next();
-        Busitype bt = new Busitype(mbt.getBusiname(),mbt.getComment());
+        MBusiType mbt = (MBusiType)i.next();
+        Busitype bt = new Busitype(mbt.getBusiTypeName(),mbt.getComment());
         bts.add(bt);
       }
       success = commitTransaction();
@@ -9911,10 +10062,104 @@ public MUser getMUser(String userName) {
   }
 
   @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols() throws MetaException, TException
+  {
+    List<BusiTypeSchemaColumn> btcs = new ArrayList<BusiTypeSchemaColumn>();
+    boolean success = false;
+    try {
+      openTransaction();
+      Query query = pm.newQuery(MBusiTypeSchemaColumn.class);
+      List<MBusiTypeSchemaColumn> mbtscs = (List<MBusiTypeSchemaColumn>)query.execute();
+      pm.retrieveAll(mbtscs);
+      for (MBusiTypeSchemaColumn mbtsc :  mbtscs) {
+        BusiTypeSchemaColumn btsc = new BusiTypeSchemaColumn(
+            new Busitype(mbtsc.getBusiType().getBusiTypeName(),mbtsc.getBusiType().getComment()),
+            convertToSchema(mbtsc.getSchema()),mbtsc.getColumn());
+        btcs.add(btsc);
+      }
+
+
+      success = commitTransaction();
+    } finally {
+      if (!success) {
+        rollbackTransaction();
+      }
+    }
+
+    return btcs;
+
+  }
+
+  @Override
+  public List<BusiTypeSchemaColumn> get_busi_type_schema_cols_by_name(String schemaName)
+      throws InvalidObjectException, MetaException, TException{
+
+    List<BusiTypeSchemaColumn> btcs = new ArrayList<BusiTypeSchemaColumn>();
+    boolean success = false;
+    try {
+      openTransaction();
+      Query query = pm.newQuery(MBusiTypeSchemaColumn.class, "schema.schemaName == schemaName");
+      query.declareParameters("java.lang.String schemaName");
+//      LOG.debug("---zjw-- schemaName:"+schemaName);
+      List<MBusiTypeSchemaColumn> mbtscs = (List<MBusiTypeSchemaColumn>)query.execute(schemaName.trim());
+      pm.retrieveAll(mbtscs);
+      for (MBusiTypeSchemaColumn mbtsc :  mbtscs) {
+        BusiTypeSchemaColumn btsc = new BusiTypeSchemaColumn(
+            new Busitype(mbtsc.getBusiType().getBusiTypeName(),mbtsc.getBusiType().getComment()),
+            convertToSchema(mbtsc.getSchema()),mbtsc.getColumn());
+        btcs.add(btsc);
+      }
+
+
+      success = commitTransaction();
+    } finally {
+      if (!success) {
+        rollbackTransaction();
+      }
+    }
+
+    return btcs;
+  }
+
+  public MBusiType getMBusitype(String busiTypeName) throws MetaException {
+
+    MBusiType mbt = null;
+    boolean commited = false;
+    try {
+      openTransaction();
+      LOG.debug("---zjw-- busiTypeName:"+busiTypeName);
+      String _busiTypeName = busiTypeName.toLowerCase().trim();//.toLowerCase()
+      Query query = pm.newQuery(MBusiType.class, "businame == businame_string");
+      query.declareParameters("java.lang.String businame_string");
+      query.setUnique(true);
+      mbt = (MBusiType) query.execute(_busiTypeName);
+      pm.retrieve(mbt);
+
+
+//      List<MBusiType> mers = (List<MBusiType>) query.execute();
+//      pm.retrieveAll(mers);
+//      for (Iterator i = mers.iterator(); i.hasNext();) {
+//        mbt = (MBusiType)i.next();
+//        LOG.debug("---zjw-- getBusiTypeName:"+mbt.getBusiTypeName());
+//      }
+
+      commited = commitTransaction();
+    } finally {
+      if (!commited) {
+        rollbackTransaction();
+      }
+    }
+    if (mbt == null) {
+      throw new MetaException("There is no _busiType named " + busiTypeName);
+    }
+    return mbt;
+  }
+
+  @Override
   public int createBusitype(Busitype busitype) throws InvalidObjectException, MetaException,
       TException {
-    MBusitype mbt = new MBusitype();
-    mbt.setBusiname(busitype.getName());
+    MBusiType mbt = new MBusiType();
+    mbt.setBusiTypeName(busitype.getName());
     mbt.setComment(busitype.getComment());
     boolean success = false;
     int now = (int)(System.currentTimeMillis()/1000);
@@ -10168,15 +10413,15 @@ public MUser getMUser(String userName) {
       MSchema mSchema = convertToMSchema(schema);
       boolean make_schema = false;
       if(mSchema.getSd().getCD().getCols() != null){//增加业务类型查询支持
-        List<MBusiTypeColumn> bcs = new ArrayList<MBusiTypeColumn>();
+        List<MBusiTypeSchemaColumn> bcs = new ArrayList<MBusiTypeSchemaColumn>();
 
         //FIXME 修改业务视图
-//        createBusiTypeCol(mSchema, bcs);
+        createBusiTypeSchemaCol(mSchema, bcs);
 
         if(!bcs.isEmpty()){
 
           LOG.info("--zjw--MBusiTypeColumn,size:"+bcs.size());
-//          pm.makePersistentAll(bcs);
+          pm.makePersistentAll(bcs);
         }else{
           pm.makePersistent(mSchema);
           make_schema =true;
@@ -10446,6 +10691,163 @@ public MUser getMUser(String userName) {
         }
       }
 
+    //alter comment
+      {
+         List<MFieldSchema> oldCols = new ArrayList<MFieldSchema>();
+         oldCols.addAll( oldSchema.getSd().getCD().getCols());
+         List<MFieldSchema> newCols = new ArrayList<MFieldSchema>();
+         newCols.addAll( mSchema.getSd().getCD().getCols());
+
+         oldCols.removeAll(newCols);
+         for(MFieldSchema mf : oldCols)   //del col, delete busitype
+         {
+           //for(String bt : MetaStoreUtils.BUSI_TYPES)
+           for(String bt : busiTypes.keySet())
+           {
+             if(mf.getComment() != null && mf.getComment().indexOf(bt) != -1)
+             {
+               //HashMap<String, Object> params = new HashMap<String, Object>();
+               params.put("schema_name", oldSchema.getSchemaName());
+               params.put("column_name", mf.getName());
+               params.put("action", "del");
+               params.put("comment", mf.getComment());
+               msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_SCHEMA_BUSITYPE_CHANGED,db_id,-1, pm, oldSchema,params));
+               MBusiType mbt = getMBusitype(bt);
+               if(mbt == null) {
+                continue;
+              }
+               this.deleteBusiTypeCol(new MBusiTypeSchemaColumn(mbt, oldSchema, mf.getName()));
+
+             }
+           }
+         }
+         oldCols.clear();
+         oldCols.addAll( oldSchema.getSd().getCD().getCols());
+
+         newCols.removeAll(oldCols);
+         for(MFieldSchema mf : newCols)   //add col, insert busitype
+         {
+           //for(String bt : MetaStoreUtils.BUSI_TYPES)
+           for(String bt : busiTypes.keySet())
+           {
+             if(mf.getComment() != null && mf.getComment().indexOf(bt) != -1)
+             {
+               //HashMap<String, Object> params = new HashMap<String, Object>();
+               params.put("schema_name", oldSchema.getSchemaName());
+               params.put("column_name", mf.getName());
+               params.put("action", "add");
+               params.put("comment", mf.getComment());
+               msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_SCHEMA_BUSITYPE_CHANGED,db_id,-1, pm, oldSchema,params));
+               MBusiType mbt = getMBusitype(bt);
+               if(mbt == null) {
+                continue;
+              }
+               this.insertBusiTypeCol(new MBusiTypeSchemaColumn(mbt, oldSchema, mf.getName()));
+
+             }
+           }
+         }
+         newCols.clear();
+         newCols.addAll(mSchema.getSd().getCD().getCols());
+
+
+         oldCols.retainAll(newCols);      //留下的是两者的交集
+         newCols.retainAll(oldCols);
+         for(MFieldSchema omf : oldCols)
+         {
+           for(MFieldSchema nmf : newCols)
+           {
+             if(omf.equals(nmf))
+             {
+               if(nmf.getComment() == null && omf.getComment() == null)
+               {
+                 //nothing to do
+               }
+               else if(omf.getComment() == null)
+               {
+                 //for(String bt : MetaStoreUtils.BUSI_TYPES)     //insert busitype
+                 for(String bt : busiTypes.keySet())
+                 {
+                   if(nmf.getComment() != null && nmf.getComment().indexOf(bt) != -1)
+                   {
+                     //HashMap<String, Object> params = new HashMap<String, Object>();
+                     params.put("schema_name", oldSchema.getSchemaName());
+                     params.put("column_name", nmf.getName());
+                     params.put("action", "add");
+                     params.put("comment", nmf.getComment());
+                     msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_SCHEMA_BUSITYPE_CHANGED,db_id,-1, pm, oldSchema,params));
+                     MBusiType mbt = getMBusitype(bt);
+                     if(mbt == null) {
+                      continue;
+                    }
+                     this.insertBusiTypeCol(new MBusiTypeSchemaColumn(mbt, oldSchema, nmf.getName()));
+                   }
+                 }
+               }
+               else if(nmf.getComment() == null)      //del busitype
+               {
+                 //for(String bt : MetaStoreUtils.BUSI_TYPES)
+                 for(String bt : busiTypes.keySet())
+                 {
+                   if(nmf.getComment() != null && nmf.getComment().indexOf(bt) != -1)
+                   {
+                     //HashMap<String, Object> params = new HashMap<String, Object>();
+                     params.put("schema_name", oldSchema.getSchemaName());
+                     params.put("column_name", nmf.getName());
+                     params.put("action", "del");
+                     params.put("comment", nmf.getComment());
+                     msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_SCHEMA_BUSITYPE_CHANGED,db_id,-1, pm, oldSchema,params));
+                     MBusiType mbt = getMBusitype(bt);
+                     if(mbt == null) {
+                      continue;
+                    }
+                     this.deleteBusiTypeCol(new MBusiTypeSchemaColumn(mbt, oldSchema, nmf.getName()));
+
+                   }
+                 }
+               }
+               else if(!nmf.getComment().equals(omf.getComment()))
+               {
+                 //for(String bt : MetaStoreUtils.BUSI_TYPES)
+                 for(String bt : busiTypes.keySet())
+                 {
+                   if(nmf.getComment().indexOf(bt) != -1){      //insert busitype
+                     //HashMap<String, Object> params = new HashMap<String, Object>();
+                     params.put("schema_name", oldSchema.getSchemaName());
+                     params.put("column_name", nmf.getName());
+                     params.put("action", "add");
+                     params.put("comment", nmf.getComment());
+                     msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_SCHEMA_BUSITYPE_CHANGED,db_id,-1, pm, oldSchema,params));
+                     MBusiType mbt = getMBusitype(bt);
+                     if(mbt == null) {
+                      continue;
+                    }
+                     this.insertBusiTypeCol(new MBusiTypeSchemaColumn(mbt, oldSchema, nmf.getName()));
+
+                   }
+                   if(omf.getComment().indexOf(bt) != -1){      //del busitype
+                       //HashMap<String, Object> params = new HashMap<String, Object>();
+                     params.put("schema_name", oldSchema.getSchemaName());
+                     params.put("column_name", omf.getName());
+                     params.put("action", "del");
+                     params.put("comment", omf.getComment());
+                     msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_SCHEMA_BUSITYPE_CHANGED,db_id,-1, pm, oldSchema,params));
+                     MBusiType mbt = getMBusitype(bt);
+                     if(mbt == null) {
+                      continue;
+                    }
+                     this.deleteBusiTypeCol(new MBusiTypeSchemaColumn(mbt, oldSchema, omf.getName()));
+
+                   }
+                 }
+               }
+
+             }
+           }
+
+         }
+      }
+
       oldSchema.setSchemaName(mSchema.getSchemaName().toLowerCase());
       oldSchema.setParameters(mSchema.getParameters());
       oldSchema.setOwner(mSchema.getOwner());
@@ -10505,6 +10907,7 @@ public MUser getMUser(String userName) {
 
     return success;
   }
+
 
   private List<MTable> getMTablesBySchemaName(String schemaName) {
     List<MTable> mtbls = null;

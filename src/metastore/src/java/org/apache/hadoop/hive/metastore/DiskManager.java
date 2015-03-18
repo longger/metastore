@@ -893,6 +893,7 @@ public class DiskManager {
             r += "R3=" + DeviceInfo.getTypeStr(e.getValue().r3) + ", ";
             r += "l1Key=" + e.getValue().l1Key + ", l2KeyMax?=" + e.getValue().l2KeyMax + "\n";
             synchronized (e.getValue()) {
+
               if (e.getValue().distribution.size() > 0) {
                 r += "\t" + e.getValue().distribution + "\n";
               }
@@ -5084,7 +5085,6 @@ public class DiskManager {
                 e.printStackTrace();
                 continue;
               }
-
               String recvStr = new String(recvPacket.getData() , 0 , recvPacket.getLength());
 
               DMReport report = parseReport(recvStr);
