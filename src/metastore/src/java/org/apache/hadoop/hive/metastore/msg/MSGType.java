@@ -260,7 +260,7 @@ public class MSGType {
   public static final int MSG_REVOKE_TABLE_COLUMN = 5207;
 
   /**
-   * 创建新设备，且处于可用状态
+   * 创建新设备，且处于可用状态，或者更新设备
    */
   public static final int MSG_CREATE_DEVICE = 6001;
   /**
@@ -278,7 +278,7 @@ public class MSGType {
   /**
    * 设备进入下线状态，不接受任何读写
    */
-  public static final int MSG_DEVICE_OFFLINE = 6004;
+  public static final int MSG_DEVICE_OFFLINE = 6006;
   /**
    * 设备进入非稳状态，平台检测到设备不可达，但可能是网络等原因造成，
    * 检索和加载可能仍能够使用

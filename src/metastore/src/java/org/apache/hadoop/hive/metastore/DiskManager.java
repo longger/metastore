@@ -74,7 +74,8 @@ public class DiskManager {
     public static enum Role {
       MASTER, SLAVE,
     }
-    public Role role;
+    public static long serverId;
+    public static Role role;
     public String alternateURI;
 
     public Log LOG;
@@ -94,11 +95,13 @@ public class DiskManager {
     public final Queue<DMRequest> repQ = new ConcurrentLinkedQueue<DMRequest>();
     public final Queue<BackupEntry> backupQ = new ConcurrentLinkedQueue<BackupEntry>();
     public final ConcurrentLinkedQueue<DMReport> reportQueue = new ConcurrentLinkedQueue<DMReport>();
-    public final Map<String, Long> toReRep = new ConcurrentHashMap<String, Long>();
+    public final ConcurrentHashMap<String, Long> toReRep = new ConcurrentHashMap<String, Long>();
     public final Map<String, Long> toUnspc = new ConcurrentHashMap<String, Long>();
     public final Map<String, MigrateEntry> rrmap = new ConcurrentHashMap<String, MigrateEntry>();
 
     public final ConcurrentLinkedQueue<ReplicateRequest> rrq = new ConcurrentLinkedQueue<ReplicateRequest>();
+
+    private HashMap<String, Long> inactiveNodes = new HashMap<String, Long>();
 
     // TODO: fix me: change it to 30 min
     public long backupTimeout = 1 * 60 * 1000;
@@ -1299,6 +1302,7 @@ public class DiskManager {
       public String dev; // dev name
       public String mp = null; // mount point
       public int prop = -1;
+      public int status = MetaStoreConst.MDeviceStatus.ONLINE;
       public boolean isOffline = false;
       public long read_nr;
       public long write_nr;
@@ -1798,11 +1802,13 @@ public class DiskManager {
 
       public long offlineDelTimeout = 3600 * 1000; // 1 hour
       public long suspectDelTimeout = 30 * 24 * 3600 * 1000; // 30 days
+      public long inactiveNodeTimeout = 3600 * 1000; // 1 hour
 
       private long last_repTs = System.currentTimeMillis();
       private long last_rerepTs = System.currentTimeMillis();
       private long last_unspcTs = System.currentTimeMillis();
       private long last_voidTs = System.currentTimeMillis();
+      private long last_inactiveNodeTs = System.currentTimeMillis();
       private long last_limitTs = System.currentTimeMillis();
       private long last_limitLeakTs = System.currentTimeMillis();
 
@@ -1823,6 +1829,7 @@ public class DiskManager {
         rerepTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_REREP_TIMEOUT);
         offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
         suspectDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_SUSPECT_DEL_TIMEOUT);
+        inactiveNodeTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_INACTIVE_NODE_TIMEOUT);
         ff_range = hiveConf.getLongVar(HiveConf.ConfVars.DM_FF_RANGE);
         DiskManager.identify_shared_device = hiveConf.getBoolVar(HiveConf.ConfVars.DM_IDENTIFY_SHARED_DEV);
 
@@ -2687,6 +2694,7 @@ public class DiskManager {
                   }
                   if (f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
                     // this means we should clean up the OFFLINE locs
+                    // BUG-XXX: refer to next BUG-XXX hint
                     do_clean = true;
                   }
                 } catch (MetaException e) {
@@ -2698,7 +2706,13 @@ public class DiskManager {
               for (SFileLocation fl : f.getLocations()) {
                 if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
                   // if this OFFLINE sfl exist too long or we do exceed the ng'size limit
-                  if (do_clean || fl.getUpdate_time() + offlineDelTimeout < System.currentTimeMillis()) {
+                  if (do_clean && f.getStore_status() == MetaStoreConst.MFileStoreStatus.REPLICATED) {
+                    // BUG-XXX: if we want to re-replicate a sfile and it is in REPLICATED state, then
+                    // we should keep it for at least half offlineDelTimeout
+                    if (fl.getUpdate_time() + (offlineDelTimeout / 2) < System.currentTimeMillis()) {
+                      s.add(fl);
+                    }
+                  } else if (do_clean || fl.getUpdate_time() + offlineDelTimeout < System.currentTimeMillis()) {
                     s.add(fl);
                   }
                 }
@@ -2762,15 +2776,18 @@ public class DiskManager {
                   }
                   for (SFileLocation fl : sfl) {
                     if (toReRep.containsKey(fl.getDevid())) {
-                      LOG.info("Change FileLocation " + fl.getDevid() + ":" + fl.getLocation() + " to SUSPECT state!");
-                      synchronized (trs) {
-                        fl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.SUSPECT);
-                        try {
-                          trs.updateSFileLocation(fl);
-                        } catch (MetaException e) {
-                          LOG.error(e, e);
-                          delete = false;
-                          continue;
+                      if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+                        LOG.info("Change FileLocation " + fl.getDevid() + ":" + fl.getLocation() +
+                            " to SUSPECT state! (by toReRep)");
+                        synchronized (trs) {
+                          fl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.SUSPECT);
+                          try {
+                            trs.updateSFileLocation(fl);
+                          } catch (MetaException e) {
+                            LOG.error(e, e);
+                            delete = false;
+                            continue;
+                          }
                         }
                       }
                     }
@@ -2893,6 +2910,60 @@ public class DiskManager {
             last_voidTs = System.currentTimeMillis();
           }
 
+          // check long-stand inactive nodes to handle under replicated files
+          if (last_inactiveNodeTs + 120000 < System.currentTimeMillis()) {
+            HashMap<String, Long> newIN = new HashMap<String, Long>();
+            boolean isAdd = false;
+            List<Node> lns = null;
+
+            synchronized (trs) {
+              lns = trs.getAllNodes();
+            }
+            if (lns != null) {
+              for (Node n : lns) {
+                if (!ndmap.containsKey(n.getNode_name())) {
+                  Long ts = inactiveNodes.get(n.getNode_name());
+                  if (ts == null) {
+                    // new one
+                    isAdd = true;
+                    newIN.put(n.getNode_name(), System.currentTimeMillis());
+                  } else {
+                    newIN.put(n.getNode_name(), ts);
+                  }
+                }
+              }
+              if (isAdd || inactiveNodes.size() < newIN.size()) {
+                LOG.info("Detect new inactive nodes. CUR " + newIN);
+              }
+              inactiveNodes.clear();
+              inactiveNodes = newIN;
+
+              // check long-stand entries
+              for (Map.Entry<String, Long> entry : inactiveNodes.entrySet()) {
+                if (entry.getValue() + inactiveNodeTimeout < System.currentTimeMillis()) {
+                  List<String> __devs;
+                  // get all devices on this node
+                  synchronized (trs) {
+                    __devs = trs.listDevsByNode(entry.getKey());
+                  }
+                  // add all devices to toReRep
+                  if (__devs != null) {
+                    for (String devid : __devs) {
+                      boolean isQd = (toReRep.putIfAbsent(devid, System.currentTimeMillis()) == null);
+                      if (isQd) {
+                        removeFromADMap(devid, entry.getKey());
+                        toUnspc.remove(devid);
+                        LOG.info("Queue Device " + devid +
+                          " on toReRep set by inactive node " + entry.getKey());
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            last_inactiveNodeTs = System.currentTimeMillis();
+          }
+
           if (last_genRpt + 60000 <= System.currentTimeMillis()) {
             generateReport();
             last_genRpt = System.currentTimeMillis();
@@ -2915,11 +2986,11 @@ public class DiskManager {
 
       String roleStr = conf.getVar(HiveConf.ConfVars.DM_ROLE);
       if (roleStr.equalsIgnoreCase("master")) {
-        this.role = Role.MASTER;
+        DiskManager.role = Role.MASTER;
       } else if (roleStr.equalsIgnoreCase("slave")) {
-        this.role = Role.SLAVE;
+        DiskManager.role = Role.SLAVE;
       } else {
-        this.role = Role.SLAVE;
+        DiskManager.role = Role.SLAVE;
       }
 
       if (rsType == RsStatus.NEWMS){
@@ -3187,6 +3258,7 @@ public class DiskManager {
 	            try {
 	              d = rs.getDevice(e.getKey());
 	              e.getValue().prop = d.getProp();
+	              e.getValue().status = d.getStatus();
 	              if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE ||
 	                  d.getStatus() == MetaStoreConst.MDeviceStatus.DISABLE) {
 	                e.getValue().isOffline = true;
@@ -3458,6 +3530,7 @@ public class DiskManager {
                 d = rs_s1.getDevice(di.dev);
               }
               di.prop = d.getProp();
+              di.status = d.getStatus();
               if (d.getStatus() == MetaStoreConst.MDeviceStatus.OFFLINE ||
                   d.getStatus() == MetaStoreConst.MDeviceStatus.DISABLE) {
                 di.isOffline = true;
@@ -3483,6 +3556,10 @@ public class DiskManager {
       if (ni == null) {
         ni = new NodeInfo(ndi);
         ni = ndmap.put(node.getNode_name(), ni);
+        // clean entry in inactiveNodes map
+        if (inactiveNodes.remove(node.getNode_name()) != null) {
+          LOG.info("Remove Node " + node.getNode_name() + " from inactiveNodes map.");
+        }
       } else {
         Set<DeviceInfo> old, cur;
         old = new TreeSet<DeviceInfo>();
@@ -3523,10 +3600,10 @@ public class DiskManager {
         old = maskActiveDevice(old);
 
         for (DeviceInfo di : old) {
-          LOG.debug("Queue Device " + di.dev + " on toReRep set.");
+          LOG.info("Queue Device " + di.dev + " on toReRep set by report diff.");
           synchronized (toReRep) {
             if (!toReRep.containsKey(di.dev)) {
-              toReRep.put(di.dev, System.currentTimeMillis());
+              toReRep.putIfAbsent(di.dev, System.currentTimeMillis());
               removeFromADMap(di.dev, node.getNode_name());
               toUnspc.remove(di.dev);
             }
@@ -3535,11 +3612,11 @@ public class DiskManager {
         for (DeviceInfo di : cur) {
           synchronized (toReRep) {
             if (toReRep.containsKey(di.dev)) {
-              LOG.debug("Devcie " + di.dev + " is back, do not make SFL SUSPECT!");
+              LOG.info("Devcie " + di.dev + " is back, do not make SFL SUSPECT!");
               toReRep.remove(di.dev);
             }
           }
-          LOG.debug("Queue Device " + di.dev + " on toUnspc set.");
+          LOG.info("Queue Device " + di.dev + " on toUnspc set.");
           synchronized (toUnspc) {
             if (!toUnspc.containsKey(di.dev)) {
               toUnspc.put(di.dev, System.currentTimeMillis());
@@ -3960,12 +4037,12 @@ public class DiskManager {
               }
             }
           }
-          // find the LARGEST 5 nodes, and random select one
+          // find the LARGEST max(10 or 20%NODES) nodes, and random select one
           if (candidate.size() == 0) {
             continue;
           } else {
             Random r = new Random();
-            __trim_candidate(candidate, 5);
+            __trim_candidate(candidate, Math.max(10, ndmap.size() / 5));
             String[] a = candidate.keySet().toArray(new String[0]);
             if (a.length > 0) {
               return a[r.nextInt(a.length)];
@@ -4361,8 +4438,8 @@ public class DiskManager {
               dilist.add(di);
             }
           }
-          // find the LARGEST 3 devices in current type, and random select one
-          __trim_dilist(dilist, 3, null);
+          // find the LARGEST 5 devices in current type, and random select one
+          __trim_dilist(dilist, 5, null);
           Random r = new Random();
           if (dilist.size() > 0) {
             return dilist.get(r.nextInt(dilist.size())).dev;
@@ -4396,12 +4473,12 @@ public class DiskManager {
             continue;
           }
         } else if (flp.dev_mode == FileLocatingPolicy.RANDOM_DEVS) {
-          // random select a device in specify dilist with at most 3 device?
+          // random select a device in specify dilist with at most 5 device?
           if (dilist == null) {
             return null;
           } else {
             Random r = new Random();
-            __trim_dilist(dilist, 3, null);
+            __trim_dilist(dilist, 5, null);
             if (dilist.size() > 0) {
               return dilist.get(r.nextInt(dilist.size())).dev;
             } else {
@@ -4414,7 +4491,7 @@ public class DiskManager {
             return null;
           } else {
             Random r = new Random();
-            __trim_dilist(dilist, 3, flp.devs);
+            __trim_dilist(dilist, 5, flp.devs);
             if (dilist.size() > 0) {
               return dilist.get(r.nextInt(dilist.size())).dev;
             } else {
@@ -5515,9 +5592,9 @@ public class DiskManager {
                       LOG.warn("Invalid REP report: " + r.args);
                     } else {
                       if (args.length == 5) {
-                        LOG.info("REPLICATED to " + report.node + " dev " + args[0] + ":" + args[1] + "/" + args[2] + ", latency=" + args[4]);
+                        LOG.info("REPLICATED to " + report.node + " dev " + args[0] + ":" + args[1] + ":" + args[2] + ", latency=" + args[4]);
                       } else {
-                        LOG.info("REPLICATED to " + report.node + " dev " + args[0] + ":" + args[1] + "/" + args[2]);
+                        LOG.info("REPLICATED to " + report.node + " dev " + args[0] + ":" + args[1] + ":" + args[2]);
                       }
                       SFileLocation newsfl, toDel = null;
                       try {

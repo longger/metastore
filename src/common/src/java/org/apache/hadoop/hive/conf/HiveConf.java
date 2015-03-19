@@ -721,6 +721,7 @@ public class HiveConf extends Configuration {
     DM_CHECK_REREP_TIMEOUT("hive.diskmanager.check.rerep.timeout", 30 * 1000),
     DM_CHECK_OFFLINE_DEL_TIMEOUT("hive.diskmanager.check.offline.del.timeout", 3600 * 1000),
     DM_CHECK_SUSPECT_DEL_TIMEOUT("hive.diskmanager.check.suspect.del.timeout", 30 * 24 * 3600 * 1000),
+    DM_CHECK_INACTIVE_NODE_TIMEOUT("hive.diskmanager.check.inactive.node.timeout", 1 * 3600 * 1000),
     DM_SAFEMODE_ENTER("hive.diskmanager.safemode.enter", (float)0.5),
     DM_SAFEMODE_LEAVE("hive.diskmanager.safemode.leave", (float)0.99),
     DM_APPEND_CMD_MAX("hive.diskmanager.nr.max", 4),
@@ -737,6 +738,9 @@ public class HiveConf extends Configuration {
     FLSELECTOR_WATCH_FAIR_NODES("flselector.watch.fair_nodes", null),
     FLSELECTOR_WATCH_ORDERED_ALLOC("flselector.watch.ordered_alloc", null),
 
+    // Feature Test
+    MS_FEATURE_TEST("ms.feature.test", false),
+
     //add by zy
     NEWMS_IS_USE_METASTORE_CLIENT("newms.isUseMetaStoreClient", true),
     NEWMS_IS_GET_ALL_OBJECTS("newms.isGetAllObjects", false),
@@ -745,6 +749,7 @@ public class HiveConf extends Configuration {
     NEWMS_RPC_PORT("newms.rpc.port", 10101),
     NEWMS_RPC_INFO_FILENAME("rpc.info.filename", "rpc.info"),
     NEWMS_CONSUME_MSG("newms.consume.msg", true),
+    NEWMS_CONSUME_FROM_MAX_OFFSET("newms.consume.from.max.offset", false),
     ZOOKEEPERADDRESS("jdo.mq.zookeeper.address", null)
     ;
 

@@ -15,6 +15,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
+import org.apache.hadoop.hive.metastore.DiskManager;
 import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.api.Device;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -59,8 +60,14 @@ public class MsgServer {
 
 	public static void pdSend(DDLMsg msg) {
 	  if (initalized) {
-	    queue.add(msg);
-	    send.release();
+	    // BUG-XXX: if we are in slave mode, do NOT send message to meta-test?
+	    if (DiskManager.role == DiskManager.Role.MASTER) {
+	      queue.add(msg);
+	      send.release();
+	    } else {
+	      LOG.info("SLAVE ignore ddl msg to topic=" + Producer.topic + ":" +
+	          MSGFactory.getMsgData2(msg));
+	    }
 	  }
 	}
 	public static void addMsg(DDLMsg msg) {
@@ -318,7 +325,8 @@ public class MsgServer {
 			// 生成处理线程
 			ConsumerConfig cc = new ConsumerConfig(group);
 			HiveConf hc = new HiveConf();
-			if(hc.getBoolVar(ConfVars.NEWMS_IS_GET_ALL_OBJECTS)) {
+			if (hc.getBoolVar(ConfVars.NEWMS_IS_GET_ALL_OBJECTS) ||
+			    hc.getBoolVar(ConfVars.NEWMS_CONSUME_FROM_MAX_OFFSET)) {
         cc.setConsumeFromMaxOffset();
       }
 			MessageConsumer consumer = sessionFactory.createConsumer(cc);
@@ -345,7 +353,17 @@ public class MsgServer {
 				    }
 				  }
 					String data = new String(message.getData());
-					LOG.info("Consume msg from metaq's topic=" + topic + ": " + data);
+					if (DiskManager.role != null) {
+					  switch (DiskManager.role) {
+					  case MASTER:
+					    LOG.info("Consume msg from metaq's topic=" + topic + ": " + data);
+					    break;
+					  case SLAVE:
+					  default:
+					    LOG.info("Slave ignore consume msg from metaq's topic=" + topic + ": " + data);
+					    return;
+					  }
+					}
 					int time = 0;
 					DDLMsg msg = DDLMsg.fromJson(data);
 					// FIXME: if we are in IS_OLD_WITH_NEW mode, we can ignore file-related ops
@@ -407,6 +425,7 @@ public class MsgServer {
     return new MSGFactory.DDLMsg(event_id, id, old_object_params, eventObject, max_msg_id++, db_id, node_id, now, null,old_object_params);
   }
 
+	// FIXME: BUG-XXX: we have to consider metaDB failed, and cache localqueue messages!
 	public static class LocalConsumer implements Runnable {
 		private final Semaphore lcsem  = new Semaphore(0);
 		private ObjectStore ob;
@@ -568,8 +587,8 @@ public class MsgServer {
 	        }//end of switch
 			  }  catch (Exception e) {
 			    try {
-			    ob = new ObjectStore();
-			    ob.setConf(new HiveConf());
+			      ob = new ObjectStore();
+			      ob.setConf(new HiveConf());
 			    } catch (Exception e1) {
 			      LOG.error(e1, e1);
 			      LOG.error("Exception in exception handling, BAD!");

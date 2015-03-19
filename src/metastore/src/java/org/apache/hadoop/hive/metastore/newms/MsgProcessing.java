@@ -595,7 +595,7 @@ public class MsgProcessing {
 		  // ok, we just resend the msg to producer's topic now
 		  MsgServer.pdSend(msg);
 		  if (rmsg != null) {
-        MsgServer.addMsg(rmsg);
+        MsgServer.pdSend(rmsg);
       }
 		} catch (TException e) {
 		  __reconnect();
