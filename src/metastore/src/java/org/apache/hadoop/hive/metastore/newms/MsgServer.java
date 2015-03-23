@@ -58,6 +58,18 @@ public class MsgServer {
 		return queue.isEmpty() && failed_queue.isEmpty() && localQueue.isEmpty();
 	}
 
+	public static long getLocalQueueSize() {
+	  return localQueue.size();
+	}
+
+	public static long getQueueSize() {
+	  return queue.size();
+	}
+
+	public static long getFailedQueueSize() {
+	  return failed_queue.size();
+	}
+
 	public static void pdSend(DDLMsg msg) {
 	  if (initalized) {
 	    // BUG-XXX: if we are in slave mode, do NOT send message to meta-test?

@@ -57,6 +57,7 @@ import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.api.Subpartition;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.metastore.newms.MsgServer;
 import org.apache.hadoop.hive.metastore.newms.RawStoreImp;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
 import org.apache.hadoop.util.ReflectionUtils;
@@ -2274,8 +2275,9 @@ public class DiskManager {
         //62 replicate,loadstatus_bad,
         //64 l1Ttotal,l1Tfree,l1offline,
         //67 l2Ttotal,l2Tfree,l2offline,
-        //70 l2Ttotal,l2Tfree,l2offline,
-        //73 l2Ttotal,l2Tfree,l2offline,
+        //70 l3Ttotal,l3Tfree,l3offline,
+        //73 l4Ttotal,l4Tfree,l4offline,
+        //76 localQ,MsgQ,failedQ,
         // {tbls},
         StringBuffer sb = new StringBuffer(2048);
         long free = 0, used = 0;
@@ -2469,6 +2471,9 @@ public class DiskManager {
         sb.append(l4total + ",");
         sb.append(l4free + ",");
         sb.append(l4offline + ",");
+        sb.append(MsgServer.getLocalQueueSize() + ",");
+        sb.append(MsgServer.getQueueSize() + ",");
+        sb.append(MsgServer.getFailedQueueSize() + ",");
         sb.append("\n");
 
         // generate report file
@@ -3462,6 +3467,9 @@ public class DiskManager {
       }
       r += "}\n";
       r += flselector.printWatched();
+      r += "MsgLocalQ: " + MsgServer.getLocalQueueSize() + "\n";
+      r += "MsgQ:" + MsgServer.getQueueSize() + "\n";
+      r += "MsgFailedQ:" + MsgServer.getFailedQueueSize() + "\n";
       r += "Rep Limit: closeRepLimit " + closeRepLimit.get() + ", fixRepLimit " + fixRepLimit.get() + "\n";
 
       dmsnr++;
