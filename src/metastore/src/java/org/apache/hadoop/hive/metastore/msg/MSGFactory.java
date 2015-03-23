@@ -228,6 +228,17 @@ public class MSGFactory {
             map.put(key, parserJsonToMap(value));
         } else if (value.startsWith("[") && value.endsWith("]")) {
           map.put(key, JSONArray.toList(JSONArray.fromObject(value),Long.class));
+        } else if (value != null && !value.startsWith("\"")) {
+          if (Character.isDigit(value.charAt(0))) {
+            try {
+              Long x = Long.parseLong(value);
+              map.put(key, x);
+            } catch (NumberFormatException nfe) {
+              map.put(key, value);
+            }
+          } else {
+            map.put(key, value);
+          }
         } else{
             map.put(key, value);
         }

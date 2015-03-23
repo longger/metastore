@@ -1,6 +1,7 @@
 package org.apache.hadoop.hive.metastore.newms;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
@@ -10,6 +11,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
+import org.apache.hadoop.hive.metastore.DiskManager;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.ObjectStore;
@@ -142,9 +144,27 @@ public class NewMS {
 	    try {
 	      try {
 	        jedis = rf.getDefaultInstance();
-	        String fid = RawStoreImp.getFid() + "";
-	        jedis.set("g_fid", fid);
-	        LOG.info("Store current g_fid " + fid + " into redis.");
+	        switch (DiskManager.role) {
+	        case MASTER:
+	          String fid = RawStoreImp.getFid() + "";
+	          jedis.set("g_fid", fid);
+	          LOG.info("MASTER: Store current g_fid " + fid + " into redis.");
+	          break;
+	        default:
+	        case SLAVE:
+	          String sfid = jedis.get("g_fid");
+	          if (sfid != null) {
+	            long id = Long.parseLong(sfid);
+	            synchronized (RawStoreImp.class) {
+	              if (RawStoreImp.getFid() < id) {
+	                RawStoreImp.setFID(id);
+	                LOG.info("SLAVE: Reget current g_fid " + id + " from redis.");
+	              }
+	            }
+	          }
+	          break;
+	        }
+
 	      } catch(JedisException e) {
 	        LOG.warn(e, e);
 	        err = -1;
@@ -263,7 +283,10 @@ public class NewMS {
           topic = "oldms";
         }
         // if old_with_new, comsumer use oldms topic
-        MsgServer.startConsumer(conf.getVar(ConfVars.ZOOKEEPERADDRESS), topic, "newms");
+        String serverName = InetAddress.getLocalHost().getHostName();
+        LOG.info("Use " + serverName + " as the consumer tag, make sure it's ok.");
+        MsgServer.startConsumer(conf.getVar(ConfVars.ZOOKEEPERADDRESS), topic,
+            "newms-" + serverName);
         // Producer use meta-test topic
         MsgServer.startProducer();
         MsgServer.startLocalConsumer();

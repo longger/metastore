@@ -194,7 +194,10 @@ public class ObjectStore implements RawStore, Configurable {
     NO_STATE, OPEN, COMMITED, ROLLBACK
   }
 
-  private boolean isOracle = false;
+  private static enum RDBMS_TYPE {
+    ORACLE, OSCAR, OTHER,
+  }
+  private RDBMS_TYPE dbtype = RDBMS_TYPE.OTHER;
 
   private void restoreFID() {
     boolean commited = false;
@@ -203,15 +206,24 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT max(fid) FROM FILES");
       List results = (List) query.execute();
-      if (isOracle) {
+      switch (dbtype) {
+      case ORACLE:
         BigDecimal maxfid = (BigDecimal) results.iterator().next();
         if (maxfid != null) {
           g_fid = maxfid.longValue() + 10;
         }
-      } else {
+        break;
+      case OSCAR:
+        if (results != null && results.iterator() != null && results.iterator().next() != null) {
+          g_fid = (Long)results.iterator().next() + 10;
+        }
+        break;
+      default:
+      case OTHER:
         if (results != null && results.iterator() != null && results.iterator().next() != null) {
           g_fid = (Integer)results.iterator().next() + 10;
         }
+        break;
       }
       commited = commitTransaction();
       LOG.info("restore FID to " + g_fid);
@@ -234,13 +246,24 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT min(fid) FROM FILES");
       List results = (List) query.execute();
-      if (isOracle) {
+      switch (dbtype) {
+      case ORACLE:
         BigDecimal minfid = (BigDecimal) results.iterator().next();
         if (minfid != null) {
           r = minfid.longValue();
         }
-      } else {
-        r = (Integer)results.iterator().next();
+        break;
+      default:
+      case OTHER:
+      case OSCAR: {
+        Object o = results.iterator().next();
+        if (o instanceof Long) {
+          r = (Long)results.iterator().next();
+        } else {
+          r = (Integer)results.iterator().next();
+        }
+        break;
+      }
       }
       commited = commitTransaction();
     } catch (javax.jdo.JDODataStoreException e) {
@@ -428,7 +451,10 @@ public class ObjectStore implements RawStore, Configurable {
 
     String url = HiveConf.getVar(getConf(), ConfVars.METASTORECONNECTURLKEY).toLowerCase();
     if (url.startsWith("jdbc:oracle")) {
-      isOracle = true;
+      dbtype = RDBMS_TYPE.ORACLE;
+    }
+    if (url.startsWith("jdbc:oscar")) {
+      dbtype = RDBMS_TYPE.OSCAR;
     }
 
     if (isInitialized) {
@@ -2520,11 +2546,21 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT count(*) FROM NODES");
       List results = (List) query.execute();
-      if (isOracle) {
+      switch (dbtype) {
+      case ORACLE:
         BigDecimal tableSize = (BigDecimal) results.iterator().next();
         r = tableSize.longValue();
-      } else {
-        r = (Integer)results.iterator().next();
+        break;
+      default:
+      case OTHER:
+      case OSCAR:
+        Object o = results.iterator().next();
+        if (o instanceof Long) {
+          r = (Long)results.iterator().next();
+        } else {
+          r = (Integer)results.iterator().next();
+        }
+        break;
       }
       commited = commitTransaction();
     } finally {
@@ -2544,11 +2580,22 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       Query query = pm.newQuery("javax.jdo.query.SQL", "SELECT count(*) FROM DEVICES");
       List results = (List) query.execute();
-      if (isOracle) {
+      switch (dbtype) {
+      case ORACLE:
         BigDecimal tableSize = (BigDecimal) results.iterator().next();
         r = tableSize.longValue();
-      } else {
-        r = (Integer)results.iterator().next();
+        break;
+      default:
+      case OTHER:
+      case OSCAR: {
+        Object o = results.iterator().next();
+        if (o instanceof Long) {
+          r = (Long)results.iterator().next();
+        } else {
+          r = (Integer)results.iterator().next();
+        }
+        break;
+      }
       }
       commited = commitTransaction();
     } finally {
@@ -3748,7 +3795,7 @@ public class ObjectStore implements RawStore, Configurable {
       for (FieldSchema part : keys) {
         // FIXME: set version to ZERO initially
         mkeys.add(new MFieldSchema(part.getName().toLowerCase(),
-            part.getType(), part.getComment(), 0));
+            part.getType(), part.getComment(), part.getVersion()));
       }
     }
     return mkeys;
@@ -5497,6 +5544,28 @@ public class ObjectStore implements RawStore, Configurable {
           newFS.add(newt.getFileSplitKeys().get(i));
           i++;
           LOG.info("---zjw-- in alter getP_col:"+pif.getP_col()+" --version:"+pif.getP_version());
+        }
+        // BUG-XXX: have to CHECk the column exits!!!
+        if (HiveConf.getBoolVar(hiveConf, ConfVars.MS_FEATURE_TEST)) {
+          i = 0;
+          for (PartitionInfo pif : newPis) {
+            boolean isOK = false;
+            if (!pif.getP_col().equalsIgnoreCase(newt.getFileSplitKeys().get(i).getName())) {
+              throw new InvalidObjectException("FileSplitValue: column name mismatch: pi.comment " + pif.getP_col() +
+                  ", fsk.name " + newt.getFileSplitKeys().get(i).getName());
+            }
+            for (MFieldSchema mfs : newt.getSd().getCD().getCols()) {
+              if (mfs.getName().equalsIgnoreCase(pif.getP_col())) {
+                isOK = true;
+                break;
+              }
+            }
+            if (!isOK) {
+              throw new InvalidObjectException("FileSplitValue: column name mismatch: fsk.name " + pif.getP_col() +
+                  ", col.name not exist.");
+            }
+            i++;
+          }
         }
       }
 //      if (newt.getFileSplitKeys() != null) {

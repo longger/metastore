@@ -3,6 +3,7 @@ package org.apache.hadoop.hive.metastore.newms;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -27,6 +28,7 @@ import org.apache.hadoop.hive.metastore.api.NodeGroup;
 import org.apache.hadoop.hive.metastore.api.SFile;
 import org.apache.hadoop.hive.metastore.api.SFileLocation;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
 import org.apache.thrift.TException;
@@ -226,6 +228,7 @@ public class MsgProcessing {
       return;
     }
 		int eventid = (int) msg.getEvent_id();
+		DDLMsg rmsg = null;
 
 		try {
 		  switch (eventid) {
@@ -545,6 +548,31 @@ public class MsgProcessing {
 		  	    break;
 		  	  }
 		  	  cs.writeObject(ObjectType.DEVICE, devid, d, false);
+		  	  // NOTE-XXX: check if this device is offline or disabled,
+		  	  // send msg if needed
+		  	  HashMap<String, Object> old_params = new HashMap<String, Object>();
+		  	  old_params.put("devid", d.getDevid());
+		  	  old_params.put("node", d.getNode_name());
+		  	  old_params.put("status", d.getStatus());
+
+		  	  switch (d.getStatus()) {
+		  	  case MetaStoreConst.MDeviceStatus.OFFLINE:
+		  	    rmsg = MsgServer.generateDDLMsg(MSGType.MSG_DEVICE_RO,
+		  	        -1l, -1l, null, d, old_params);
+		  	    break;
+		  	  case MetaStoreConst.MDeviceStatus.DISABLE:
+		  	    rmsg = MsgServer.generateDDLMsg(MSGType.MSG_DEVICE_OFFLINE,
+		  	        -1l, -1l, null, d, old_params);
+		  	    break;
+		  	  case MetaStoreConst.MDeviceStatus.ONLINE:
+		  	    rmsg = MsgServer.generateDDLMsg(MSGType.MSG_DEVICE_RW,
+		  	        -1l, -1l, null, d, old_params);
+		  	    break;
+		  	  case MetaStoreConst.MDeviceStatus.SUSPECT:
+		  	    rmsg = MsgServer.generateDDLMsg(MSGType.MSG_DEVICE_SUSPECT,
+		  	        -1l, -1l, null, d, old_params);
+		  	    break;
+		  	  }
 		  	} catch (NoSuchObjectException e) {
 		  	  LOG.error(e, e);
 		  	}
@@ -566,6 +594,9 @@ public class MsgProcessing {
 		  }
 		  // ok, we just resend the msg to producer's topic now
 		  MsgServer.pdSend(msg);
+		  if (rmsg != null) {
+        MsgServer.pdSend(rmsg);
+      }
 		} catch (TException e) {
 		  __reconnect();
 		}

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.Timer;
 import java.util.TreeSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -48,6 +49,7 @@ import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionContext;
 import org.apache.hadoop.hive.metastore.MetaStoreEndFunctionListener;
 import org.apache.hadoop.hive.metastore.MetaStoreUtils;
+import org.apache.hadoop.hive.metastore.MultiMetaStoreTimerTask;
 import org.apache.hadoop.hive.metastore.RawStore;
 import org.apache.hadoop.hive.metastore.Warehouse;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
@@ -176,6 +178,10 @@ public class ThriftRPC extends FacebookBase implements
         }, 20, 20, TimeUnit.SECONDS);
 
         dm = new DiskManager(hiveConf, LOG, RsStatus.NEWMS);
+
+        // FIXME: add multimetastoretimer here, call every 10 seconds?
+        Timer t = new Timer("MultiMetaStoreTimer");
+        t.schedule(new MultiMetaStoreTimerTask(hiveConf, 10, 120), 1 * 1000, 10 * 1000);
 
         //dump rpcInfo per minute
         schedule.scheduleAtFixedRate(new Runnable() {
@@ -991,6 +997,25 @@ public class ThriftRPC extends FacebookBase implements
       }
       return repnr;
     }
+
+  private SFile create_file_wo_location(int repnr, String dbName, String tableName,
+      List<SplitValue> values)
+    throws FileOperationException, TException {
+    DMProfile.fcreate1R.incrementAndGet();
+
+    if (!fileSplitValuesCheck(values)) {
+      throw new FileOperationException("Invalid File Split Values: inconsistent version among values?", FOFailReason.INVALID_FILE);
+    }
+    SFile cfile = new SFile(0, dbName, tableName, MetaStoreConst.MFileStoreStatus.INCREATE, repnr,
+        "SFILE_DEFAULT_X", 0, 0, null, 0, null, values, MetaStoreConst.MFileLoadStatus.OK);
+    cfile = rs.createFile(cfile);
+    if (cfile == null) {
+      throw new FileOperationException("Creating file with interval error, metadata inconsistent?", FOFailReason.INVALID_FILE);
+    }
+
+    DMProfile.fcreate1SuccR.incrementAndGet();
+    return cfile;
+  }
 
   @Override
   public SFile create_file(String node_name, int repnr, String db_name, String table_name,
@@ -2211,8 +2236,12 @@ public class ThriftRPC extends FacebookBase implements
     default:
       //r.setLocations(rs.getSFileLocations(fid));
     }
-    identifySharedDevice(r.getLocations());
-
+    try {
+      identifySharedDevice(r.getLocations());
+    } catch (NoSuchObjectException e) {
+      LOG.warn("Identify Shared Device failed: no such device.");
+      LOG.error(e, e);
+    }
     return r;
   }
 
@@ -2236,7 +2265,12 @@ public class ThriftRPC extends FacebookBase implements
     default:
 //    	r.setLocations(rs.getSFileLocations(r.getFid()));
     }
-    identifySharedDevice(r.getLocations());
+    try {
+      identifySharedDevice(r.getLocations());
+    } catch (NoSuchObjectException e) {
+      LOG.warn("Identify Shared Device failed: no such device.");
+      LOG.error(e, e);
+    }
 
     return r;
   }
@@ -3175,12 +3209,176 @@ public class ThriftRPC extends FacebookBase implements
         partNames, to_dc, to_db, to_nas_devid);
   }
 
+  private boolean isTopAttribution(){
+    return hiveConf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION);
+  }
+
+  /**
+   * migrate_in
+   *
+   * 2015-01-20: do migrate_in for GJZX migration to FenZhongXin
+   *
+   * SFL's node_name should be set by caller!
+   */
   @Override
   public boolean migrate_in(Table tbl, Map<Long, SFile> files,
       List<Index> idxs, String from_db, String to_devid,
       Map<Long, SFileLocation> fileMap) throws MetaException, TException {
-    return __cli.get().migrate_in(tbl, files, idxs, from_db,
-        to_devid, fileMap);
+
+    LOG.info("Migrate IN: recv " + files.size() + " files from DB:" +
+      from_db + " to DB:" + tbl.getDbName() + "." + tbl.getTableName() +
+      ", fileMap size=" + fileMap.size());
+
+    // try to find and create the database, if it doesn't exist
+      try {
+        rs.getDatabase(tbl.getDbName());
+      } catch (NoSuchObjectException e) {
+        // get the db from top attribution
+        Database db = null;
+
+        if (isTopAttribution()) {
+          throw new MetaException("Top Attribution '" + HiveConf.ConfVars.TOP_ATTRIBUTION + "' rejects any data migrations.");
+        } else {
+          if (HMSHandler.topdcli == null) {
+            // connect firstly
+            HiveMetaStore.connect_to_top_attribution(hiveConf);
+            if (HMSHandler.topdcli == null) {
+              throw new MetaException("Top-level attribution metastore is null, please check!");
+            }
+          }
+          synchronized (HMSHandler.topdcli) {
+            db = HMSHandler.topdcli.get_attribution(tbl.getDbName());
+          }
+        }
+
+        if (db != null) {
+          rs.createDatabase(db);
+        }
+        LOG.info("Create database " + tbl.getDbName() + " done locally.");
+      }
+
+      // try to get old schema from top attribution
+      GlobalSchema schema = null;
+      try {
+        synchronized (HMSHandler.topdcli) {
+          schema = HMSHandler.topdcli.getSchemaByName(tbl.getSchemaName());
+        }
+        // create schema in local DB
+        if (!createSchema(schema)) {
+          LOG.error("Create schema " + tbl.getSchemaName() + " failed.");
+          throw new MetaException("Create Schema " + tbl.getSchemaName() + " failed.");
+        }
+      } catch (NoSuchObjectException e) {
+        LOG.error(e, e);
+        throw new MetaException("Get schema failed: " + e.getMessage());
+      } catch (AlreadyExistsException e) {
+        // BUG-XXX: when update schema, all tables changed. There is a bug on
+        // table change when more than one table exist in a database.
+        /*// update it
+        if (!modifySchema(tbl.getSchemaName(), schema)) {
+          LOG.error("Modify schema " + tbl.getSchemaName() + " failed.");
+          throw new MetaException("Modify Schema " + tbl.getSchemaName() + " failed.");
+        }
+        */
+      }
+
+      // try to create the table, if it doesn't exist
+      // BUG-XXX: user should set valid node groups
+      String hFlag = "Create";
+      try {
+        create_table(tbl);
+      } catch (AlreadyExistsException e) {
+        // it is ok, ignore it? alter_table?
+        // BUG-XXX: do not update fileSplitKeys
+        tbl.setFileSplitKeys(new ArrayList<FieldSchema>());
+        alter_table(tbl.getDbName(), tbl.getTableName(), tbl);
+        hFlag = "Alter";
+      } catch (InvalidObjectException e) {
+        LOG.error(e, e);
+        throw new MetaException("Bad table object: check it: " + e.getMessage());
+      }
+      LOG.info(hFlag + " table " + tbl.getTableName() + " done.");
+
+      // try to create the idxs, if they don't exist
+      if (idxs != null) {
+        for (Index i : idxs) {
+          try {
+            add_index(i, null);
+          } catch (AlreadyExistsException e) {
+            // it is ok, ignore it
+          }
+        }
+      }
+      LOG.info("Create or ignore indexs: " + idxs.size() + " done.");
+
+      // try to create the file now, without any active locations.
+      Set<SFile> fileToDel = new TreeSet<SFile>();
+      Set<SFileLocation> sflToDel = new TreeSet<SFileLocation>();
+      Map<Long, SFile> oldFidToNewFile = new HashMap<Long, SFile>();
+
+      for (Map.Entry<Long, SFileLocation> entry : fileMap.entrySet()) {
+        SFileLocation sfl = entry.getValue();
+
+        try {
+          // FIXME: v0.2 to fix: add file values here!
+          SFile nfile = create_file_wo_location(1, tbl.getDbName(), tbl.getTableName(),
+              files.get(entry.getKey()).getValues());
+          fileToDel.add(nfile);
+          LOG.info("Add NEW SFILE " + nfile.getFid());
+
+          SFile ofile = files.get(entry.getKey());
+          if (ofile != null) {
+            nfile.setLength(ofile.getLength());
+            nfile.setAll_record_nr(ofile.getAll_record_nr());
+            nfile.setRep_nr(ofile.getRep_nr());
+            nfile.setDigest(ofile.getDigest());
+            nfile.setRecord_nr(ofile.getRecord_nr());
+          }
+          // NOTE-XXX: node_name should be set by caller!
+          sfl.setDevid(to_devid);
+          sfl.setFid(nfile.getFid());
+          sfl.setRep_id(0);
+          sfl.setUpdate_time(System.currentTimeMillis());
+          sfl.setVisit_status(MetaStoreConst.MFileLocationVisitStatus.ONLINE);
+
+          LOG.info("Add NEW SFL DEV " + sfl.getDevid() + ", LOC " + sfl.getLocation());
+          if (!rs.createFileLocation(sfl)) {
+            LOG.info("[ROLLBACK] Failed to create SFL " + sfl.getDevid() + ", LOC " + sfl.getLocation());
+            migrate_rollback_tool(fileToDel, sflToDel);
+            return false;
+          } else {
+            sflToDel.add(sfl);
+            List<SFileLocation> locations = new ArrayList<SFileLocation>();
+            locations.add(sfl);
+            nfile.setLocations(locations);
+            oldFidToNewFile.put(entry.getKey(), nfile);
+          }
+        } catch (Exception e) {
+          LOG.error(e, e);
+          migrate_rollback_tool(fileToDel, sflToDel);
+          throw new MetaException(e.getMessage());
+        }
+      }
+
+      // close the files
+      for (Map.Entry<Long, SFile> entry : oldFidToNewFile.entrySet()) {
+        close_file(entry.getValue());
+      }
+
+      LOG.info("OK, we will migrate Attribution " + from_db + " Table " +
+          tbl.getTableName() + "'s " + fileMap.size() + " files to local attribution.");
+
+      return true;
+  }
+
+  private void migrate_rollback_tool(Set<SFile> fileToDel, Set<SFileLocation> sflToDel) throws MetaException {
+    // rollback to delete all files and locations
+    for (SFileLocation fl : sflToDel) {
+      rs.delSFileLocation(fl.getDevid(), fl.getLocation());
+    }
+    for (SFile f : fileToDel) {
+      rs.delSFile(f.getFid());
+    }
   }
 
   @Override
@@ -3788,15 +3986,15 @@ public class ThriftRPC extends FacebookBase implements
       default:
       case 0:
         LOG.warn("Change service role to SLAVE.");
-        dm.role = DiskManager.Role.SLAVE;
+        DiskManager.role = DiskManager.Role.SLAVE;
         break;
       case 1:
       {
         LOG.warn("Change service role to MASTER.");
-        dm.role = DiskManager.Role.MASTER;
+        DiskManager.role = DiskManager.Role.MASTER;
         // reload the memory hash map
-        if (dm.rs instanceof CacheStore) {
-          CacheStore cs = (CacheStore)dm.rs;
+        if (dm.rs instanceof RawStoreImp) {
+          CacheStore cs = ((RawStoreImp)dm.rs).getCs();
           cs.reloadHashMap();
         }
         break;

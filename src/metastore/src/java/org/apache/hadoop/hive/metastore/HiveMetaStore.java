@@ -158,6 +158,7 @@ import org.apache.hadoop.hive.metastore.msg.MSGFactory.DDLMsg;
 import org.apache.hadoop.hive.metastore.msg.MSGType;
 import org.apache.hadoop.hive.metastore.msg.MetaMsgServer;
 import org.apache.hadoop.hive.metastore.newms.CacheStore;
+import org.apache.hadoop.hive.metastore.newms.RawStoreImp;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionDefinition;
 import org.apache.hadoop.hive.metastore.tools.PartitionFactory.PartitionInfo;
@@ -537,7 +538,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     private void createDefaultDB_core(RawStore ms) throws MetaException, InvalidObjectException {
       Database ldb = null, mdb = null;
 
-      if (dm != null && dm.role != DiskManager.Role.MASTER) {
+      if (dm != null && DiskManager.role != DiskManager.Role.MASTER) {
         // only master can create default database and update URIs
         // FIXME: when call update_ms_service(), you should update MS saved URIs!!
         return;
@@ -1293,7 +1294,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
         } catch (Exception e) {
           LOG.error(e, e);
-          throw new MetaException("create schema view failed.");
+          if (e instanceof InvalidObjectException) {
+            throw (InvalidObjectException)e;
+          }
         }
         LOG.info("--zjw--before commitTransaction");
         success = ms.commitTransaction();
@@ -7383,17 +7386,17 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         default:
         case 0:
           LOG.warn("Change service role to SLAVE.");
-          dm.role = DiskManager.Role.SLAVE;
+          DiskManager.role = DiskManager.Role.SLAVE;
           break;
         case 1:
         {
           LOG.warn("Change service role to MASTER.");
-          dm.role = DiskManager.Role.MASTER;
+          DiskManager.role = DiskManager.Role.MASTER;
           // update MS saved service URIs
           change_service_uri(getMS());
           // reload the memory hash map
-          if (dm.rs instanceof CacheStore) {
-            CacheStore cs = (CacheStore)dm.rs;
+          if (dm.rs instanceof RawStoreImp) {
+            CacheStore cs = ((RawStoreImp)dm.rs).getCs();
             cs.reloadHashMap();
           }
           break;
