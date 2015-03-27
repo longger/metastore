@@ -95,10 +95,12 @@ import org.apache.hadoop.hive.metastore.api.UnknownTableException;
 import org.apache.hadoop.hive.metastore.api.User;
 import org.apache.hadoop.hive.metastore.api.statfs;
 import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
+import org.apache.hadoop.hive.metastore.zk.MetaConstants;
 import org.apache.hadoop.hive.metastore.zk.ServerName;
 import org.apache.hadoop.hive.metastore.zk.ZKUtil;
+import org.apache.hadoop.hive.metastore.zk.ZooKeeperListener;
 import org.apache.hadoop.hive.metastore.zk.ZooKeeperWatcher;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
+//import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
@@ -127,11 +129,16 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
   private final HashMap<String,HiveMetaStoreClient> remore_dc_map = new HashMap<String,HiveMetaStoreClient>();
   private boolean isAuthed = false;
 
+  private boolean isHAModel = false;
+  private String currentHAUriString = "";
+
   // for thrift connects
   private int retries = 5;
   private int retryDelaySeconds = 0;
 
   static final private Log LOG = LogFactory.getLog("hive.metastore");
+
+
 
   public HiveMetaStoreClient(String msUri, Integer retry, Integer retryDelay, HiveMetaHookLoader hookLoader)
   throws MetaException {
@@ -184,6 +191,8 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     }
     // finally open the store
     open();
+
+
   }
 
   public HiveMetaStoreClient(HiveConf conf)
@@ -257,6 +266,8 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     }
     // finally open the store
     open();
+
+
   }
 
   //added for newms locality check ,reduce internal connections to zookeeper
@@ -265,6 +276,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     String zkUri = conf.getVar(HiveConf.ConfVars.METAZOOKEEPERSTOREURIS);
     String zkPort = conf.getVar(HiveConf.ConfVars.HIVE_ZOOKEEPER_META_PORT);
     if(!msUri.contains("thrift")){//
+      isHAModel = true;
       zkUri = msUri;
       if(zkUri.indexOf(":") < 0){
         zkUri = zkUri +":"+ zkPort;
@@ -283,10 +295,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     try {
       String hostName = InetAddress.getLocalHost().getHostName();
       String hostIp = InetAddress.getLocalHost().getHostAddress();
-      boolean one = (localMsUri != null);
-      boolean two = (!localMsUri.equals(""));
-      boolean three = (localMsUri.contains("thrift"));
-      boolean four = (localMsUri != null && !localMsUri.equals("") && localMsUri.contains("thrift"));
+
       if(localMsUri != null && !localMsUri.equals("") && localMsUri.contains("thrift")){
         int start = localMsUri.lastIndexOf("/")+1;
         int end   = localMsUri.lastIndexOf(":");
@@ -302,6 +311,72 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     return msUri;
   }
 
+  /**
+   *
+   * MasterChangeListener.
+   *
+   * reconnect by zookeeper event,not used now.
+   *
+   * when it is used,please modified zookeeper watcher as metastoreclient memeber.
+   *
+   */
+  private class MasterChangeListener extends ZooKeeperListener{
+    public MasterChangeListener(ZooKeeperWatcher watcher) {
+      super(watcher);
+      // TODO Auto-generated constructor stub
+    }
+
+    void handle(final String path) {
+      if (isHAModel) {
+        LOG.info("======Master change event:"+path);
+        if(path.equalsIgnoreCase(MetaConstants.DEFAULT_ZOOKEEPER_ZNODE_PARENT+ "/"+conf.get("zookeeper.znode.master", "master")))
+        {
+          try {
+            reconnect();
+          } catch (MetaException e) {
+            LOG.error(e);
+          }
+        }
+      }
+    }
+
+    /**
+     * Called when a new node has been created.
+     * @param path full path of the new node
+     */
+    @Override
+    public void nodeCreated(String path) {
+      handle(path);
+    }
+
+    /**
+     * Called when a node has been deleted
+     * @param path full path of the deleted node
+     */
+    @Override
+    public void nodeDeleted(String path) {
+      handle(path);
+    }
+
+    /**
+     * Called when an existing node has changed data.
+     * @param path full path of the updated node
+     */
+    @Override
+    public void nodeDataChanged(String path) {
+      handle(path);
+    }
+
+    /**
+     * Called when an existing node has a child node added or removed.
+     * @param path full path of the node whose children have changed
+     */
+    @Override
+    public void nodeChildrenChanged(String path) {
+      handle(path);
+    }
+  }
+
   private String retryGetMaster(ZooKeeperWatcher zkw,String zkString,int times){
     if(times <= 0){
       return null;
@@ -310,6 +385,14 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     try {
       zkw = new ZooKeeperWatcher(conf,zkString,this.toString(),null,false);
       msUri = blockUntilAvailable(zkw,60000).toString();
+
+      /**
+       * registr a zookeeper listener , reconnect when receive a message.
+       */
+      //MasterChangeListener masterChangeListener = new MasterChangeListener(zkw);
+      //zkw.registerListener(masterChangeListener);
+
+      currentHAUriString = msUri;
       return msUri;
     } catch (ZooKeeperConnectionException e) {
       LOG.error("Error in init zk connection");
@@ -362,11 +445,41 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
   }
 
   public void reconnect() throws MetaException {
+    //LOG.info("$$$$$$$$$$$$$$$$$$$$ZQH------reconnect() has been allocated!!!!!!!$$$$$$$$$$$$$$$$$$$");
     if (localMetaStore) {
       // For direct DB connections we don't yet support reestablishing connections.
       throw new MetaException("For direct MetaStore DB connections, we don't support retries" +
           " at the client level.");
     } else {
+      // read newest HA service address
+      /******************added by zjw for hivemetastore service HA****************/
+      if(isHAModel){
+        String msUri = conf.getVar(HiveConf.ConfVars.METASTOREURIS);
+        msUri = getMsUriFromHA(msUri);
+        //LOG.info("$$$$$$$$$$$$$$$$$$$$ZQH$$$$$$$$$$$$$$$$$$$"+msUri);
+        if (msUri != null) {
+          String metastoreUrisString[] = msUri.split(",");
+            metastoreUris = new URI[metastoreUrisString.length];
+            try {
+              int i = 0;
+              for (String s : metastoreUrisString) {
+                URI tmpUri = new URI(s);
+                if (tmpUri.getScheme() == null) {
+                  throw new IllegalArgumentException("URI: " + s
+                      + " does not have a scheme");
+                }
+                metastoreUris[i++] = tmpUri;
+
+              }
+            } catch (IllegalArgumentException e) {
+              throw (e);
+            } catch (Exception e) {
+              MetaStoreUtils.logAndThrowMetaException(e);
+            }
+          }
+      }
+
+
       // Swap the first element of the metastoreUris[] with a random element from the rest
       // of the array. Rationale being that this method will generally be called when the default
       // connection has died and the default connection is likely to be the first array element.
