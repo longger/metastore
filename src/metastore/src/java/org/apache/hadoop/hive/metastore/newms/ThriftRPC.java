@@ -3641,6 +3641,7 @@ public class ThriftRPC extends FacebookBase implements
 
   @Override
   public boolean set_loadstatus_bad(long fid) throws MetaException, TException {
+    startFunction("set_loadstatus_bad", "fid " + fid);
     SFile saved = rs.getSFile(fid);
     if (saved == null) {
       throw new FileOperationException("Can not find SFile by FID " + fid,

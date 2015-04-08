@@ -506,28 +506,31 @@ public class DiskManager {
 
         public void updateFStat(String devid, String location, String tag,
             int rdnr, int wrnr, int ernr, long iolat) {
-          FSTAT fs = fstat.get(devid + ":" + location + ":" + tag);
-          if (fs != null) {
-            synchronized (fs) {
-              if (rdnr > 0) {
-                fs.rdnr += rdnr;
+          try {
+            FSTAT fs = fstat.get(devid + ":" + location + ":" + tag);
+            if (fs != null) {
+              synchronized (fs) {
+                if (rdnr > 0) {
+                  fs.rdnr += rdnr;
+                }
+                if (wrnr > 0) {
+                  fs.wrnr += wrnr;
+                }
+                if (ernr > 0) {
+                  fs.ernr += ernr;
+                }
+                if (iolat > 0) {
+                  fs.iolat += iolat;
+                }
+                fs.ts = System.currentTimeMillis();
               }
-              if (wrnr > 0) {
-                fs.wrnr += wrnr;
-              }
-              if (ernr > 0) {
-                fs.ernr += ernr;
-              }
-              if (iolat > 0) {
-                fs.iolat += iolat;
-              }
-              fs.ts = System.currentTimeMillis();
+            } else {
+              fs = new FSTAT(devid, location, tag);
+              fs.ernr += ernr;
+              fs.iolat += iolat;
+              fstat.putIfAbsent(devid + ":" + location + ":" + tag, fs);
             }
-          } else {
-            fs = new FSTAT(devid, location, tag);
-            fs.ernr += ernr;
-            fs.iolat += iolat;
-            fstat.putIfAbsent(devid + ":" + location + ":" + tag, fs);
+          } catch (Exception e) {
           }
         }
 
@@ -538,80 +541,110 @@ public class DiskManager {
                 if (dmr.args != null) {
                   String[] fs = dmr.args.split(",");
                   if (fs.length == 5) {
-                    // tag:devid:location
-                    DMAudit dma = map.get(fs[0] + ":" + fs[2] + ":" + fs[3]);
+                    try {
+                      // tag:devid:location
+                      DMAudit dma = map.get(fs[0] + ":" + fs[2] + ":" + fs[3]);
 
-                    if (dma == null) {
-                      // new entry
-                      if (fs[4].equals("RDB")) {
-                        dma = new DMAudit();
-                        dma.op = VFSOperation.READ_BEGIN;
-                        try {
-                          dma.open = Long.parseLong(fs[1]);
-                        } catch (Exception e) {}
-                        dma.devid = fs[2];
-                        dma.location = fs[3];
-                        dma.tag = fs[0];
-                        map.putIfAbsent(fs[0] + ":" + fs[2] + ":" + fs[3], dma);
-                      } else if (fs[4].equals("WRB")) {
-                        dma = new DMAudit();
-                        dma.op = VFSOperation.WRITE_BEGIN;
-                        try {
-                          dma.open = Long.parseLong(fs[1]);
-                        } catch (Exception e) {}
-                        dma.devid = fs[2];
-                        dma.location = fs[3];
-                        dma.tag = fs[0];
-                        map.putIfAbsent(fs[0] + ":" + fs[2] + ":" + fs[3], dma);
-                      } else if (fs[4].equals("RDE")) {
-                        drop_rde++;
-                      } else if (fs[4].equals("WRE")) {
-                        drop_wre++;
-                      } else if (fs[4].equals("ERR")) {
-                        // ok, try to update FSTAT
-                        updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, 0);
-                      }
-                    } else {
-                      switch (dma.op) {
-                      case READ_BEGIN:{
-                        if (fs[4].equals("RDE")) {
-                          // ok, try to update FSTAT
-                          long cur = dma.open;
-                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
-                          updateFStat(fs[2], fs[3], fs[0], 1, 0, 0, cur - dma.open);
-                          map.remove(dma);
+                      if (dma == null) {
+                        // new entry
+                        if (fs[4].equals("RDB")) {
+                          dma = new DMAudit();
+                          dma.op = VFSOperation.READ_BEGIN;
+                          try {
+                            dma.open = Long.parseLong(fs[1]);
+                          } catch (Exception e) {}
+                          dma.devid = fs[2];
+                          dma.location = fs[3];
+                          dma.tag = fs[0];
+                          map.putIfAbsent(fs[0] + ":" + fs[2] + ":" + fs[3], dma);
+                        } else if (fs[4].equals("WRB")) {
+                          dma = new DMAudit();
+                          dma.op = VFSOperation.WRITE_BEGIN;
+                          try {
+                            dma.open = Long.parseLong(fs[1]);
+                          } catch (Exception e) {}
+                          dma.devid = fs[2];
+                          dma.location = fs[3];
+                          dma.tag = fs[0];
+                          map.putIfAbsent(fs[0] + ":" + fs[2] + ":" + fs[3], dma);
+                        } else if (fs[4].equals("RDE")) {
+                          drop_rde++;
+                        } else if (fs[4].equals("WRE")) {
+                          drop_wre++;
                         } else if (fs[4].equals("ERR")) {
                           // ok, try to update FSTAT
-                          long cur = dma.open;
-                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
-                          updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, cur - dma.open);
-                          map.remove(dma);
+                          updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, 0);
                         }
-                        break;
-                      }
-                      case WRITE_BEGIN:{
-                        if (fs[4].equals("WRE")) {
-                          // ok, try to update FSTAT
-                          long cur = dma.open;
-                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
-                          updateFStat(fs[2], fs[3], fs[0], 0, 1, 0, cur - dma.open);
-                          map.remove(dma);
-                        } else if (fs[4].equals("ERR")) {
-                          // ok, try to update FSTAT
-                          long cur = dma.open;
-                          try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
-                          updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, cur - dma.open);
-                          map.remove(dma);
+                      } else {
+                        switch (dma.op) {
+                        case READ_BEGIN:{
+                          if (fs[4].equals("RDE")) {
+                            // ok, try to update FSTAT
+                            long cur = dma.open;
+                            try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                            updateFStat(fs[2], fs[3], fs[0], 1, 0, 0, cur - dma.open);
+                            map.remove(dma);
+                          } else if (fs[4].equals("ERR")) {
+                            // ok, try to update FSTAT
+                            long cur = dma.open;
+                            try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                            updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, cur - dma.open);
+                            map.remove(dma);
+                          }
+                          break;
                         }
-                        break;
+                        case WRITE_BEGIN:{
+                          if (fs[4].equals("WRE")) {
+                            // ok, try to update FSTAT
+                            long cur = dma.open;
+                            try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                            updateFStat(fs[2], fs[3], fs[0], 0, 1, 0, cur - dma.open);
+                            map.remove(dma);
+                          } else if (fs[4].equals("ERR")) {
+                            // ok, try to update FSTAT
+                            long cur = dma.open;
+                            try {cur = Long.parseLong(fs[1]);} catch (Exception x) {}
+                            updateFStat(fs[2], fs[3], fs[0], 0, 0, 1, cur - dma.open);
+                            map.remove(dma);
+                          }
+                          break;
+                        }
+                        default:
+                        }
                       }
-                      default:
-                      }
+                    } catch (Exception e) {
                     }
                   }
                 }
               }
             }
+          }
+        }
+
+        public void cleanDSFStat(long timeout) {
+          try {
+            // clean DMAudit
+            List<String> toDel = new ArrayList<String>();
+
+            for (Map.Entry<String, DMAudit> e : map.entrySet()) {
+              if (e.getValue().open + timeout < System.currentTimeMillis()) {
+                toDel.add(e.getKey());
+              }
+            }
+            for (String td : toDel) {
+              map.remove(td);
+            }
+            toDel.clear();
+            // clean DSFStat
+            for (Map.Entry<String, FSTAT> e : fstat.entrySet()) {
+              if (e.getValue().ts + timeout < System.currentTimeMillis()) {
+                toDel.add(e.getKey());
+              }
+            }
+            for (String td : toDel) {
+              fstat.remove(td);
+            }
+          } catch (Exception e) {
           }
         }
 
@@ -707,6 +740,8 @@ public class DiskManager {
               o3.iolat += fs.iolat;
             }
           }
+
+          r += "Drop RDE " + drop_rde + ", WRE " + drop_wre + "\n";
           List<Entry<String, HotResult>> entries = Lists.newArrayList(hist_hot_dev.entrySet());
           Collections.sort(entries, compByNr);
 
@@ -776,6 +811,12 @@ public class DiskManager {
         if (dm != null) {
           r += "Hot Device Tracking:\n";
           r += hdt.getHotDeviceTracing(dm);
+          r += "\n";
+        }
+
+        if (dm != null && dm.deviceTracked.size() > 0) {
+          r += "Tracked Device:\n";
+          r += dm.getTrackedDevice();
           r += "\n";
         }
 
@@ -1215,6 +1256,7 @@ public class DiskManager {
     public static class DMReply {
       public enum DMReplyType {
         DELETED, REPLICATED, FAILED_REP, FAILED_DEL, VERIFY, INFO, SLAVE, AUDIT,
+        TRACK_DEV,
       }
       DMReplyType type;
       String args;
@@ -1243,6 +1285,9 @@ public class DiskManager {
           break;
         case AUDIT:
           r += "AUDIT";
+          break;
+        case TRACK_DEV:
+          r += "TRACK_DEV";
           break;
         default:
           r += "UNKNOWN";
@@ -1295,6 +1340,28 @@ public class DiskManager {
         default:
           r = "DMRequest: Invalid OP!";
         }
+        return r;
+      }
+    }
+
+    public static class DeviceTrack {
+      public String dev;
+      long rep_nr;
+      long rep_err;
+      long rep_lat;
+      long del_nr;
+      long del_err;
+      long del_lat;
+
+      public DeviceTrack(String dev) {
+        this.dev = dev;
+      }
+
+      @Override
+      public String toString() {
+        String r = "";
+        r += dev + " -> " + rep_nr + "," + rep_err + "," + ((double)rep_lat / rep_nr) + "," +
+            del_nr + "," + del_err + "," + ((double)del_lat / del_nr);
         return r;
       }
     }
@@ -1440,8 +1507,10 @@ public class DiskManager {
     private final ConcurrentHashMap<String, DeviceInfo> admap;
     // Device -> Node Map
     private final ConcurrentHashMap<String, Set<String>> dnmap;
-    // Blacklisted Devices (no replicated would send to them)
-    private final ConcurrentHashMap<String, String> blacklisted;
+    // Blacklisted Devices (no replicate or delete requests should send to them)
+    private final ConcurrentHashMap<String, DeviceInfo> blacklisted;
+    // Track Devices' rep/del info
+    private final ConcurrentHashMap<String, DeviceTrack> deviceTracked;
 
     public class BackupTimerTask extends TimerTask {
       private long last_backupTs = System.currentTimeMillis();
@@ -1800,6 +1869,8 @@ public class DiskManager {
       public long repTimeout = 15 * 60 * 1000;
       public long delTimeout = 5 * 60 * 1000;
       public long rerepTimeout = 30 * 1000;
+      public long cleanDSFStatCheck = 30 * 60 * 1000;
+      public long cleanDSFStatTimeout = 24 * 3600 * 1000; // 24 hours
 
       public long offlineDelTimeout = 3600 * 1000; // 1 hour
       public long suspectDelTimeout = 30 * 24 * 3600 * 1000; // 30 days
@@ -1812,6 +1883,7 @@ public class DiskManager {
       private long last_inactiveNodeTs = System.currentTimeMillis();
       private long last_limitTs = System.currentTimeMillis();
       private long last_limitLeakTs = System.currentTimeMillis();
+      private long last_cleanDSFStatTs = System.currentTimeMillis();
 
       private long last_genRpt = System.currentTimeMillis();
 
@@ -1831,6 +1903,7 @@ public class DiskManager {
         offlineDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_OFFLINE_DEL_TIMEOUT);
         suspectDelTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_SUSPECT_DEL_TIMEOUT);
         inactiveNodeTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_CHECK_INACTIVE_NODE_TIMEOUT);
+        cleanDSFStatTimeout = hiveConf.getLongVar(HiveConf.ConfVars.DM_DSFSTAT_TIMEOUT);
         ff_range = hiveConf.getLongVar(HiveConf.ConfVars.DM_FF_RANGE);
         DiskManager.identify_shared_device = hiveConf.getBoolVar(HiveConf.ConfVars.DM_IDENTIFY_SHARED_DEV);
 
@@ -2969,6 +3042,13 @@ public class DiskManager {
             last_inactiveNodeTs = System.currentTimeMillis();
           }
 
+          // check DSFStat info
+          if (last_cleanDSFStatTs + cleanDSFStatCheck < System.currentTimeMillis()) {
+            LOG.info("Reap DSFStat info that longer than " + (cleanDSFStatTimeout / 1000) + " seconds.");
+            SysMonitor.dsfstat.cleanDSFStat(cleanDSFStatTimeout);
+            last_cleanDSFStatTs = System.currentTimeMillis();
+          }
+
           if (last_genRpt + 60000 <= System.currentTimeMillis()) {
             generateReport();
             last_genRpt = System.currentTimeMillis();
@@ -3014,7 +3094,8 @@ public class DiskManager {
       ndmap = new ConcurrentHashMap<String, NodeInfo>();
       admap = new ConcurrentHashMap<String, DeviceInfo>();
       dnmap = new ConcurrentHashMap<String, Set<String>>();
-      blacklisted = new ConcurrentHashMap<String, String>();
+      blacklisted = new ConcurrentHashMap<String, DeviceInfo>();
+      deviceTracked = new ConcurrentHashMap<String, DeviceTrack>();
       closeRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_CLOSE_REP_LIMIT));
       fixRepLimit.set(hiveConf.getLongVar(HiveConf.ConfVars.DM_FIX_REP_LIMIT));
       init();
@@ -3467,9 +3548,9 @@ public class DiskManager {
       }
       r += "}\n";
       r += flselector.printWatched();
-      r += "MsgLocalQ: " + MsgServer.getLocalQueueSize() + "\n";
-      r += "MsgQ:" + MsgServer.getQueueSize() + "\n";
-      r += "MsgFailedQ:" + MsgServer.getFailedQueueSize() + "\n";
+      r += "MsgLocalQ : " + MsgServer.getLocalQueueSize() + "\n";
+      r += "MsgQ      : " + MsgServer.getQueueSize() + "\n";
+      r += "MsgFailedQ: " + MsgServer.getFailedQueueSize() + "\n";
       r += "Rep Limit: closeRepLimit " + closeRepLimit.get() + ", fixRepLimit " + fixRepLimit.get() + "\n";
 
       dmsnr++;
@@ -3930,6 +4011,85 @@ public class DiskManager {
         }
       }
       return mp;
+    }
+
+    public void updateDeviceTracking(List<DMReply> dmrs) {
+      if (dmrs != null) {
+        for (DMReply dmr : dmrs) {
+          if (dmr.type == DMReply.DMReplyType.TRACK_DEV) {
+            if (dmr.args != null) {
+              String[] fs = dmr.args.split(",");
+              if (fs.length == 7) {
+                // +B:dev,rep_nr,rep_err,rep_lat,del_nr,del_err,del_lat
+                DeviceTrack dt = deviceTracked.get(fs[0]);
+                DeviceTrack ndt = new DeviceTrack(fs[0]);
+
+                try {
+                  ndt.rep_nr = Long.parseLong(fs[1]);
+                } catch (NumberFormatException nfe) {}
+                try {
+                  ndt.rep_err = Long.parseLong(fs[2]);
+                } catch (NumberFormatException nfe) {}
+                try {
+                  ndt.rep_lat = Long.parseLong(fs[3]);
+                } catch (NumberFormatException nfe) {}
+                try {
+                  ndt.del_nr = Long.parseLong(fs[4]);
+                } catch (NumberFormatException nfe) {}
+                try {
+                  ndt.del_err = Long.parseLong(fs[5]);
+                } catch (NumberFormatException nfe) {}
+                try {
+                  ndt.del_lat = Long.parseLong(fs[6]);
+                } catch (NumberFormatException nfe) {}
+
+                if (dt == null) {
+                  deviceTracked.put(fs[0], ndt);
+                  LOG.info("Add device " + fs[0] + " to track list");
+                } else {
+                  if (ndt.rep_nr < dt.rep_nr) {
+                    LOG.info("Detect device " + fs[0] + " re-join to track list");
+                  }
+                  if (ndt.rep_err > dt.rep_err) {
+                    LOG.info("Detect device " + fs[0] + " generate REP errors: " +
+                        (ndt.rep_err - dt.rep_err));
+                  }
+                  if (ndt.rep_nr > 0 && dt.rep_nr > 0 &&
+                      (ndt.rep_lat / ndt.rep_nr > 2 * dt.rep_lat / dt.rep_nr)) {
+                    LOG.info("Detect device " + fs[0] + " induce REP latency: " +
+                        (ndt.rep_lat / ndt.rep_nr));
+                  }
+                  if (ndt.del_err > dt.del_err) {
+                    LOG.info("Detect device " + fs[0] + " generate DEL errors: " +
+                        (ndt.del_err - dt.del_err));
+                  }
+                  if (ndt.del_nr > 0 && dt.del_nr > 0 &&
+                    (ndt.del_lat / ndt.del_nr > 2 * dt.del_lat / dt.del_nr)) {
+                    LOG.info("Detect device " + fs[0] + " induce DEL latency: " +
+                        (ndt.del_lat / ndt.del_nr));
+                  }
+                  dt.rep_nr = ndt.rep_nr;
+                  dt.rep_err = ndt.rep_err;
+                  dt.rep_lat = ndt.rep_lat;
+                  dt.del_nr = ndt.del_nr;
+                  dt.del_err = ndt.del_err;
+                  dt.del_lat = ndt.del_lat;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    public String getTrackedDevice() {
+      String r = "";
+
+      for (Map.Entry<String, DeviceTrack> e : deviceTracked.entrySet()) {
+        r += e.getValue() + "\n";
+      }
+
+      return r;
     }
 
     static public class FileLocatingPolicy {
@@ -5196,8 +5356,10 @@ public class DiskManager {
                   continue;
                 }
                 // NOTE-XXX: handle audit report here!
-                if (report.isAuditRpt) {
-                  sm.dsfstat.updateDMAudit(report.replies);
+                if (report.isComplexRpt) {
+                  SysMonitor.dsfstat.updateDMAudit(report.replies);
+                  // Track device
+                  updateDeviceTracking(report.replies);
                   continue;
                 }
                 try {
@@ -5259,24 +5421,40 @@ public class DiskManager {
                       case FAILED_DEL:
                         oni.totalFailDel++;
                         // it is ok ignore any del failure
+                        if (args.length == 4) {
+                          LOG.info("Failed Delete on " + args[0] + " dev " + args[1] + ":" +
+                              args[2] + " errcode=" + args[3]);
+                        } else if (args.length == 3) {
+                          LOG.info("Failed Delete on " + args[0] + " dev " + args[1] + ":" +
+                              args[2]);
+                        }
                         break;
                       case FAILED_REP:
                         oni.totalFailRep++;
                         // ok, we know that the SFL will be invalid parma...ly
                         SFileLocation sfl;
 
+                        if (args.length == 4) {
+                          LOG.info("Failed Replication on " + args[0] + " dev " + args[1] + ":" +
+                              args[2] + " errcode=" + args[3]);
+                        } else if (args.length == 3) {
+                          LOG.info("Failed Replication on " + args[0] + " dev " + args[1] + ":" +
+                              args[2]);
+                        }
                         try {
                           synchronized (rs_s1) {
                             sfl = rs_s1.getSFileLocation(args[1], args[2]);
                             if (sfl != null) {
                               // delete this SFL right now
                               if (sfl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.OFFLINE) {
-                                LOG.info("Failed Replication for file " + sfl.getFid() + " dev " + sfl.getDevid() + " loc " + sfl.getLocation() + ", delete it now.");
+                                LOG.info("Failed Replication for file " + sfl.getFid() + " dev " + sfl.getDevid() +
+                                    " loc " + sfl.getLocation() + ", delete it now.");
                                 rs_s1.delSFileLocation(args[1], args[2]);
                                 // BUG-XXX: shall we trigger a DELETE request to dservice?
                                 synchronized (oni.toDelete) {
                                   oni.toDelete.add(sfl);
-                                  LOG.info("----> Add toDelete " + sfl.getLocation() + ", qs " + cleanQ.size() + ", dev " + sfl.getDevid());
+                                  LOG.info("----> Add toDelete " + sfl.getLocation() + ", qs " + cleanQ.size() +
+                                      ", dev " + sfl.getDevid());
                                 }
                               }
                             }
@@ -5372,8 +5550,8 @@ public class DiskManager {
         Node reportNode = null;
         NodeInfo oni = null;
 
-        // is audit report?
-        public boolean isAuditRpt = false;
+        // is complex report?
+        public boolean isComplexRpt = false;
 
         @Override
         public String toString() {
@@ -5418,7 +5596,7 @@ public class DiskManager {
           // +CMD
           // +CMD
           // +A:TAG,13800000,devid,location,VFSOperation
-          r.isAuditRpt = true;
+          r.isComplexRpt = true;
           r.node = reports[0].substring(0, reports[0].indexOf('\n')).replaceFirst("\\+node:", "");
           r.replies = parseCmds(reports[2]);
           break;
@@ -5503,6 +5681,10 @@ public class DiskManager {
             r.add(dmr);
           } else if (cmds[i].startsWith("+A:")) {
             dmr.type = DMReply.DMReplyType.AUDIT;
+            dmr.args = cmds[i].substring(3);
+            r.add(dmr);
+          } else if (cmds[i].startsWith("+B:")) {
+            dmr.type = DMReply.DMReplyType.TRACK_DEV;
             dmr.args = cmds[i].substring(3);
             r.add(dmr);
           }
@@ -5654,8 +5836,12 @@ public class DiskManager {
                     if (args.length < 3) {
                       LOG.warn("Invalid DEL report: " + r.args);
                     } else {
+                      if (args.length == 4) {
+                        LOG.info("DELETE from " + args[0] + " dev " + args[1] + ":" + args[2] + ", latency=" + args[3]);
+                      } else {
+                        LOG.info("DELETE from " + args[0] + " dev " + args[1] + ":" + args[2]);
+                      }
                       try {
-                        LOG.warn("Begin delete FLoc MD " + args[0] + "," + args[1] + "," + args[2]);
                         synchronized (rs) {
                           SFileLocation sfl = rs.getSFileLocation(args[1], args[2]);
                           if (sfl != null) {
@@ -5718,9 +5904,11 @@ public class DiskManager {
                     synchronized (rs) {
                       List<SFileLocation> sfl = rs.getSFileLocations(f.getFid());
                       int repnr = 0;
-                      for (SFileLocation fl : sfl) {
-                        if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
-                          repnr++;
+                      if (sfl != null) {
+                        for (SFileLocation fl : sfl) {
+                          if (fl.getVisit_status() == MetaStoreConst.MFileLocationVisitStatus.ONLINE) {
+                            repnr++;
+                          }
                         }
                       }
                       if (f.getRep_nr() == repnr && f.getStore_status() == MetaStoreConst.MFileStoreStatus.CLOSED) {
@@ -5739,7 +5927,7 @@ public class DiskManager {
                   try {
                     synchronized (rs) {
                       List<SFileLocation> sfl = rs.getSFileLocations(f.getFid());
-                      if (sfl.size() == 0) {
+                      if (sfl != null && sfl.size() == 0) {
                         // delete this file: if it's in INCREATE state, ignore it; if it's in !INCREAT && !RM_PHYSICAL state, warning it.
                         if (f.getStore_status() != MetaStoreConst.MFileStoreStatus.INCREATE) {
                           if (f.getStore_status() != MetaStoreConst.MFileStoreStatus.RM_PHYSICAL) {
