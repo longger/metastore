@@ -1477,6 +1477,7 @@ public class DiskManager {
       public long tvyr = 0;
       public long uptime = 0;
       public double load1 = 0.0;
+      public long recvLatency = 0;
 
       public NodeInfo(List<DeviceInfo> dis) {
         this.lastRptTs = System.currentTimeMillis();
@@ -4692,6 +4693,7 @@ public class DiskManager {
 
       public void run() {
         while (true) {
+        try {
           // dequeue requests from the clean queue
           DMRequest r = cleanQ.poll();
           if (r == null) {
@@ -4706,6 +4708,7 @@ public class DiskManager {
           }
           if (r.op == DMRequest.DMROperation.RM_PHYSICAL) {
             synchronized (ndmap) {
+              if (r.file != null && r.file.getLocations() != null) {
               for (SFileLocation loc : r.file.getLocations()) {
                 NodeInfo ni = ndmap.get(loc.getNode_name());
                 if (ni == null) {
@@ -4723,8 +4726,12 @@ public class DiskManager {
                   LOG.info("----> Add to Node " + loc.getNode_name() + "'s toDelete " + loc.getLocation() + ", qs " + cleanQ.size() + ", " + r.file.getLocationsSize());
                 }
               }
+              }
             }
           }
+        } catch (Exception e) {
+          LOG.error(e, e);
+        }
         }
       }
     }
@@ -5403,6 +5410,9 @@ public class DiskManager {
                           oni.tvyr = Long.parseLong(args[7]);
                           oni.uptime = Long.parseLong(args[8]);
                           oni.load1 = Double.parseDouble(args[9]);
+                          if (args.length > 10) {
+                            oni.recvLatency = Long.parseLong(args[10]);
+                          }
                         } catch (NumberFormatException e1) {
                           LOG.error(e1, e1);
                         } catch (IndexOutOfBoundsException e1) {
