@@ -5783,6 +5783,7 @@ public class ObjectStore implements RawStore, Configurable {
 
     oldSd.setLocation(newSd.getLocation());
     MColumnDescriptor oldCD = oldSd.getCD();
+    MColumnDescriptor tmpCD = new MColumnDescriptor();
     // 关键在setCd这里
     if (!(oldSd != null && oldSd.getCD() != null &&
         oldSd.getCD().getCols() != null &&
@@ -5802,13 +5803,33 @@ public class ObjectStore implements RawStore, Configurable {
       // 得到oldSD没有而newSD有的信息，即newSD-oldSD,因为MFieldSchema的equals方法的原因，
       // 考虑一下，假如修改了列的类型呢，列名应该不会影响？应该不存在吧
 
-      newMFieldSchemas.removeAll(oldMFieldSchemas);
+      // 先假设只有comment不同，剩下的列名、列类型一样，因为只能通过schema去修改
 
+      Map<String,String> newSDMFieldschemaMap = new HashMap<String, String>();
+      Iterator<MFieldSchema> newMFieldschemaIterator = newMFieldSchemas.iterator();
+      while(newMFieldschemaIterator.hasNext())
+      {
+        MFieldSchema tmpMFieldSchema = newMFieldschemaIterator.next();
+        newSDMFieldschemaMap.put(tmpMFieldSchema.getName(), tmpMFieldSchema.getComment());
+      }
 
-      oldSd.setCD(newSd.getCD());
+      ArrayList<MFieldSchema> res = new ArrayList<MFieldSchema>();
+      // 遍历oldSD,如果发现并且其comment不为空则加入oldCD中
+      Iterator<MFieldSchema> oldMFieldschemaIterator = oldMFieldSchemas.iterator();
+      while(oldMFieldschemaIterator.hasNext())
+      {
+        MFieldSchema tmpFieldSchema = oldMFieldschemaIterator.next();
+        if(newSDMFieldschemaMap.get(tmpFieldSchema.getName()) != null)
+        {
+          res.add(tmpFieldSchema);
+        }
+      }
+
+      tmpCD.setCols(res);
+      oldSd.setCD(tmpCD);
    }
 
-
+    removeUnusedColumnDescriptor(tmpCD);
     removeUnusedColumnDescriptor(oldCD);
     oldSd.setBucketCols(newSd.getBucketCols());
     oldSd.setCompressed(newSd.isCompressed());
@@ -10901,7 +10922,7 @@ public MUser getMUser(String userName) {
         //copyMSD(mSchema.getSd(), oldmt.getSd());//Schema的修改不涉及修改归属地/分区方法和类型
 
         //copyMSD(mSchema.getSd(), oldmt.getSd());//Schema的修改不涉及修改归属地/分区方法和类型
-
+        copyMSDMSchemaToTable(mSchema.getSd(), oldmt.getSd());
         // end by tianlong
 //        oldmt.setDatabase(mSchema.getDatabase());
         oldmt.setRetention(mSchema.getRetention());
