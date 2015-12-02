@@ -142,6 +142,7 @@ TOK_TABLE_PARTITION;
 TOK_ALTERTABLE_FILEFORMAT;
 TOK_ALTERTABLE_LOCATION;
 TOK_ALTERTABLE_PROPERTIES;
+TOK_ALTERTABLE_DROP_PROPERTIES;
 TOK_ALTERTABLE_CHANGECOL_AFTER_POSITION;
 TOK_ALTERINDEX_REBUILD;
 TOK_ALTERINDEX_PROPERTIES;
@@ -1117,6 +1118,7 @@ alterTableStatementSuffix
     | alterStatementSuffixArchive
     | alterStatementSuffixUnArchive
     | alterStatementSuffixProperties
+    | alterStatementSuffixDropProperties
     | alterTblPartitionStatement
     | alterStatementSuffixClusterbySortby
     | alterStatementSuffixSkewedby
@@ -1388,6 +1390,14 @@ alterStatementSuffixProperties
     : name=Identifier KW_SET KW_TBLPROPERTIES tableProperties
     -> ^(TOK_ALTERTABLE_PROPERTIES $name tableProperties)
     ;
+    
+alterStatementSuffixDropProperties
+@init { msgs.push("drop properties statemetn"); }
+@after { msgs.pop(); } 
+    :name=Identifier KW_DROP KW_TBLPROPERTIES tableProperties
+    -> ^(TOK_ALTERTABLE_DROP_PROPERTIES $name tableProperties)
+    ;
+    
 alterSchemaStatementSuffixProperties
 @init { msgs.push("alter properties statement"); }
 @after { msgs.pop(); }

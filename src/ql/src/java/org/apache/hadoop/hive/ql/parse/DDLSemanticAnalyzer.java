@@ -292,6 +292,11 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     case HiveParser.TOK_ALTERTABLE_PROPERTIES:
       analyzeAlterTableProps(ast, false);
       break;
+    // add by tianlong
+    case HiveParser.TOK_ALTERTABLE_DROP_PROPERTIES:
+      analyzeAlterTableDropProps(ast, false);
+      break;
+    // end by tianlong
     case HiveParser.TOK_ALTERTABLE_CLUSTER_SORT:
       analyzeAlterTableClusterSort(ast);
       break;
@@ -2282,6 +2287,9 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
       case RENAMEPARTITION:
       case ADDPROPS:
       case RENAME:
+      // add by tianlong
+      case DROPPROPS:
+      // end by tianlong
       case ALTERFILESPLIT:
       case ADDNODEGROUP:
       case DELETENODEGROUP:
@@ -2344,6 +2352,25 @@ public class DDLSemanticAnalyzer extends BaseSemanticAnalyzer {
     rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
         alterTblDesc), conf));
   }
+
+  // add by tianlong
+  private void analyzeAlterTableDropProps(ASTNode ast, boolean expectView)
+      throws SemanticException{
+
+    String tableName = getUnescapedName((ASTNode) ast.getChild(0));
+    HashMap<String, String> mapProp = getProps((ASTNode) (ast.getChild(1))
+        .getChild(0));
+    AlterTableDesc alterTblDesc =
+        new AlterTableDesc(AlterTableTypes.DROPPROPS, expectView);
+    alterTblDesc.setProps(mapProp);
+    alterTblDesc.setOldName(tableName);
+
+    addInputsOutputsAlterTable(tableName, null, alterTblDesc);
+
+    rootTasks.add(TaskFactory.get(new DDLWork(getInputs(), getOutputs(),
+        alterTblDesc), conf));
+  }
+  // end by tianlong
 
   private void analyzeAlterTableSerdeProps(ASTNode ast, String tableName,
       HashMap<String, String> partSpec)
