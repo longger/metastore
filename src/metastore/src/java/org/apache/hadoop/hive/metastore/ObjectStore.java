@@ -5799,18 +5799,14 @@ public class ObjectStore implements RawStore, Configurable {
       ArrayList<MFieldSchema> newMFieldSchemas = new ArrayList<MFieldSchema>();
       newMFieldSchemas.addAll(newSd.getCD().getCols());
 
-      // 是否考虑万一通过table修改了列信息呢？？？或者不提供table修改列（除了comment）的接口
-      // 得到oldSD没有而newSD有的信息，即newSD-oldSD,因为MFieldSchema的equals方法的原因，
-      // 考虑一下，假如修改了列的类型呢，列名应该不会影响？应该不存在吧
-
       // 先假设只有comment不同，剩下的列名、列类型一样，因为只能通过schema去修改
 
-      Map<String,String> newSDMFieldschemaMap = new HashMap<String, String>();
+      Map<String,MFieldSchema> newSDMFieldschemaMap = new HashMap<String, MFieldSchema>();
       Iterator<MFieldSchema> newMFieldschemaIterator = newMFieldSchemas.iterator();
       while(newMFieldschemaIterator.hasNext())
       {
         MFieldSchema tmpMFieldSchema = newMFieldschemaIterator.next();
-        newSDMFieldschemaMap.put(tmpMFieldSchema.getName(), tmpMFieldSchema.getComment());
+        newSDMFieldschemaMap.put(tmpMFieldSchema.getName(), tmpMFieldSchema);
       }
 
       ArrayList<MFieldSchema> res = new ArrayList<MFieldSchema>();
@@ -5819,10 +5815,15 @@ public class ObjectStore implements RawStore, Configurable {
       while(oldMFieldschemaIterator.hasNext())
       {
         MFieldSchema tmpFieldSchema = oldMFieldschemaIterator.next();
-        if(newSDMFieldschemaMap.get(tmpFieldSchema.getName()) != null)
+        if( newSDMFieldschemaMap.get(tmpFieldSchema.getName())!=null && (newSDMFieldschemaMap.get(tmpFieldSchema.getName()).getComment()!=null) )
         {
-          res.add(tmpFieldSchema);
+          newSDMFieldschemaMap.put(tmpFieldSchema.getName(), tmpFieldSchema);
         }
+      }
+
+      for(Map.Entry<String, MFieldSchema> entry : newSDMFieldschemaMap.entrySet())
+      {
+        res.add(entry.getValue());
       }
 
       tmpCD.setCols(res);
