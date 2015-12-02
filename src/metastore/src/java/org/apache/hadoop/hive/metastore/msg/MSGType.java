@@ -206,7 +206,11 @@ public class MSGType {
    * 删除schema
    */
   public static final int MSG_DEL_SCHEMA = 1608;
-
+  /**
+   *修改schema修改comment
+   *add by tianlong
+   */
+  public static final int MSG_MODIFY_SCHEMA_ALT_COL_COMMENT = 1609;
   /**
    * dw1 专用DDL语句
    */
