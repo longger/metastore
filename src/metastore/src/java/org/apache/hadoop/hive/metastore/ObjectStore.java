@@ -5811,11 +5811,13 @@ public class ObjectStore implements RawStore, Configurable {
 
       ArrayList<MFieldSchema> res = new ArrayList<MFieldSchema>();
       // 遍历oldSD,如果发现并且其comment不为空则加入oldCD中
+      // 问题：如果不在newSD，中也就是删除的或者操作table的这个考虑么？
       Iterator<MFieldSchema> oldMFieldschemaIterator = oldMFieldSchemas.iterator();
       while(oldMFieldschemaIterator.hasNext())
       {
         MFieldSchema tmpFieldSchema = oldMFieldschemaIterator.next();
-        if( newSDMFieldschemaMap.get(tmpFieldSchema.getName())!=null && (newSDMFieldschemaMap.get(tmpFieldSchema.getName()).getComment()!=null) )
+        // 这个判断是假设对列的修改操作（除了comment）全是通过schema操作的
+        if( newSDMFieldschemaMap.get(tmpFieldSchema.getName())!=null && tmpFieldSchema.getComment()!=null )
         {
           newSDMFieldschemaMap.put(tmpFieldSchema.getName(), tmpFieldSchema);
         }
