@@ -2214,17 +2214,14 @@ public class ObjectStore implements RawStore, Configurable {
   	MTable mtbl = mbc.getTable();
     try {
       openTransaction();
-      //LOG.info("-----------tianlong--------delete busiTypeCol-------");
       Query query = pm.newQuery(MBusiTypeColumn.class, "table.tableName == tabName && table.database.name == dbName && this.column == column");
       query.declareParameters("java.lang.String tabName, java.lang.String dbName, java.lang.String column");
-      //LOG.info("----------tianlong-----"+mtbl.getTableName()+" "+mtbl.getDatabase().getName()+" "+mbc.getColumn());
       Collection cols = (Collection)query.execute(mtbl.getTableName(), mtbl.getDatabase().getName(), mbc.getColumn());
       Iterator iter = cols.iterator();
       while (iter.hasNext()) {
         MBusiTypeColumn col = (MBusiTypeColumn)iter.next();
         LOG.debug("---zy--  DEL BusiType " + col.getBusiType() + " on col " + col.getColumn() + " for db " +
             mtbl.getDatabase().getName() + " table " + mtbl.getTableName());
-        //LOG.info("-----------tianlong-------in while loop---col.getColumn="+col.getColumn());
         pm.deletePersistent(col);
       }
       commited = commitTransaction();
@@ -2242,10 +2239,8 @@ public class ObjectStore implements RawStore, Configurable {
       openTransaction();
       LOG.debug("---zy-- insert BusiType " + mbc.getBusiType() + " on col " + mbc.getColumn() + " for db " +
           mtbl.getDatabase().getName() + " table " + mtbl.getTableName());
-      //LOG.info("---------tianlong---------insert busiTypeCol---before pm.makePersistent mbc.getColumn()="+mbc.getColumn());
       pm.makePersistent(mbc);
       commited = commitTransaction();
-      //LOG.info("------tiannlong---------after pm.makePersistent  commited="+commited);
     } finally {
       if (!commited) {
         rollbackTransaction();
@@ -5282,27 +5277,6 @@ public class ObjectStore implements RawStore, Configurable {
         			 {
         				 for(String bt : MetaStoreUtils.BUSI_TYPES)
         				 {
-        				   /*
-        					 if(nmf.getComment().indexOf(bt) != -1){			//insert busitype
-        						 HashMap<String, Object> params = new HashMap<String, Object>();
-              			 params.put("db_name", oldt.getDatabase().getName());
-                     params.put("table_name", oldt.getTableName());
-              			 params.put("column_name", nmf.getName());
-              			 params.put("action", "add");
-              			 params.put("comment", nmf.getComment());
-              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
-              			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
-
-              			 LOG.info("--------tianlong--------before insert busi type// nmf.getName="+nmf.getName());
-										 this.insertBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
-										 LOG.info("--------tianlong--------after insert busi type");
-              			 try {
-											this.append_busi_type_datacenter(new BusiTypeDatacenter(bt, convertToDatabase(oldt.getDatabase())));
-										} catch (TException e) {
-											LOG.error(e,e);
-										}
-        					 }
-        					 */
         					 if(omf.getComment().indexOf(bt) != -1){			//del busitype
 	    	        			 HashMap<String, Object> params = new HashMap<String, Object>();
 	    	        			 params.put("db_name", oldt.getDatabase().getName());
@@ -5312,8 +5286,6 @@ public class ObjectStore implements RawStore, Configurable {
 	    	        			 params.put("comment", omf.getComment());
 	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
 	    	        			 msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
-
-	    	        			 //LOG.info("-------tianlong-------omf.getComment="+omf.getComment()+" column_name="+omf.getName());
 											 this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, omf.getName()));
         					 }
         				 }
@@ -5331,8 +5303,6 @@ public class ObjectStore implements RawStore, Configurable {
                      params.put("comment", nmf.getComment());
                      msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
                      msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
-
-                     //LOG.info("--------tianlong--------nmf.getComment="+nmf.getComment()+" column_name="+nmf.getName());
                      this.insertBusiTypeCol(new MBusiTypeColumn(bt, oldt, nmf.getName()));
                      try {
                       this.append_busi_type_datacenter(new BusiTypeDatacenter(bt, convertToDatabase(oldt.getDatabase())));
@@ -5340,22 +5310,6 @@ public class ObjectStore implements RawStore, Configurable {
                       LOG.error(e,e);
                     }
                    }
-                   /*
-                   if(omf.getComment().indexOf(bt) != -1){      //del busitype
-                       HashMap<String, Object> params = new HashMap<String, Object>();
-                       params.put("db_name", oldt.getDatabase().getName());
-                       params.put("table_name", oldt.getTableName());
-                       params.put("column_name", omf.getName());
-                       params.put("action", "del");
-                       params.put("comment", omf.getComment());
-                       msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_TABLE_BUSITYPE_CHANGED,db_id,-1, pm, oldt,params));
-                       msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TABLE_PARAM,db_id,-1, pm, oldt,params));
-
-                       LOG.info("-------tianlong-------before delete busi type// omf.getName"+omf.getName());
-                       this.deleteBusiTypeCol(new MBusiTypeColumn(bt, oldt, omf.getName()));
-                       LOG.info("--------tianlong--------after delete busi type");
-                   }
-                   */
                  }
         				 // end by tianlong
         			 }
@@ -5496,7 +5450,6 @@ public class ObjectStore implements RawStore, Configurable {
       success = commitTransaction();
 
       if(success) {
-        //LOG.info("------tianlong--------the size of msgs queue="+msgs.size());
         for(MSGFactory.DDLMsg msg : msgs) {
           Object eventObject = msg.getEventObject();
           long id = -1;
@@ -5513,7 +5466,6 @@ public class ObjectStore implements RawStore, Configurable {
           }
           msg.setObject_id(id);
           MetaMsgServer.sendMsg(msg);
-          //LOG.info("-----tianlong------- after send msg");
         }
       }
 
@@ -10532,8 +10484,6 @@ public MUser getMUser(String userName) {
           p.put("table_name", mSchema.getSchemaName().toLowerCase());
           p.put("old_table_name", oldt.getTableName());
           p.put("db_name", oldt.getDatabase().getName());
-          //LOG.info("--------tianlong----------new table name = "+mSchema.getSchemaName().toLowerCase());
-          //LOG.info("--------tianlong----------old table name = "+oldt.getTableName());
           msgs.add(MSGFactory.generateDDLMsg(MSGType.MSG_ALT_TALBE_NAME, db_id, -1, pm, oldt, p));
         }
       }
@@ -10919,14 +10869,9 @@ public MUser getMUser(String userName) {
         oldmt.setOwner(mSchema.getOwner());
         // Fully copy over the contents of the new SD into the old SD,
         // so we don't create an extra SD in the metastore db that has no references.
-        // begin by tianlong
-        // 现在去获取新的schema的sd（这个sd是没有comment的），然后和old table去比较找出两者的差别，然后生成一个新的sd，再去set
-
         //copyMSD(mSchema.getSd(), oldmt.getSd());//Schema的修改不涉及修改归属地/分区方法和类型
+        copyMSDMSchemaToTable(mSchema.getSd(), oldmt.getSd());    // modify by tianlong
 
-        //copyMSD(mSchema.getSd(), oldmt.getSd());//Schema的修改不涉及修改归属地/分区方法和类型
-        copyMSDMSchemaToTable(mSchema.getSd(), oldmt.getSd());
-        // end by tianlong
 //        oldmt.setDatabase(mSchema.getDatabase());
         oldmt.setRetention(mSchema.getRetention());
 //        oldmt.setPartitionKeys(mSchema.getPartitionKeys());
