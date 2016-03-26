@@ -22,6 +22,7 @@ import org.apache.hadoop.hbase.util.HasThread;
 import org.apache.hadoop.hive.common.classification.InterfaceAudience;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
+import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler;
 import org.apache.hadoop.hive.metastore.zk.MasterAddressTracker;
 import org.apache.hadoop.hive.metastore.zk.MetaConstants;
 import org.apache.hadoop.hive.metastore.zk.ServerName;
@@ -120,7 +121,10 @@ public class MetaMaster  extends HasThread implements Abortable{
 
    String local_attribution_uri = conf.getVar(ConfVars.METASTORELOCALURIS);
    this.serverName = new ServerName(local_attribution_uri);
+   String zkAddress = conf.getVar(HiveConf.ConfVars.METASTOREURIS);
+   HMSHandler.LOG.info("==="+serverName+"===zk====="+zkAddress);
 
+   //this.zooKeeper = new ZooKeeperWatcher(conf,null, MASTER , this, true);
    this.zooKeeper = new ZooKeeperWatcher(conf,null, MASTER , this, true);
 
  }

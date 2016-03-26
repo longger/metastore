@@ -33,6 +33,8 @@ import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.hbase.util.Threads;
 import org.apache.hadoop.hive.common.classification.InterfaceAudience;
 import org.apache.hadoop.hive.common.classification.InterfaceStability;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
@@ -159,8 +161,13 @@ public class ZooKeeperWatcher implements Watcher, Abortable, Closeable {
       this.constructorCaller = e;
     }
     if(zkString == null){
-      this.quorum = ZKConfig.getZKQuorumServersString(conf);
+
+      //for HA,read config zkstring
+      HMSHandler.LOG.info("===zk==="+zkString+"====="+conf.get(HiveConf.ConfVars.METASTOREURIS.varname));
+      //this.quorum = ZKConfig.getZKQuorumServersStringFromConfig(conf);
+      this.quorum = ZKConfig.getZKQuorumServersStringFromConfig(conf);
     }else{
+      HMSHandler.LOG.info("===zk==="+zkString+"====="+conf.get(HiveConf.ConfVars.METASTOREURIS.varname));
       this.quorum = zkString;
     }
     // Identifier will get the sessionid appended later below down when we

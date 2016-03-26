@@ -162,7 +162,9 @@ TOK_DROPDATABASE;
 TOK_DROPTABLE;
 TOK_DATABASECOMMENT;
 TOK_TABCOLLIST;
+TOK_VIEWCOLLIST;
 TOK_TABCOL;
+TOK_VIEWCOL;
 TOK_TABLECOMMENT;
 TOK_TABLEPARTCOLS;
 TOK_TABLEBUCKETS;
@@ -330,6 +332,8 @@ TOK_ALTERINDEX_MODIFY_PARTITION_ADD_FILE;
 TOK_ALTERINDEX_MODIFY_SUBPARTITION_ADD_FILE;
 TOK_ALTERINDEX_MODIFY_PARTINDEX_DROP_FILE;
 TOK_ALTERINDEX_MODIFY_SUBPARTINDEX_DROP_FILE;
+TOK_ALTERVIEW_ADDBUSYTYPES;
+TOK_ALTERVIEW_DELBUSYTYPES;
 TOK_SHOWSUBPARTITIONS;
 TOK_HETER;
 TOK_SHOWPARTITIONKEYS;
@@ -1098,7 +1102,8 @@ alterSchemaStatementSuffix
     | alterSchemaStatementSuffixAddCol
     | alterSchemaStatementSuffixRenameCol
     | alterSchemaStatementSuffixProperties
-    |alterSchemaStatementChangeColPosition
+    | alterSchemaStatementChangeColPosition
+    | alterStatementSuffixBusyType   
     ;
     
 alterTableStatementSuffix
@@ -1298,6 +1303,14 @@ alterSchemaStatementChangeColPosition
 //add 2-level  partition operations
 
 
+alterStatementSuffixBusyType
+@init { msgs.push("change view 's busy type"); }
+@after { msgs.pop(); }
+    :Identifier (add=KW_ADD | delete=KW_DELETE) KW_BUSYTYPE KW_ON KW_COLUMNS LPAREN columnBusyTypeList RPAREN
+    -> {$add != null}? ^(TOK_ALTERVIEW_ADDBUSYTYPES Identifier columnBusyTypeList)
+    ->                 ^(TOK_ALTERVIEW_DELBUSYTYPES Identifier columnBusyTypeList)
+    ;
+    
 alterStatementSuffixDropPartitions
 @init { msgs.push("drop partition statement"); }
 @after { msgs.pop(); }
@@ -2241,6 +2254,12 @@ columnNameTypeList
     : columnNameType (COMMA columnNameType)* -> ^(TOK_TABCOLLIST columnNameType+)
     ;
 
+columnBusyTypeList
+@init { msgs.push("column busy type list"); }
+@after { msgs.pop(); }
+    : columnBusyType (COMMA columnBusyType)* -> ^(TOK_VIEWCOLLIST columnBusyType+)
+    ;
+
 columnNameColonTypeList
 @init { msgs.push("column name type list"); }
 @after { msgs.pop(); }
@@ -2344,6 +2363,13 @@ columnNameType
     : colName=Identifier colType (KW_COMMENT comment=StringLiteral)?
     -> {$comment == null}? ^(TOK_TABCOL $colName colType)
     ->                     ^(TOK_TABCOL $colName colType $comment)
+    ;
+
+columnBusyType
+@init { msgs.push("viewcolumn specification"); }
+@after { msgs.pop(); }
+    : colName=Identifier colBusyType=StringLiteral
+    -> ^(TOK_VIEWCOL $colName $colBusyType)
     ;
 
 columnNameColonType
@@ -3319,6 +3345,7 @@ KW_RIGHT : 'RIGHT';
 KW_FULL : 'FULL';
 KW_ON : 'ON';
 KW_SPLIT : 'SPLIT';
+KW_BUSYTYPE :'BUSYTYPE';
 KW_PARTITION : 'PARTITION';
 KW_PARTITIONS : 'PARTITIONS';
 KW_TABLE: 'TABLE';

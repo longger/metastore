@@ -26,8 +26,10 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -96,6 +98,7 @@ import org.apache.hadoop.hive.metastore.model.MetaStoreConst;
 import org.apache.hadoop.hive.metastore.zk.ServerName;
 import org.apache.hadoop.hive.metastore.zk.ZKUtil;
 import org.apache.hadoop.hive.metastore.zk.ZooKeeperWatcher;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.shims.HadoopShims;
 import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.thrift.HadoopThriftAuthBridge;
@@ -138,21 +141,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
     /******************added by zjw for hivemetastore service HA****************/
 
 
-    String zkUri = conf.getVar(HiveConf.ConfVars.METAZOOKEEPERSTOREURIS);
-    String zkPort = conf.getVar(HiveConf.ConfVars.HIVE_ZOOKEEPER_META_PORT);
-    LOG.info("#####msUri address:"+msUri+",zkUri:"+zkUri+",zkport:"+zkPort);
-    if(!msUri.contains("thrift")){//
-      zkUri = msUri;
-      if(zkUri.indexOf(":") < 0){
-        zkUri = zkUri +":"+ zkPort;
-      }
-      LOG.info("#####connecting to zk address:"+msUri);
-      if(zkUri != null){
-        ZooKeeperWatcher zkw = null;
-        msUri = retryGetMaster(zkw,zkUri,  3);
-        LOG.info("#####hivemetasore address:"+msUri);
-      }
-    }
+    msUri = getMsUriFromHA(msUri);
 
     /******************end hivemetastore service HA****************/
 
@@ -215,20 +204,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
 
     /******************added by zjw for hivemetastore service HA****************/
 
-
-    String zkUri = conf.getVar(HiveConf.ConfVars.METAZOOKEEPERSTOREURIS);
-    String zkPort = conf.getVar(HiveConf.ConfVars.HIVE_ZOOKEEPER_META_PORT);
-    LOG.info("#####msUri address:"+msUri+",zkUri:"+zkUri+",zkport:"+zkPort);
-    if(!msUri.contains("thrift")){//
-      zkUri = msUri;
-      zkUri = zkUri +":"+ zkPort;
-      LOG.info("#####connecting to zk address:"+zkUri);
-      if(zkUri != null){
-        ZooKeeperWatcher zkw = null;
-        msUri = retryGetMaster(zkw,zkUri,  3);
-        LOG.info("#####hivemetasore address:"+msUri);
-      }
-    }
+    msUri = getMsUriFromHA(msUri);
 
     /******************end hivemetastore service HA****************/
     localMetaStore = (msUri == null) ? true : msUri.trim().isEmpty();
@@ -277,18 +253,59 @@ public class HiveMetaStoreClient implements IMetaStoreClient {
         MetaStoreUtils.logAndThrowMetaException(e);
       }
     } else {
-      LOG.error("NOT getting uris from conf");
       throw new MetaException("MetaStoreURIs not found in conf file");
     }
     // finally open the store
     open();
   }
 
+  //added for newms locality check ,reduce internal connections to zookeeper
+  private String getMsUriFromHA(String msUri){
+    msUri = validateLocalMetastoreUrl(msUri);
+    String zkUri = conf.getVar(HiveConf.ConfVars.METAZOOKEEPERSTOREURIS);
+    String zkPort = conf.getVar(HiveConf.ConfVars.HIVE_ZOOKEEPER_META_PORT);
+    if(!msUri.contains("thrift")){//
+      zkUri = msUri;
+      if(zkUri.indexOf(":") < 0){
+        zkUri = zkUri +":"+ zkPort;
+      }
+      if(zkUri != null){
+        ZooKeeperWatcher zkw = null;
+        msUri = retryGetMaster(zkw,zkUri,  3);
+      }
+    }
+    return msUri;
+  }
+
+  private String validateLocalMetastoreUrl(String msUri){
+
+    String localMsUri = conf.getVar(HiveConf.ConfVars.OLDMETASTORELOCALURIS);
+    try {
+      String hostName = InetAddress.getLocalHost().getHostName();
+      String hostIp = InetAddress.getLocalHost().getHostAddress();
+      boolean one = (localMsUri != null);
+      boolean two = (!localMsUri.equals(""));
+      boolean three = (localMsUri.contains("thrift"));
+      boolean four = (localMsUri != null && !localMsUri.equals("") && localMsUri.contains("thrift"));
+      if(localMsUri != null && !localMsUri.equals("") && localMsUri.contains("thrift")){
+        int start = localMsUri.lastIndexOf("/")+1;
+        int end   = localMsUri.lastIndexOf(":");
+        if(start >0 && end >0 && end > start){
+          String localMsUriHost = localMsUri.substring(start,end);
+          if(localMsUriHost.equalsIgnoreCase(hostName) || localMsUriHost.equalsIgnoreCase(hostIp)){
+            msUri = localMsUri;
+          }
+        }
+      }
+    } catch (UnknownHostException e1) {
+    }
+    return msUri;
+  }
+
   private String retryGetMaster(ZooKeeperWatcher zkw,String zkString,int times){
     if(times <= 0){
       return null;
     }
-    LOG.info("###Connectiong zookeeper:"+zkString);
     String msUri =  null;
     try {
       zkw = new ZooKeeperWatcher(conf,zkString,this.toString(),null,false);

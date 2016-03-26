@@ -104,7 +104,7 @@ public class MetaConstants {
   public static final String ZK_SESSION_TIMEOUT = "zookeeper.session.timeout";
 
   /** Default value for ZooKeeper session timeout */
-  public static final int DEFAULT_ZK_SESSION_TIMEOUT = 180 * 1000;
+  public static final int DEFAULT_ZK_SESSION_TIMEOUT = 60 * 1000;
 
   /** Configuration key for whether to use ZK.multi */
   public static final String ZOOKEEPER_USEMULTI = "hbase.zookeeper.useMulti";

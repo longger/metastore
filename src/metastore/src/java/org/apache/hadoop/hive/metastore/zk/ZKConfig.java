@@ -32,6 +32,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.classification.InterfaceAudience;
 import org.apache.hadoop.hive.common.classification.InterfaceStability;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.util.StringUtils;
 
 /**
@@ -264,5 +265,17 @@ public class ZKConfig {
    */
   public static String getZKQuorumServersString(Configuration conf) {
     return getZKQuorumServersString(makeZKProps(conf));
+  }
+
+  //added by zjw for HA
+  public static String getZKQuorumServersStringFromConfig(Configuration conf) {
+    String zkString = "";
+    zkString = conf.get(HiveConf.ConfVars.METASTOREURIS.varname);
+    //if top metastore not setted ,then read TOP_ATTRIBUTION value
+    if( (zkString == null || zkString.equals(""))
+        && conf.getBoolean(HiveConf.ConfVars.TOP_ATTRIBUTION.varname, false)){
+      zkString = conf.get(HiveConf.ConfVars.METASTOREURIS.varname);
+    }
+    return zkString;
   }
 }

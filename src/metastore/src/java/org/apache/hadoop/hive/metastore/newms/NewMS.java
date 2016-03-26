@@ -13,6 +13,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.DiskManager;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
+import org.apache.hadoop.hive.metastore.HiveMetaStore.HMSHandler;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreServerEventHandler;
 import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.TServerSocketKeepAlive;
@@ -255,9 +256,17 @@ public class NewMS {
 				@Override
 				public void run() {
 					try {
-						String uri = conf.getVar(ConfVars.METASTOREURIS);
-						uri = uri.substring(uri.lastIndexOf(":") + 1);
-						HiveMetaStore.main(new String[]{uri});
+					  if(conf.getVar(ConfVars.METASTOREURIS).startsWith("thrift")){
+  						String uri = conf.getVar(ConfVars.METASTOREURIS);
+  						uri = uri.substring(uri.lastIndexOf(":") + 1);
+  						HiveMetaStore.main(new String[]{uri});
+					  }else{
+					    HMSHandler.LOG.info("=====in starting newms,HA model======zkAddress:"+conf.getVar(ConfVars.METASTOREURIS));
+					    String localMsuri = conf.getVar(HiveConf.ConfVars.METASTORELOCALURIS);
+					    String localOldMsuri = conf.getVar(HiveConf.ConfVars.OLDMETASTORELOCALURIS);
+					    localOldMsuri = localOldMsuri.substring(localOldMsuri.lastIndexOf(":") + 1);
+              HiveMetaStore.main(new String[]{localOldMsuri});
+					  }
 					} catch (Throwable e) {
 						LOG.error(e, e);
 					}
@@ -290,7 +299,7 @@ public class NewMS {
         // Producer use meta-test topic
         MsgServer.startProducer();
         MsgServer.startLocalConsumer();
-        
+
       } catch (Exception e) {
         LOG.error(e, e);
         throw new IOException("Start MsgServer failed: " + e.getMessage());

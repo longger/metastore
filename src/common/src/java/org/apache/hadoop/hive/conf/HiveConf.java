@@ -251,6 +251,7 @@ public class HiveConf extends Configuration {
     METASTOREWAREHOUSE("hive.metastore.warehouse.dir", "/user/hive/warehouse"),
     METASTOREURIS("hive.metastore.uris", ""),
     METASTORELOCALURIS("hive.metastore.local.uris", ""),
+    OLDMETASTORELOCALURIS("hive.oldmetastore.local.uris", ""),
     METAZOOKEEPERSTOREURIS("hive.metastore.zookeeper.uris", ""),
     // Number of times to retry a connection to a Thrift metastore server
     METASTORETHRIFTCONNECTIONRETRIES("hive.metastore.connect.retries", 3),

@@ -60,8 +60,8 @@ import org.apache.hadoop.hive.metastore.DiskManager.BackupEntry;
 import org.apache.hadoop.hive.metastore.DiskManager.DMProfile;
 import org.apache.hadoop.hive.metastore.DiskManager.DMRequest;
 import org.apache.hadoop.hive.metastore.DiskManager.DeviceInfo;
-import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
 import org.apache.hadoop.hive.metastore.DiskManager.FLSelector.FLS_Policy;
+import org.apache.hadoop.hive.metastore.DiskManager.FileLocatingPolicy;
 import org.apache.hadoop.hive.metastore.DiskManager.ReplicateRequest;
 import org.apache.hadoop.hive.metastore.DiskManager.SysMonitor;
 import org.apache.hadoop.hive.metastore.api.AlreadyExistsException;
@@ -7589,10 +7589,13 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       ////**********Here for HA
 //      if(!conf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION)){
         HMSHandler.LOG.info("===========register zk master not top===========");
+
+        HMSHandler.LOG.info("==========="+conf.getVar(HiveConf.ConfVars.METASTOREURIS));
         master = new MetaMaster(conf);
         master.start();
 //      }
 
+      blockUntilIAmMaster(master);
 
       if (!conf.getBoolVar(HiveConf.ConfVars.IS_TOP_ATTRIBUTION) && !conf.getBoolVar(ConfVars.NEWMS_IS_OLD_WITH_NEW)) {
         dm = new DiskManager(new HiveConf(DiskManager.class), HMSHandler.LOG);
@@ -7612,6 +7615,54 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       throw t;
     }
     HMSHandler.LOG.error("HERE ->>>>>>>>>>>>>>>>>");
+  }
+
+  private static void blockUntilIAmMaster(MetaMaster master){
+    long sleepedSeconds = 0l;
+    int hour = 0;
+    long snap = 3l;//sleep
+
+    boolean isMaster = false;
+
+    String msg = "";
+
+    /*
+    byte[] bytes;
+    try {
+      bytes = ZKUtil.getDataAndWatch(master.getZooKeeper(), master.getZooKeeper().getMasterAddressZNode());
+    } catch (KeeperException e1) {
+      return;
+    }
+    if (bytes == null) {
+      msg = ("A master was detected, but went down before its address " +
+        "could be read.  Attempting to become the next active master");
+    } else {
+      ServerName currentMaster;
+      currentMaster = ServerName.parseFrom(bytes);
+
+      if (ServerName.isSameHostnameAndPort(currentMaster, master.getServerName())) {
+        isMaster = true;
+      }
+      HMSHandler.LOG.info("===is active master:"+master.isActiveMaster() +"===currentMaster:"+currentMaster.toString()+"===local:"+master.toString());
+    }
+
+    */
+
+    HMSHandler.LOG.info("===is active master:"+master.isActiveMaster() );
+    while(!master.isActiveMaster() ){
+      //HMSHandler.LOG.info("===========backup service begin to sleep===============");
+      try{
+        Thread.sleep(snap*1000);
+        sleepedSeconds += snap;
+        if(sleepedSeconds >= 60  ){
+          HMSHandler.LOG.info("===========sleept for another day.");
+          sleepedSeconds = 0;
+        }else if(sleepedSeconds >= 3600 * (hour+1) ){
+          HMSHandler.LOG.info("===========sleept for another hour.");
+          hour += 1;
+        }
+      }catch(InterruptedException e){}
+    }
   }
 
   public static synchronized void connect_to_top_attribution(HiveConf conf) throws MetaException {
